@@ -33,11 +33,17 @@ class LiteLLMProvider(LLMProvider):
             (api_key and api_key.startswith("sk-or-")) or
             (api_base and "openrouter" in api_base)
         )
-        
+
         # Detect AiHubMix by api_base
         self.is_aihubmix = bool(api_base and "aihubmix" in api_base)
-        
-        # Track if using custom endpoint (vLLM, etc.)
+
+        # Detect Ollama by api_base (localhost:11434) or model name
+        self.is_ollama = bool(
+            (api_base and "11434" in api_base) or
+            "ollama" in default_model.lower()
+        )
+
+        # Track if using custom endpoint (vLLM, Ollama, etc.) - local OpenAI-compatible APIs
         self.is_vllm = bool(api_base) and not self.is_openrouter and not self.is_aihubmix
         
         # Configure LiteLLM based on provider
@@ -48,7 +54,7 @@ class LiteLLMProvider(LLMProvider):
             elif self.is_aihubmix:
                 # AiHubMix gateway - OpenAI-compatible
                 os.environ["OPENAI_API_KEY"] = api_key
-            elif self.is_vllm:
+            elif self.is_vllm and not self.is_ollama:
                 # vLLM/custom endpoint - uses OpenAI-compatible API
                 os.environ["HOSTED_VLLM_API_KEY"] = api_key
             elif "deepseek" in default_model:
@@ -70,8 +76,12 @@ class LiteLLMProvider(LLMProvider):
                 os.environ.setdefault("MOONSHOT_API_KEY", api_key)
                 os.environ.setdefault("MOONSHOT_API_BASE", api_base or "https://api.moonshot.cn/v1")
         
-        if api_base:
+        # Set api_base for non-Ollama endpoints (Ollama uses OLLAMA_API_BASE env var)
+        if api_base and not self.is_ollama:
             litellm.api_base = api_base
+        elif self.is_ollama and api_base:
+            # Set Ollama-specific base URL if custom
+            os.environ.setdefault("OLLAMA_API_BASE", api_base)
         
         # Disable LiteLLM logging noise
         litellm.suppress_debug_info = True
@@ -102,24 +112,33 @@ class LiteLLMProvider(LLMProvider):
         # Auto-prefix model names for known providers
         # (keywords, target_prefix, skip_if_starts_with)
         _prefix_rules = [
-            (("glm", "zhipu"), "zai", ("zhipu/", "zai/", "openrouter/", "hosted_vllm/")),
-            (("qwen", "dashscope"), "dashscope", ("dashscope/", "openrouter/")),
+            (("glm", "zhipu"), "zai", ("zhipu/", "zai/", "openrouter/", "hosted_vllm/", "ollama/")),
+            (("qwen", "dashscope"), "dashscope", ("dashscope/", "openrouter/", "ollama/")),
             (("moonshot", "kimi"), "moonshot", ("moonshot/", "openrouter/")),
             (("gemini",), "gemini", ("gemini/",)),
         ]
         model_lower = model.lower()
-        for keywords, prefix, skip in _prefix_rules:
-            if any(kw in model_lower for kw in keywords) and not any(model.startswith(s) for s in skip):
-                model = f"{prefix}/{model}"
-                break
+
+        # Skip prefix rules for local endpoints (Ollama, vLLM)
+        if not self.is_vllm:
+            for keywords, prefix, skip in _prefix_rules:
+                if any(kw in model_lower for kw in keywords) and not any(model.startswith(s) for s in skip):
+                    model = f"{prefix}/{model}"
+                    break
 
         # Gateway/endpoint-specific prefixes (detected by api_base/api_key, not model name)
         if self.is_openrouter and not model.startswith("openrouter/"):
             model = f"openrouter/{model}"
         elif self.is_aihubmix:
             model = f"openai/{model.split('/')[-1]}"
+        elif self.is_ollama:
+            # Ollama uses native LiteLLM support with ollama/ prefix
+            if not model.startswith("ollama/"):
+                model = f"ollama/{model}"
         elif self.is_vllm:
-            model = f"hosted_vllm/{model}"
+            # Other local endpoints (vLLM) use hosted_vllm/ prefix
+            if not model.startswith("hosted_vllm/"):
+                model = f"hosted_vllm/{model}"
         
         # kimi-k2.5 only supports temperature=1.0
         if "kimi-k2.5" in model.lower():
@@ -132,8 +151,8 @@ class LiteLLMProvider(LLMProvider):
             "temperature": temperature,
         }
         
-        # Pass api_base directly for custom endpoints (vLLM, etc.)
-        if self.api_base:
+        # Pass api_base directly for custom endpoints (vLLM, etc.) but not Ollama
+        if self.api_base and not self.is_ollama:
             kwargs["api_base"] = self.api_base
         
         # Pass extra headers (e.g. APP-Code for AiHubMix)

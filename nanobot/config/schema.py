@@ -139,15 +139,16 @@ class Config(BaseSettings):
             "openai": p.openai, "gpt": p.openai, "gemini": p.gemini,
             "zhipu": p.zhipu, "glm": p.zhipu, "zai": p.zhipu,
             "dashscope": p.dashscope, "qwen": p.dashscope,
-            "groq": p.groq, "moonshot": p.moonshot, "kimi": p.moonshot, "vllm": p.vllm,
+            "groq": p.groq, "moonshot": p.moonshot, "kimi": p.moonshot,
+            "vllm": p.vllm, "ollama": p.vllm,  
         }
         for kw, provider in keyword_map.items():
-            if kw in model and provider.api_key:
+            if kw in model and (provider.api_key or provider.api_base):
                 return provider
         # Fallback: gateways first (can serve any model), then specific providers
         all_providers = [p.openrouter, p.aihubmix, p.anthropic, p.openai, p.deepseek,
                          p.gemini, p.zhipu, p.dashscope, p.moonshot, p.vllm, p.groq]
-        return next((pr for pr in all_providers if pr.api_key), None)
+        return next((pr for pr in all_providers if pr.api_key or pr.api_base), None)
 
     def get_api_key(self, model: str | None = None) -> str | None:
         """Get API key for the given model. Falls back to first available key."""
