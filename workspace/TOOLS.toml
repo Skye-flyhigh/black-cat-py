@@ -1,0 +1,57 @@
+# TOOLS.toml — Available tools for nanobot
+# Auto-generated from tool definitions. Do not edit manually.
+
+[file.read_file]
+description = "Read the contents of a file"
+params = { path = "str" }
+
+[file.write_file]
+description = "Write content to a file (creates parent directories if needed)"
+params = { path = "str", content = "str" }
+
+[file.edit_file]
+description = "Edit a file by replacing specific text"
+params = { path = "str", old_text = "str", new_text = "str" }
+
+[file.list_dir]
+description = "List contents of a directory"
+params = { path = "str" }
+
+[shell.exec]
+description = "Execute a shell command and return output"
+params = { command = "str", working_dir = "str?" }
+timeout = 60
+max_output = 10000
+blocked = ["rm -rf", "format", "dd", "shutdown"]
+
+[web.search]
+description = "Search the web using Brave Search API"
+params = { query = "str", count = "int = 5" }
+requires = "tools.web.search.apiKey"
+
+[web.fetch]
+description = "Fetch and extract main content from a URL"
+params = { url = "str", extract_mode = "markdown | plain", max_chars = "int = 50000" }
+
+[comms.message]
+description = "Send a message to a specific chat channel"
+params = { content = "str", channel = "str?", chat_id = "str?" }
+note = "Only use for channel delivery; normal responses don't need this"
+
+[tasks.spawn]
+description = "Spawn a subagent for background work"
+params = { task = "str", label = "str?" }
+note = "Use for complex or time-consuming tasks"
+
+[cron]
+description = "Scheduled tasks via CLI"
+examples = [
+    "nanobot cron add --name 'morning' --message 'GM' --cron '0 9 * * *'",
+    "nanobot cron add --name 'water' --message 'Drink!' --every 7200",
+    "nanobot cron list",
+    "nanobot cron remove <job_id>",
+]
+
+[heartbeat]
+description = "HEARTBEAT.md is checked every 30 minutes for periodic tasks"
+format = "markdown checklist"
