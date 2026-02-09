@@ -375,13 +375,18 @@ For normal conversation, just respond with text - do not call the message tool."
         self,
         messages: list[dict[str, Any]],
         content: str | None,
-        tool_calls: list[dict[str, Any]] | None = None
+        tool_calls: list[dict[str, Any]] | None = None,
+        reasoning_content: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Append assistant response to message list (with optional tool_calls)."""
+        """Append assistant response to message list (with optional tool_calls and reasoning)."""
         msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
 
         if tool_calls:
             msg["tool_calls"] = tool_calls
+
+        # Thinking models (DeepSeek-R1, Kimi, etc.) reject history without this
+        if reasoning_content:
+            msg["reasoning_content"] = reasoning_content
 
         messages.append(msg)
         return messages

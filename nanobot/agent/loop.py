@@ -1,11 +1,17 @@
 """Agent loop: the core processing engine."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from nanobot.config.schema import Config, ExecToolConfig
+    from nanobot.cron.service import CronService
 
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
@@ -42,21 +48,20 @@ class AgentLoop:
         model: str | None = None,
         max_iterations: int = 20,
         brave_api_key: str | None = None,
-        exec_config: "ExecToolConfig | None" = None,
-        cron_service: "CronService | None" = None,
+        exec_config: ExecToolConfig | None = None,
+        cron_service: CronService | None = None,
         restrict_to_workspace: bool = False,
         session_manager: SessionManager | None = None,
-        config: "Config | None" = None,
+        config: Config | None = None,
     ):
-        from nanobot.config.schema import ExecToolConfig, Config
-        from nanobot.cron.service import CronService
+        from nanobot.config.schema import ExecToolConfig as ExecToolConfigRuntime
         self.bus = bus
         self.provider = provider
         self.workspace = workspace
         self.model = model or provider.get_default_model()
         self.max_iterations = max_iterations
         self.brave_api_key = brave_api_key
-        self.exec_config = exec_config or ExecToolConfig()
+        self.exec_config = exec_config or ExecToolConfigRuntime()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
         self.config = config
@@ -223,7 +228,8 @@ class AgentLoop:
                     for tc in response.tool_calls
                 ]
                 messages = self.context.add_assistant_message(
-                    messages, response.content, tool_call_dicts
+                    messages, response.content, tool_call_dicts,
+                    reasoning_content=response.reasoning_content,
                 )
                 
                 # Execute tools
@@ -329,7 +335,8 @@ class AgentLoop:
                     for tc in response.tool_calls
                 ]
                 messages = self.context.add_assistant_message(
-                    messages, response.content, tool_call_dicts
+                    messages, response.content, tool_call_dicts,
+                    reasoning_content=response.reasoning_content,
                 )
                 
                 for tool_call in response.tool_calls:
