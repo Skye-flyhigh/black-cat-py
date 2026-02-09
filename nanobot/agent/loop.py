@@ -46,8 +46,9 @@ class AgentLoop:
         cron_service: "CronService | None" = None,
         restrict_to_workspace: bool = False,
         session_manager: SessionManager | None = None,
+        config: "Config | None" = None,
     ):
-        from nanobot.config.schema import ExecToolConfig
+        from nanobot.config.schema import ExecToolConfig, Config
         from nanobot.cron.service import CronService
         self.bus = bus
         self.provider = provider
@@ -58,6 +59,7 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self.config = config
         
         self.context = ContextManager(workspace)
         self.sessions = session_manager or SessionManager(workspace)
@@ -106,7 +108,13 @@ class AgentLoop:
         # Cron tool (for scheduling)
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
-    
+
+    def _resolve_author(self, sender_id: str, channel: str) -> str:
+        """Resolve sender_id to author name using config, or return sender_id as-is."""
+        if self.config:
+            return self.config.resolve_author(sender_id, channel)
+        return sender_id  # Fallback: use raw sender_id if no config
+
     async def run(self) -> None:
         """Run the agent loop, processing messages from the bus."""
         self._running = True
@@ -176,10 +184,11 @@ class AgentLoop:
             cron_tool.set_context(msg.channel, msg.chat_id)
         
         # Build initial messages (use get_history for LLM-formatted messages)
+        author = self._resolve_author(msg.sender_id, msg.channel)
         messages = self.context.build_messages(
             history=session.get_history(),
             current_message=msg.content,
-            author=msg.sender_id,
+            author=author,
             channel=msg.channel,
             chat_id=msg.chat_id,
             media=msg.media if msg.media else None,
@@ -285,10 +294,11 @@ class AgentLoop:
             cron_tool.set_context(origin_channel, origin_chat_id)
         
         # Build messages with the announce content
+        author = self._resolve_author(msg.sender_id, msg.channel)
         messages = self.context.build_messages(
             history=session.get_history(),
             current_message=msg.content,
-            author=msg.sender_id,
+            author=author,
             channel=origin_channel,
             chat_id=origin_chat_id,
         )

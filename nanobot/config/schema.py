@@ -112,6 +112,15 @@ class ToolsConfig(BaseModel):
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
 
 
+class AuthorIdentity(BaseModel):
+    """Platform identities for an author (like API keys, keep private)."""
+    whatsapp: str | None = None
+    telegram: str | None = None
+    discord: str | None = None
+    feishu: str | None = None
+    cli: str | None = None
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
@@ -119,6 +128,7 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    authors: dict[str, AuthorIdentity] = Field(default_factory=dict)  # Map author name → platform IDs
     
     @property
     def workspace_path(self) -> Path:
@@ -161,7 +171,24 @@ class Config(BaseSettings):
             if spec.is_gateway and spec.default_api_base and p == getattr(self.providers, spec.name, None):
                 return spec.default_api_base
         return None
-    
+
+    def resolve_author(self, sender_id: str, channel: str) -> str:
+        """
+        Resolve sender_id to author name using configured identities.
+
+        Args:
+            sender_id: The platform-specific sender identifier.
+            channel: The channel name (telegram, whatsapp, discord, feishu, cli).
+
+        Returns:
+            Author name if found in config, otherwise "unknown".
+        """
+        for author_name, identity in self.authors.items():
+            platform_id = getattr(identity, channel, None)
+            if platform_id and platform_id == sender_id:
+                return author_name
+        return "unknown"
+
     class Config:
         env_prefix = "NANOBOT_"
         env_nested_delimiter = "__"
