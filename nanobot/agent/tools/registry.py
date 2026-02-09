@@ -1,5 +1,6 @@
 """Tool registry for dynamic tool management."""
 
+from pathlib import Path
 from typing import Any
 
 from nanobot.agent.tools.base import Tool
@@ -68,6 +69,42 @@ class ToolRegistry:
     
     def __len__(self) -> int:
         return len(self._tools)
-    
+
     def __contains__(self, name: str) -> bool:
         return name in self._tools
+
+    def export_md(self, path: Path) -> None:
+        """
+        Export registered tools to TOOLS.md file for human reading.
+
+        Args:
+            path: Path to write TOOLS.md (typically workspace/TOOLS.md)
+        """
+        lines = [
+            "# Available Tools",
+            "",
+            "This document lists all tools available to nanobot.",
+            "Auto-generated from registered tools.",
+            "",
+        ]
+
+        for tool in self._tools.values():
+            lines.append(f"## {tool.name}")
+            lines.append("")
+            lines.append(tool.description)
+            lines.append("")
+
+            # Parameters
+            props = tool.parameters.get("properties", {})
+            required = set(tool.parameters.get("required", []))
+
+            if props:
+                lines.append("**Parameters:**")
+                for name, prop in props.items():
+                    prop_type = prop.get("type", "any")
+                    desc = prop.get("description", "")
+                    req = "(required)" if name in required else "(optional)"
+                    lines.append(f"- `{name}` ({prop_type}) {req}: {desc}")
+                lines.append("")
+
+        path.write_text("\n".join(lines), encoding="utf-8")
