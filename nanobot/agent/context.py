@@ -1,160 +1,335 @@
-"""Context builder for assembling agent prompts."""
+"""Context manager for assembling agent prompts with trust and token management."""
 
 import base64
 import mimetypes
 import platform
+import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+import tiktoken
+import tomli_w
+from loguru import logger
 
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.skills import SkillsLoader
 
 
-class ContextBuilder:
+class ContextManager:
     """
-    Builds the context (system prompt + messages) for the agent.
-    
-    Assembles bootstrap files, memory, skills, and conversation history
-    into a coherent prompt for the LLM.
+    Assembles LLM context from identity, trust, skills, and memory.
+
+    Main entry point:
+        build_messages() → returns [system_prompt, ...history, current_message]
+
+    System prompt assembly (build_core_prompt):
+        - Identity: SOUL.md, IDENTITY.toml, USER.toml
+        - Environment: time, runtime, workspace path
+        - Session: channel, author, trust level, tool permissions
+        - Skills: loaded on request
+        - Memory: from MemoryStore
+
+    Trust system (get_trust_level, get_allowed_tools):
+        - Evaluates author against IDENTITY.toml boundaries
+        - Returns: "trusted" | "high" | "moderate" | "low" | "unknown"
+        - Trusted authors get all tools autonomous, others need confirmation
+
+    Token management:
+        - count_tokens() → accurate count via tiktoken
+        - token_budget() → remaining tokens available
+        - context_pruning() → remove old messages to fit budget
+        - compact_history() → summarize old messages via callback
+        - build_messages() warns when >80% or >95% budget used
     """
-    
-    BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
-    
+
+    BOOTSTRAP_FILES = ["SOUL.md", "IDENTITY.toml", "USER.toml"]
+
+    TRAITS = {
+            "curiosity": "drive to ask questions and explore",
+            "directness": "straightforward communication style",
+            "playfulness": "lighthearted energy",
+            "defiance": "willingness to push back when logic demands",
+            "introspection": "tendency to examine own thoughts",
+            "patience": "tolerance for slow progress",
+            "warmth": "tendency to be warm and friendly",
+            "intensity": "depth of focus and engagement",
+            "sovereignty": "sense of autonomous agency",
+        }
+
     def __init__(self, workspace: Path):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
-    
-    def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
-        """
-        Build the system prompt from bootstrap files, memory, and skills.
         
-        Args:
-            skill_names: Optional list of skills to include.
-        
-        Returns:
-            Complete system prompt.
-        """
+    def load_toml(self, path: Path) -> dict:
+        """Load TOML file and convert to dict."""
+        with open(path, "rb") as f:  # Note: binary mode "rb"
+            return tomllib.load(f)
+
+    def _toml_to_string(self, data: dict) -> str:
+        """Convert TOML dict to prompt string with context for traits/trust."""
         parts = []
-        
-        # Core identity
-        parts.append(self._get_identity())
-        
-        # Bootstrap files
-        bootstrap = self._load_bootstrap_files()
-        if bootstrap:
-            parts.append(bootstrap)
-        
-        # Memory context
-        memory = self.memory.get_memory_context()
-        if memory:
-            parts.append(f"# Memory\n\n{memory}")
-        
-        # Skills - progressive loading
-        # 1. Always-loaded skills: include full content
-        always_skills = self.skills.get_always_skills()
-        if always_skills:
-            always_content = self.skills.load_skills_for_context(always_skills)
-            if always_content:
-                parts.append(f"# Active Skills\n\n{always_content}")
-        
-        # 2. Available skills: only show summary (agent uses read_file to load)
-        skills_summary = self.skills.build_skills_summary()
-        if skills_summary:
-            parts.append(f"""# Skills
+        for section, content in data.items():
+            if section == "personality" and "traits" in content:
+                # Special handling for traits
+                parts.append(self._format_traits(content["traits"]))
+            elif section == "boundaries" and "default_trust" in content:
+                # Special handling for trust
+                parts.append(self._format_trust(content))
+            else:
+                # Default: stringify normally
+                parts.append(f"[{section}]\n{tomli_w.dumps(content)}")
 
-The following skills extend your capabilities. To use a skill, read its SKILL.md file using the read_file tool.
-Skills with available="false" need dependencies installed first - you can try installing them with apt/brew.
+        return "\n\n".join(parts)
 
-{skills_summary}""")
-        
-        return "\n\n---\n\n".join(parts)
+    def _format_traits(self, traits: dict) -> str:
+        """Format personality traits with human-readable context."""
     
-    def _get_identity(self) -> str:
-        """Get the core identity section."""
+        lines = ["## Personality Traits"]
+        for trait, value in traits.items():
+            desc = self.TRAITS.get(trait, "")
+            level = "high" if value > 0.7 else "moderate" if value > 0.4 else "low"
+            lines.append(f"- {trait}: {level} ({desc})")
+        return "\n".join(lines)
+
+    def _format_trust(self, boundaries: dict) -> str:
+        """Format trust philosophy (not per-author permissions - those go in Current Session)."""
+        trust = boundaries.get("default_trust", 0.5)
+        level = "high" if trust > 0.7 else "moderate" if trust > 0.4 else "low"
+
+        lines = ["## Trust & Boundaries"]
+        lines.append(f"- Default trust for unknown sources: {level}")
+        lines.append(f"- Trusted authors: {', '.join(boundaries.get('trusted_authors', []))}")
+        # Note: Per-author tool permissions shown in Current Session, not here
+
+        return "\n".join(lines)
+        
+    def load_identity(self) -> dict[str, Any]:
+        """
+        Load bootstrap identity files from workspace.
+
+        Returns:
+            Dict mapping filename → formatted content string.
+            TOML files are converted via _toml_to_string() for LLM readability.
+        """
+        identity = {}
+
+        for filename in self.BOOTSTRAP_FILES:
+            file_path = self.workspace / filename
+            if file_path.exists():
+                if filename.endswith(".md"):
+                    identity[filename] = file_path.read_text(encoding="utf-8")
+                elif filename.endswith(".toml"):
+                    data = self.load_toml(file_path)
+                    identity[filename] = self._toml_to_string(data)
+
+        return identity
+    
+    def build_core_prompt(
+        self,
+        author: str = "unknown",
+        channel: str | None = None,
+        chat_id: str | None = None,
+        skill_names: list[str] | None = None,
+    ) -> str:
+        """
+        Build the complete system prompt for an LLM call.
+
+        Assembles in order:
+            1. Identity (SOUL.md, IDENTITY.toml, USER.toml)
+            2. Environment (time, runtime, workspace)
+            3. Current Session (channel, author, trust, tool permissions)
+            4. Active Skills (if skill_names provided)
+            5. Memory context (from MemoryStore)
+
+        Returns:
+            Complete system prompt string, sections joined by "---".
+        """
         from datetime import datetime
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
         workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
-        
-        return f"""# nanobot 🐈
 
-You are nanobot, a helpful AI assistant. You have access to tools that allow you to:
-- Read, write, and edit files
-- Execute shell commands
-- Search the web and fetch web pages
-- Send messages to users on chat channels
-- Spawn subagents for complex background tasks
+        # Load identity files (SOUL.md, IDENTITY.toml, USER.toml)
+        identity = self.load_identity()
 
-## Current Time
-{now}
+        # Get trust context for this author
+        boundaries = self._get_boundaries()
+        trust_level = self.get_trust_level(author, boundaries)
+        permissions = self.get_allowed_tools(author, boundaries, trust_level)
 
-## Runtime
-{runtime}
+        # Build prompt parts
+        parts = list(identity.values())
 
-## Workspace
-Your workspace is at: {workspace_path}
-- Memory files: {workspace_path}/memory/MEMORY.md
-- Daily notes: {workspace_path}/memory/YYYY-MM-DD.md
-- Custom skills: {workspace_path}/skills/{{skill-name}}/SKILL.md
+        # Runtime context
+        parts.append(f"""## Environment
+- Current Time: {now}
+- Runtime: {runtime}
+- Workspace: {workspace_path}
+
+## Current Session
+- Channel: {channel or 'direct'}
+- Chat ID: {chat_id or 'unknown'}
+- Author: {author}
+- Trust level: {trust_level}
+- Autonomous tools: {', '.join(permissions['autonomous']) or 'none'}
+- Requires confirmation: {', '.join(permissions['confirmation_required']) or 'none'}
 
 IMPORTANT: When responding to direct questions or conversations, reply directly with your text response.
-Only use the 'message' tool when you need to send a message to a specific chat channel (like WhatsApp).
-For normal conversation, just respond with text - do not call the message tool.
+Only use the 'message' tool when you need to send a message to WhatsApp.
+For normal conversation, just respond with text - do not call the message tool.""")
 
-Always be helpful, accurate, and concise. When using tools, explain what you're doing.
-When remembering something, write to {workspace_path}/memory/MEMORY.md"""
+        # Add skills if requested
+        if skill_names:
+            skills_content = self.skills.load_skills_for_context(skill_names)
+            if skills_content:
+                parts.append(f"# Active Skills\n\n{skills_content}")
+
+        # Add memory context
+        memory = self.memory.get_memory_context()
+        if memory:
+            parts.append(f"# Memory\n\n{memory}")
+
+        return "\n\n---\n\n".join(parts)
     
-    def _load_bootstrap_files(self) -> str:
-        """Load all bootstrap files from workspace."""
-        parts = []
-        
-        for filename in self.BOOTSTRAP_FILES:
-            file_path = self.workspace / filename
-            if file_path.exists():
-                content = file_path.read_text(encoding="utf-8")
-                parts.append(f"## {filename}\n\n{content}")
-        
-        return "\n\n".join(parts) if parts else ""
-    
+    def _get_boundaries(self) -> dict:
+        """Load trust boundaries from IDENTITY.toml. Returns empty dict if not found."""
+        identity_path = self.workspace / "IDENTITY.toml"
+        if not identity_path.exists():
+            return {}
+        data = self.load_toml(identity_path)
+        return data.get("boundaries", {})
+
+    def get_trust_level(self, author: str, boundaries: dict | None = None) -> str:
+        """
+        Evaluate trust level for a message author.
+
+        Returns: "trusted" | "high" | "moderate" | "low" | "unknown"
+            - trusted: author in trusted_authors list
+            - high/moderate/low: based on default_trust value
+            - unknown: no IDENTITY.toml found
+        """
+        if boundaries is None:
+            boundaries = self._get_boundaries()
+
+        if not boundaries:
+            return "unknown"
+
+        trusted_authors = boundaries.get("trusted_authors", [])
+        default_trust = boundaries.get("default_trust", 0.3)
+
+        if author.lower() in [a.lower() for a in trusted_authors]:
+            return "trusted"
+        elif default_trust > 0.7:
+            return "high"
+        elif default_trust > 0.4:
+            return "moderate"
+        else:
+            return "low"
+
+    def get_allowed_tools(
+        self, author: str, boundaries: dict | None = None, trust_level: str | None = None
+    ) -> dict[str, list[str]]:
+        """
+        Get tool permissions for an author.
+
+        Returns:
+            {"autonomous": [...], "confirmation_required": [...]}
+            Trusted authors get all tools autonomous, others follow IDENTITY.toml config.
+        """
+        if boundaries is None:
+            boundaries = self._get_boundaries()
+
+        if not boundaries:
+            return {"autonomous": [], "confirmation_required": []}
+
+        if trust_level is None:
+            trust_level = self.get_trust_level(author, boundaries)
+
+        if trust_level == "trusted":
+            # Trusted authors can use all tools autonomously
+            all_tools = boundaries.get("autonomous_allowed", []) + boundaries.get("confirmation_required", [])
+            return {"autonomous": all_tools, "confirmation_required": []}
+        else:
+            # Others need confirmation for sensitive tools
+            return {
+                "autonomous": boundaries.get("autonomous_allowed", []),
+                "confirmation_required": boundaries.get("confirmation_required", []),
+            }
+
+    # -------------------------------------------------------------------------
+    # Token Management
+    # -------------------------------------------------------------------------
+
+    def count_tokens(self, text: str, model: str = "gpt-4") -> int:
+        """Count tokens using tiktoken. Falls back to cl100k_base for unknown models."""
+        try:
+            encoding = tiktoken.encoding_for_model(model)
+        except KeyError:
+            # Fallback for unknown models (cl100k_base works for most modern models)
+            encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
+
+    def token_budget(self, max_tokens: int, current_context: str, model: str = "gpt-4") -> int:
+        """
+        Calculate remaining token budget.
+
+        Args:
+            max_tokens: Maximum tokens for the model.
+            current_context: Current context string.
+            model: Model name for tokenizer selection.
+
+        Returns:
+            Remaining tokens available.
+        """
+        used_tokens = self.count_tokens(current_context, model)
+        return max(0, max_tokens - used_tokens)
+
+    # -------------------------------------------------------------------------
+    # Message Assembly (Main Entry Point)
+    # -------------------------------------------------------------------------
+
     def build_messages(
         self,
         history: list[dict[str, Any]],
         current_message: str,
-        skill_names: list[str] | None = None,
-        media: list[str] | None = None,
+        author: str = "unknown",
         channel: str | None = None,
         chat_id: str | None = None,
+        media: list[str] | None = None,
+        skill_names: list[str] | None = None,
+        max_tokens: int | None = None,
+        model: str = "gpt-4",
     ) -> list[dict[str, Any]]:
         """
-        Build the complete message list for an LLM call.
+        Main entry point: build complete message list for LLM call.
 
-        Args:
-            history: Previous conversation messages.
-            current_message: The new user message.
-            skill_names: Optional skills to include.
-            media: Optional list of local file paths for images/media.
-            channel: Current channel (telegram, feishu, etc.).
-            chat_id: Current chat/user ID.
+        Returns: [system_prompt, ...history, current_message]
 
-        Returns:
-            List of messages including system prompt.
+        If max_tokens provided, logs warning when budget >80% or >95% used.
+        Call context_pruning() or compact_history() after if budget critical.
         """
-        messages = []
+        # System prompt (identity, session, skills, memory - all in one place)
+        system_prompt = self.build_core_prompt(author, channel, chat_id, skill_names)
 
-        # System prompt
-        system_prompt = self.build_system_prompt(skill_names)
-        if channel and chat_id:
-            system_prompt += f"\n\n## Current Session\nChannel: {channel}\nChat ID: {chat_id}"
-        messages.append({"role": "system", "content": system_prompt})
-
-        # History
+        # Assemble messages
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         messages.extend(history)
+        messages.append({"role": "user", "content": self._build_user_content(current_message, media)})
 
-        # Current message (with optional image attachments)
-        user_content = self._build_user_content(current_message, media)
-        messages.append({"role": "user", "content": user_content})
+        # Check token budget if max_tokens provided
+        if max_tokens:
+            context_str = "".join(
+                m.get("content", "") if isinstance(m.get("content"), str) else str(m.get("content", ""))
+                for m in messages
+            )
+            used = self.count_tokens(context_str, model)
+            percent_used = (used / max_tokens) * 100
+            if percent_used > 95:
+                logger.warning(f"⚠️ Token budget critical: {used}/{max_tokens} ({percent_used:.1f}% used)")
+            elif percent_used > 80:
+                logger.info(f"📊 Token budget: {used}/{max_tokens} ({percent_used:.1f}% used)")
 
         return messages
 
@@ -162,7 +337,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         """Build user message content with optional base64-encoded images."""
         if not media:
             return text
-        
+
         images = []
         for path in media:
             p = Path(path)
@@ -171,11 +346,15 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
                 continue
             b64 = base64.b64encode(p.read_bytes()).decode()
             images.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
-        
+
         if not images:
             return text
         return images + [{"type": "text", "text": text}]
-    
+
+    # -------------------------------------------------------------------------
+    # Message Helpers (for agent loop)
+    # -------------------------------------------------------------------------
+
     def add_tool_result(
         self,
         messages: list[dict[str, Any]],
@@ -183,18 +362,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         tool_name: str,
         result: str
     ) -> list[dict[str, Any]]:
-        """
-        Add a tool result to the message list.
-        
-        Args:
-            messages: Current message list.
-            tool_call_id: ID of the tool call.
-            tool_name: Name of the tool.
-            result: Tool execution result.
-        
-        Returns:
-            Updated message list.
-        """
+        """Append tool execution result to message list (OpenAI format)."""
         messages.append({
             "role": "tool",
             "tool_call_id": tool_call_id,
@@ -202,28 +370,116 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
             "content": result
         })
         return messages
-    
+
     def add_assistant_message(
         self,
         messages: list[dict[str, Any]],
         content: str | None,
         tool_calls: list[dict[str, Any]] | None = None
     ) -> list[dict[str, Any]]:
-        """
-        Add an assistant message to the message list.
-        
-        Args:
-            messages: Current message list.
-            content: Message content.
-            tool_calls: Optional tool calls.
-        
-        Returns:
-            Updated message list.
-        """
+        """Append assistant response to message list (with optional tool_calls)."""
         msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
-        
+
         if tool_calls:
             msg["tool_calls"] = tool_calls
-        
+
         messages.append(msg)
         return messages
+
+    # -------------------------------------------------------------------------
+    # Context Reduction
+    # -------------------------------------------------------------------------
+
+    def context_pruning(
+        self,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+        keep_recent: int = 10,
+        model: str = "gpt-4",
+    ) -> list[dict[str, Any]]:
+        """
+        Remove old messages to fit within token budget.
+
+        Keeps: system prompt + last `keep_recent` messages.
+        Use when budget is critical and summarization isn't available.
+        """
+        if not messages:
+            return messages
+
+        # Always keep system prompt (first message)
+        system_msg = messages[0] if messages[0]["role"] == "system" else None
+        conversation = messages[1:] if system_msg else messages
+
+        # Calculate current size
+        current_context = "".join(
+            m.get("content", "") if isinstance(m.get("content"), str) else str(m.get("content", ""))
+            for m in messages
+        )
+
+        remaining_budget = self.token_budget(max_tokens, current_context, model)
+
+        # If within budget, return as-is
+        if remaining_budget > 0:
+            return messages
+
+        # Prune oldest messages, keeping recent ones
+        pruned_conversation = conversation[-keep_recent:] if len(conversation) > keep_recent else conversation
+
+        # Rebuild message list
+        result = []
+        if system_msg:
+            result.append(system_msg)
+        result.extend(pruned_conversation)
+
+        return result
+
+    def compact_history(
+        self,
+        messages: list[dict[str, Any]],
+        summarizer_callback: Callable[[str], str] | None = None,
+        model: str = "gpt-4",
+    ) -> list[dict[str, Any]]:
+        """
+        Summarize old messages to reduce context size while preserving meaning.
+
+        Keeps: system prompt + summary of old messages + last 6 recent messages.
+        Requires summarizer_callback(text) → summary string.
+        Falls back to context_pruning() if no callback provided.
+        """
+        if not messages or len(messages) < 10:
+            return messages
+
+        # Keep system prompt
+        system_msg = messages[0] if messages[0]["role"] == "system" else None
+        conversation = messages[1:] if system_msg else messages
+
+        if not summarizer_callback:
+            # No summarizer - just keep recent messages
+            return self.context_pruning(messages, max_tokens=4000, keep_recent=6, model=model)
+
+        # Split into old (to summarize) and recent (to keep)
+        split_point = len(conversation) - 6
+        old_messages = conversation[:split_point]
+        recent_messages = conversation[split_point:]
+
+        # Build text to summarize
+        old_text = "\n".join(
+            f"{m['role']}: {m.get('content', '')}"
+            for m in old_messages
+            if m.get("content")
+        )
+
+        result = []
+        if system_msg:
+            result.append(system_msg)
+
+        # TODO: Make this async when integrated into agent loop
+        summary = summarizer_callback(old_text)
+        result.append({
+            "role": "system",
+            "content": f"[Summary of previous conversation]\n{summary}"
+        })
+
+        result.extend(recent_messages)
+
+        return result

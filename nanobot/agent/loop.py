@@ -10,7 +10,7 @@ from loguru import logger
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
-from nanobot.agent.context import ContextBuilder
+from nanobot.agent.context import ContextManager
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
 from nanobot.agent.tools.shell import ExecTool
@@ -59,7 +59,7 @@ class AgentLoop:
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
         
-        self.context = ContextBuilder(workspace)
+        self.context = ContextManager(workspace)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -179,9 +179,10 @@ class AgentLoop:
         messages = self.context.build_messages(
             history=session.get_history(),
             current_message=msg.content,
-            media=msg.media if msg.media else None,
+            author=msg.sender_id,
             channel=msg.channel,
             chat_id=msg.chat_id,
+            media=msg.media if msg.media else None,
         )
         
         # Agent loop
@@ -287,6 +288,7 @@ class AgentLoop:
         messages = self.context.build_messages(
             history=session.get_history(),
             current_message=msg.content,
+            author=msg.sender_id,
             channel=origin_channel,
             chat_id=origin_chat_id,
         )
