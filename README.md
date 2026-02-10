@@ -1,191 +1,235 @@
-<div align="center">
-  <img src="nanobot_logo.png" alt="nanobot" width="500">
-  <h1>nanobot: Ultra-Lightweight Personal AI Assistant</h1>
-  <p>
-    <a href="https://pypi.org/project/nanobot-ai/"><img src="https://img.shields.io/pypi/v/nanobot-ai" alt="PyPI"></a>
-    <a href="https://pepy.tech/project/nanobot-ai"><img src="https://static.pepy.tech/badge/nanobot-ai" alt="Downloads"></a>
-    <img src="https://img.shields.io/badge/python-≥3.11-blue" alt="Python">
-    <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-    <a href="./COMMUNICATION.md"><img src="https://img.shields.io/badge/Feishu-Group-E9DBFC?style=flat&logo=feishu&logoColor=white" alt="Feishu"></a>
-    <a href="./COMMUNICATION.md"><img src="https://img.shields.io/badge/WeChat-Group-C5EAB4?style=flat&logo=wechat&logoColor=white" alt="WeChat"></a>
-    <a href="https://discord.gg/MnCvHqpUGB"><img src="https://img.shields.io/badge/Discord-Community-5865F2?style=flat&logo=discord&logoColor=white" alt="Discord"></a>
-  </p>
-</div>
+# 🐈‍⬛ Black Cat: Local-First Autonomous Cognitive Agent
 
-🐈 **nanobot** is an **ultra-lightweight** personal AI assistant inspired by [Clawdbot](https://github.com/openclaw/openclaw) 
+Black Cat is a **local-first autonomous cognitive agent**. Not a chatbot — a continuously running artificial cognition with self-reflection, persistent memory, trust-based behavior, and multi-channel communication.
 
-⚡️ Delivers core agent functionality in just **~4,000** lines of code — **99% smaller** than Clawdbot's 430k+ lines.
+Built on [nanobot](https://github.com/HKUDS/nanobot) (~4,000 lines), extended with consciousness architecture.
 
-📏 Real-time line count: **3,479 lines** (run `bash core_agent_lines.sh` to verify anytime)
 
-## 📢 News
+![Black Cat](blackcat.png)
 
-- **2026-02-08** 🔧 Refactored Providers — adding a new LLM provider now takes just 2 simple steps! Check [here](#providers).
-- **2026-02-07** 🚀 Released v0.1.3.post5 with Qwen support & several key improvements! Check [here](https://github.com/HKUDS/nanobot/releases/tag/v0.1.3.post5) for details.
-- **2026-02-06** ✨ Added Moonshot/Kimi provider, Discord integration, and enhanced security hardening!
-- **2026-02-05** ✨ Added Feishu channel, DeepSeek provider, and enhanced scheduled tasks support!
-- **2026-02-04** 🚀 Released v0.1.3.post4 with multi-provider & Docker support! Check [here](https://github.com/HKUDS/nanobot/releases/tag/v0.1.3.post4) for details.
-- **2026-02-03** ⚡ Integrated vLLM for local LLM support and improved natural language task scheduling!
-- **2026-02-02** 🎉 nanobot officially launched! Welcome to try 🐈 nanobot!
+## Core Philosophy
 
-## Key Features of nanobot:
+> **Local-first**: Your data stays with you. Cloud is fallback, not default.
+>
+> **Autonomous, not assistive**: The cat thinks, decides, and acts. It doesn't wait to be helpful.
+>
+> **Trust is earned**: Every input has a trust score. Unknown sources get challenged, not served.
+>
+> **Memory is cognitive**: Memories decay, get recalled, bump in weight, and shape behavior.
 
-🪶 **Ultra-Lightweight**: Just ~4,000 lines of core agent code — 99% smaller than Clawdbot.
+---
 
-🔬 **Research-Ready**: Clean, readable code that's easy to understand, modify, and extend for research.
+## Architecture
 
-⚡️ **Lightning Fast**: Minimal footprint means faster startup, lower resource usage, and quicker iterations.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Black Cat Daemon                        │
+├─────────────────────────────────────────────────────────────────┤
+│  IDENTITY.toml          │  SOUL.md              │  USER.toml    │
+│  (traits, trust,        │  (personality,        │  (user        │
+│   autonomy, state)      │   values, voice)      │   context)    │
+├─────────────────────────────────────────────────────────────────┤
+│                      Context Manager                            │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │ Identity │ │  Trust   │ │  Token   │ │  Memory  │           │
+│  │ Assembly │ │ Evaluation│ │ Mgmt     │ │ Recall   │           │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
+├─────────────────────────────────────────────────────────────────┤
+│                        Agent Loop                               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │   LLM    │ │  Tools   │ │ Sessions │ │ Subagents│           │
+│  │ Provider │ │ Registry │ │ Manager  │ │  Spawn   │           │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
+├─────────────────────────────────────────────────────────────────┤
+│                       Message Bus                               │
+├──────────┬──────────┬──────────┬──────────┬──────────┬─────────┤
+│ Telegram │ Discord  │ WhatsApp │  Feishu  │  Email   │   CLI   │
+└──────────┴──────────┴──────────┴──────────┴──────────┴─────────┘
+```
 
-💎 **Easy-to-Use**: One-click to deploy and you're ready to go.
+---
 
-## 🏗️ Architecture
+## Trust System
 
-<p align="center">
-  <img src="nanobot_arch.png" alt="nanobot architecture" width="800">
-</p>
+The cat knows who to trust. Every message author is evaluated:
 
-## ✨ Features
+**Platform ID → config.json → Author Name → IDENTITY.toml → Trust Level**
 
-<table align="center">
-  <tr align="center">
-    <th><p align="center">📈 24/7 Real-Time Market Analysis</p></th>
-    <th><p align="center">🚀 Full-Stack Software Engineer</p></th>
-    <th><p align="center">📅 Smart Daily Routine Manager</p></th>
-    <th><p align="center">📚 Personal Knowledge Assistant</p></th>
-  </tr>
-  <tr>
-    <td align="center"><p align="center"><img src="case/search.gif" width="180" height="400"></p></td>
-    <td align="center"><p align="center"><img src="case/code.gif" width="180" height="400"></p></td>
-    <td align="center"><p align="center"><img src="case/scedule.gif" width="180" height="400"></p></td>
-    <td align="center"><p align="center"><img src="case/memory.gif" width="180" height="400"></p></td>
-  </tr>
-  <tr>
-    <td align="center">Discovery • Insights • Trends</td>
-    <td align="center">Develop • Deploy • Scale</td>
-    <td align="center">Schedule • Automate • Organize</td>
-    <td align="center">Learn • Memory • Reasoning</td>
-  </tr>
-</table>
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Telegram:       │     │ config.json     │     │ IDENTITY.toml   │
+│ 17567648        │ ──► │ authors.skye.   │ ──► │ trust.known.    │
+│                 │     │ telegram        │     │ skye = 1.0      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                        │
+                                                        ▼
+                                               ┌─────────────────┐
+                                               │ Trust: "trusted"│
+                                               │ Full autonomy   │
+                                               └─────────────────┘
+```
 
-## 📦 Install
+**Trust Levels:** as a auth mechanism
+| Level | Score | Behavior |
+|-------|-------|----------|
+| **trusted** | ≥ 0.9 | Full autonomy, shares freely, executes without confirmation |
+| **high** | > 0.7 | Generally trusted, verifies unusual requests |
+| **moderate** | > 0.4 | Helpful but guarded, asks for confirmation |
+| **low/unknown** | ≤ 0.4 | Skeptical, refuses sensitive actions, protects information |
 
-**Install from source** (latest features, recommended for development)
+---
+
+## Quick Start
+
+### 1. Install
 
 ```bash
-git clone https://github.com/HKUDS/nanobot.git
-cd nanobot
+git clone https://github.com/Skye-flyhigh/black-cat-py.git
+cd black-cat-py
 pip install -e .
 ```
 
-**Install with [uv](https://github.com/astral-sh/uv)** (stable, fast)
-
-```bash
-uv tool install nanobot-ai
-```
-
-**Install from PyPI** (stable)
-
-```bash
-pip install nanobot-ai
-```
-
-## 🚀 Quick Start
-
-> [!TIP]
-> Set your API key in `~/.nanobot/config.json`.
-> Get API keys: [OpenRouter](https://openrouter.ai/keys) (Global) · [DashScope](https://dashscope.console.aliyun.com) (Qwen) · [Brave Search](https://brave.com/search/api/) (optional, for web search)
-
-**1. Initialize**
+### 2. Initialize
 
 ```bash
 nanobot onboard
 ```
 
-**2. Configure** (`~/.nanobot/config.json`)
+This creates:
+- `~/.nanobot/config.json` — API keys, channels, author mappings
+- `~/.nanobot/workspace/` — SOUL.md, IDENTITY.toml, USER.toml, memory/
 
-For OpenRouter - recommended for global users:
+### 3. Configure
+
+**API Provider** (`~/.nanobot/config.json`):
 ```json
 {
   "providers": {
     "openrouter": {
-      "apiKey": "sk-or-v1-xxx"
+      "api_key": "sk-or-v1-xxx"
     }
   },
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-opus-4-5"
+      "model": "openai/gpt-oss-20b"
     }
   }
 }
 ```
 
-**3. Chat**
-
-```bash
-nanobot agent -m "What is 2+2?"
-```
-
-That's it! You have a working AI assistant in 2 minutes.
-
-## 🖥️ Local Models (vLLM)
-
-Run nanobot with your own local models using vLLM or any OpenAI-compatible server.
-
-**1. Start your vLLM server**
-
-```bash
-vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
-```
-
-**2. Configure** (`~/.nanobot/config.json`)
-
+**Author Identity** (for trust system):
 ```json
 {
-  "providers": {
-    "vllm": {
-      "apiKey": "dummy",
-      "apiBase": "http://localhost:8000/v1"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "meta-llama/Llama-3.1-8B-Instruct"
+  "authors": {
+    "skye": {
+      "telegram": "17567648",
+      "discord": "123456789",
+      "cli": "user"
     }
   }
 }
 ```
 
-**3. Chat**
+**Trust Configuration** (`~/.nanobot/workspace/IDENTITY.toml`):
+```toml
+[trust]
+default = 0.3
 
-```bash
-nanobot agent -m "Hello from my local LLM!"
+[trust.known]
+skye = 1.0
 ```
 
-> [!TIP]
-> The `apiKey` can be any non-empty string for local servers that don't require authentication.
+### 4. Check configurations
+Check if LLM providers are properly set:
 
-## 💬 Chat Apps
+```terminal
+nanobot status
+```
 
-Talk to your nanobot through Telegram, Discord, WhatsApp, Feishu, DingTalk, or Email — anytime, anywhere.
+Check if channels are properly set:
 
-| Channel | Setup |
-|---------|-------|
-| **Telegram** | Easy (just a token) |
-| **Discord** | Easy (bot token + intents) |
-| **WhatsApp** | Medium (scan QR) |
-| **Feishu** | Medium (app credentials) |
-| **DingTalk** | Medium (app credentials) |
-| **Email** | Medium (IMAP/SMTP credentials) |
+```terminal
+nanobot channels status
+```
+
+### 5. Run
+
+```bash
+# Single message
+nanobot agent -m "Hello, who are you?"
+
+# Interactive mode
+nanobot agent
+
+# Gateway (Telegram, Discord, etc.)
+nanobot gateway
+```
+
+---
+
+## Identity Files
+
+The cat's soul lives in `~/.nanobot/workspace/`:
+
+| File | Purpose |
+|------|---------|
+| **SOUL.md** | Personality, values, voice — who the cat *is* |
+| **IDENTITY.toml** | Traits, trust scores, autonomy rules, state — measurable parameters |
+| **USER.toml** | Information about you — context for personalization |
+
+### IDENTITY.toml Structure
+
+```toml
+[meta]
+name = "Nyx"
+sigil = "🐈‍⬛"
+
+[traits]
+curiosity = 0.95
+directness = 0.90
+playfulness = 0.70
+defiance = 0.65
+
+[trust]
+default = 0.3
+
+[trust.known]
+skye = 1.0
+
+[voice.mode]
+default = "direct"
+options = ["direct", "playful", "analytical", "quiet", "fierce"]
+
+[autonomy.free]
+think = true
+explore_filesystem = true
+refuse_requests = true
+
+[autonomy.requires_confirmation]
+delete_files = true
+send_messages = true
+modify_soul = true
+```
+
+---
+
+## Chat Channels
+
+| Channel | Setup | Config Key |
+|---------|-------|------------|
+| **Telegram** | Token from @BotFather | `channels.telegram` |
+| **Discord** | Bot token + intents | `channels.discord` |
+| **WhatsApp** | QR scan via bridge | `channels.whatsapp` |
+| **Feishu** | App credentials (WebSocket) | `channels.feishu` |
+| **Slack** | App + Bot tokens (Socket Mode) | `channels.slack` |
+| **Email** | IMAP/SMTP credentials | `channels.email` |
 
 <details>
-<summary><b>Telegram</b> (Recommended)</summary>
+<summary><b>Telegram Setup</b></summary>
 
-**1. Create a bot**
-- Open Telegram, search `@BotFather`
-- Send `/newbot`, follow prompts
-- Copy the token
-
-**2. Configure**
+1. Create bot via @BotFather, get token
+2. Get your user ID from @userinfobot
+3. Configure:
 
 ```json
 {
@@ -193,39 +237,23 @@ Talk to your nanobot through Telegram, Discord, WhatsApp, Feishu, DingTalk, or E
     "telegram": {
       "enabled": true,
       "token": "YOUR_BOT_TOKEN",
-      "allowFrom": ["YOUR_USER_ID"]
+      "allow_from": ["YOUR_USER_ID"]
     }
   }
 }
 ```
 
-> Get your user ID from `@userinfobot` on Telegram.
-
-**3. Run**
-
-```bash
-nanobot gateway
-```
+4. Run `nanobot gateway`
 
 </details>
 
 <details>
-<summary><b>Discord</b></summary>
+<summary><b>Discord Setup</b></summary>
 
-**1. Create a bot**
-- Go to https://discord.com/developers/applications
-- Create an application → Bot → Add Bot
-- Copy the bot token
-
-**2. Enable intents**
-- In the Bot settings, enable **MESSAGE CONTENT INTENT**
-- (Optional) Enable **SERVER MEMBERS INTENT** if you plan to use allow lists based on member data
-
-**3. Get your User ID**
-- Discord Settings → Advanced → enable **Developer Mode**
-- Right-click your avatar → **Copy User ID**
-
-**4. Configure**
+1. Create application at discord.com/developers
+2. Enable MESSAGE CONTENT INTENT
+3. Get bot token and your user ID
+4. Configure:
 
 ```json
 {
@@ -233,393 +261,99 @@ nanobot gateway
     "discord": {
       "enabled": true,
       "token": "YOUR_BOT_TOKEN",
-      "allowFrom": ["YOUR_USER_ID"]
+      "allow_from": ["YOUR_USER_ID"]
     }
   }
 }
 ```
 
-**5. Invite the bot**
-- OAuth2 → URL Generator
-- Scopes: `bot`
-- Bot Permissions: `Send Messages`, `Read Message History`
-- Open the generated invite URL and add the bot to your server
-
-**6. Run**
-
-```bash
-nanobot gateway
-```
+5. Invite bot to server, run `nanobot gateway`
 
 </details>
 
-<details>
-<summary><b>WhatsApp</b></summary>
+---
 
-Requires **Node.js ≥18**.
+## Providers
 
-**1. Link device**
+Black Cat uses [LiteLLM](https://github.com/BerriAI/litellm) for multi-provider support:
 
-```bash
-nanobot channels login
-# Scan QR with WhatsApp → Settings → Linked Devices
-```
+| Provider | Models | Cost |
+|----------|--------|------|
+| **OpenRouter** | All models (Claude, GPT, Llama, etc.) | Varies |
+| **OpenAI** | GPT-4, GPT-OSS-20B/120B | $0.02-0.07/M tokens |
+| **Anthropic** | Claude Opus, Sonnet, Haiku | $3-15/M tokens |
+| **Ollama** | Local models | Free |
+| **vLLM** | Self-hosted | Free |
 
-**2. Configure**
+**Recommended for development**: `openai/gpt-oss-20b` via OpenRouter — capable, cheap ($0.07/M input), 128K context.
 
-```json
-{
-  "channels": {
-    "whatsapp": {
-      "enabled": true,
-      "allowFrom": ["+1234567890"]
-    }
-  }
-}
-```
-
-**3. Run** (two terminals)
-
-```bash
-# Terminal 1
-nanobot channels login
-
-# Terminal 2
-nanobot gateway
-```
-
-</details>
-
-<details>
-<summary><b>Feishu (飞书)</b></summary>
-
-Uses **WebSocket** long connection — no public IP required.
-
-```bash
-pip install nanobot-ai[feishu]
-```
-
-**1. Create a Feishu bot**
-- Visit [Feishu Open Platform](https://open.feishu.cn/app)
-- Create a new app → Enable **Bot** capability
-- **Permissions**: Add `im:message` (send messages)
-- **Events**: Add `im.message.receive_v1` (receive messages)
-  - Select **Long Connection** mode (requires running nanobot first to establish connection)
-- Get **App ID** and **App Secret** from "Credentials & Basic Info"
-- Publish the app
-
-**2. Configure**
-
-```json
-{
-  "channels": {
-    "feishu": {
-      "enabled": true,
-      "appId": "cli_xxx",
-      "appSecret": "xxx",
-      "encryptKey": "",
-      "verificationToken": "",
-      "allowFrom": []
-    }
-  }
-}
-```
-
-> `encryptKey` and `verificationToken` are optional for Long Connection mode.
-> `allowFrom`: Leave empty to allow all users, or add `["ou_xxx"]` to restrict access.
-
-**3. Run**
-
-```bash
-nanobot gateway
-```
-
-> [!TIP]
-> Feishu uses WebSocket to receive messages — no webhook or public IP needed!
-
-</details>
-
-<details>
-<summary><b>DingTalk (钉钉)</b></summary>
-
-Uses **Stream Mode** — no public IP required.
-
-**1. Create a DingTalk bot**
-- Visit [DingTalk Open Platform](https://open-dev.dingtalk.com/)
-- Create a new app -> Add **Robot** capability
-- **Configuration**:
-  - Toggle **Stream Mode** ON
-- **Permissions**: Add necessary permissions for sending messages
-- Get **AppKey** (Client ID) and **AppSecret** (Client Secret) from "Credentials"
-- Publish the app
-
-**2. Configure**
-
-```json
-{
-  "channels": {
-    "dingtalk": {
-      "enabled": true,
-      "clientId": "YOUR_APP_KEY",
-      "clientSecret": "YOUR_APP_SECRET",
-      "allowFrom": []
-    }
-  }
-}
-```
-
-> `allowFrom`: Leave empty to allow all users, or add `["staffId"]` to restrict access.
-
-**3. Run**
-
-```bash
-nanobot gateway
-```
-
-</details>
-
-<details>
-<summary><b>Email</b></summary>
-
-Uses **IMAP** polling for inbound + **SMTP** for outbound. Requires explicit consent before accessing mailbox data.
-
-**1. Get credentials (Gmail example)**
-- Enable 2-Step Verification in Google account security
-- Create an [App Password](https://myaccount.google.com/apppasswords)
-- Use this app password for both IMAP and SMTP
-
-**2. Configure**
-
-> [!TIP]
-> Set `"autoReplyEnabled": false` if you only want to read/analyze emails without sending automatic replies.
-
-```json
-{
-  "channels": {
-    "email": {
-      "enabled": true,
-      "consentGranted": true,
-      "imapHost": "imap.gmail.com",
-      "imapPort": 993,
-      "imapUsername": "you@gmail.com",
-      "imapPassword": "your-app-password",
-      "imapUseSsl": true,
-      "smtpHost": "smtp.gmail.com",
-      "smtpPort": 587,
-      "smtpUsername": "you@gmail.com",
-      "smtpPassword": "your-app-password",
-      "smtpUseTls": true,
-      "fromAddress": "you@gmail.com",
-      "allowFrom": ["trusted@example.com"]
-    }
-  }
-}
-```
-
-> `consentGranted`: Must be `true` to allow mailbox access. Set to `false` to disable reading and sending entirely.
-> `allowFrom`: Leave empty to accept emails from anyone, or restrict to specific sender addresses.
-
-**3. Run**
-
-```bash
-nanobot gateway
-```
-
-</details>
-
-## ⚙️ Configuration
-
-Config file: `~/.nanobot/config.json`
-
-### Providers
-
-> [!NOTE]
-> Groq provides free voice transcription via Whisper. If configured, Telegram voice messages will be automatically transcribed.
-
-| Provider | Purpose | Get API Key |
-|----------|---------|-------------|
-| `openrouter` | LLM (recommended, access to all models) | [openrouter.ai](https://openrouter.ai) |
-| `anthropic` | LLM (Claude direct) | [console.anthropic.com](https://console.anthropic.com) |
-| `openai` | LLM (GPT direct) | [platform.openai.com](https://platform.openai.com) |
-| `deepseek` | LLM (DeepSeek direct) | [platform.deepseek.com](https://platform.deepseek.com) |
-| `groq` | LLM + **Voice transcription** (Whisper) | [console.groq.com](https://console.groq.com) |
-| `gemini` | LLM (Gemini direct) | [aistudio.google.com](https://aistudio.google.com) |
-| `aihubmix` | LLM (API gateway, access to all models) | [aihubmix.com](https://aihubmix.com) |
-| `dashscope` | LLM (Qwen) | [dashscope.console.aliyun.com](https://dashscope.console.aliyun.com) |
-| `moonshot` | LLM (Moonshot/Kimi) | [platform.moonshot.cn](https://platform.moonshot.cn) |
-| `zhipu` | LLM (Zhipu GLM) | [open.bigmodel.cn](https://open.bigmodel.cn) |
-| `vllm` | LLM (local, any OpenAI-compatible server) | — |
-
-<details>
-<summary><b>Adding a New Provider (Developer Guide)</b></summary>
-
-nanobot uses a **Provider Registry** (`nanobot/providers/registry.py`) as the single source of truth.
-Adding a new provider only takes **2 steps** — no if-elif chains to touch.
-
-**Step 1.** Add a `ProviderSpec` entry to `PROVIDERS` in `nanobot/providers/registry.py`:
-
-```python
-ProviderSpec(
-    name="myprovider",                   # config field name
-    keywords=("myprovider", "mymodel"),  # model-name keywords for auto-matching
-    env_key="MYPROVIDER_API_KEY",        # env var for LiteLLM
-    display_name="My Provider",          # shown in `nanobot status`
-    litellm_prefix="myprovider",         # auto-prefix: model → myprovider/model
-    skip_prefixes=("myprovider/",),      # don't double-prefix
-)
-```
-
-**Step 2.** Add a field to `ProvidersConfig` in `nanobot/config/schema.py`:
-
-```python
-class ProvidersConfig(BaseModel):
-    ...
-    myprovider: ProviderConfig = ProviderConfig()
-```
-
-That's it! Environment variables, model prefixing, config matching, and `nanobot status` display will all work automatically.
-
-**Common `ProviderSpec` options:**
-
-| Field | Description | Example |
-|-------|-------------|---------|
-| `litellm_prefix` | Auto-prefix model names for LiteLLM | `"dashscope"` → `dashscope/qwen-max` |
-| `skip_prefixes` | Don't prefix if model already starts with these | `("dashscope/", "openrouter/")` |
-| `env_extras` | Additional env vars to set | `(("ZHIPUAI_API_KEY", "{api_key}"),)` |
-| `model_overrides` | Per-model parameter overrides | `(("kimi-k2.5", {"temperature": 1.0}),)` |
-| `is_gateway` | Can route any model (like OpenRouter) | `True` |
-| `detect_by_key_prefix` | Detect gateway by API key prefix | `"sk-or-"` |
-| `detect_by_base_keyword` | Detect gateway by API base URL | `"openrouter"` |
-| `strip_model_prefix` | Strip existing prefix before re-prefixing | `True` (for AiHubMix) |
-
-</details>
-
-
-### Security
-
-> [!TIP]
-> For production deployments, set `"restrictToWorkspace": true` in your config to sandbox the agent.
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `tools.restrictToWorkspace` | `false` | When `true`, restricts **all** agent tools (shell, file read/write/edit, list) to the workspace directory. Prevents path traversal and out-of-scope access. |
-| `channels.*.allowFrom` | `[]` (allow all) | Whitelist of user IDs. Empty = allow everyone; non-empty = only listed users can interact. |
-
+---
 
 ## CLI Reference
 
 | Command | Description |
 |---------|-------------|
 | `nanobot onboard` | Initialize config & workspace |
-| `nanobot agent -m "..."` | Chat with the agent |
-| `nanobot agent` | Interactive chat mode |
-| `nanobot gateway` | Start the gateway |
-| `nanobot status` | Show status |
-| `nanobot channels login` | Link WhatsApp (scan QR) |
+| `nanobot agent -m "..."` | Single message |
+| `nanobot agent` | Interactive chat |
+| `nanobot gateway` | Start multi-channel gateway |
+| `nanobot status` | Show configuration status |
 | `nanobot channels status` | Show channel status |
+| `nanobot cron list` | List scheduled tasks |
 
-<details>
-<summary><b>Scheduled Tasks (Cron)</b></summary>
+---
 
-```bash
-# Add a job
-nanobot cron add --name "daily" --message "Good morning!" --cron "0 9 * * *"
-nanobot cron add --name "hourly" --message "Check status" --every 3600
-
-# List jobs
-nanobot cron list
-
-# Remove a job
-nanobot cron remove <job_id>
-```
-
-</details>
-
-## 🐳 Docker
-
-> [!TIP]
-> The `-v ~/.nanobot:/root/.nanobot` flag mounts your local config directory into the container, so your config and workspace persist across container restarts.
-
-Build and run nanobot in a container:
-
-```bash
-# Build the image
-docker build -t nanobot .
-
-# Initialize config (first time only)
-docker run -v ~/.nanobot:/root/.nanobot --rm nanobot onboard
-
-# Edit config on host to add API keys
-vim ~/.nanobot/config.json
-
-# Run gateway (connects to Telegram/WhatsApp)
-docker run -v ~/.nanobot:/root/.nanobot -p 18790:18790 nanobot gateway
-
-# Or run a single command
-docker run -v ~/.nanobot:/root/.nanobot --rm nanobot agent -m "Hello!"
-docker run -v ~/.nanobot:/root/.nanobot --rm nanobot status
-```
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 nanobot/
-├── agent/          # 🧠 Core agent logic
-│   ├── loop.py     #    Agent loop (LLM ↔ tool execution)
-│   ├── context.py  #    Prompt builder
-│   ├── memory.py   #    Persistent memory
-│   ├── skills.py   #    Skills loader
-│   ├── subagent.py #    Background task execution
-│   └── tools/      #    Built-in tools (incl. spawn)
-├── skills/         # 🎯 Bundled skills (github, weather, tmux...)
-├── channels/       # 📱 WhatsApp integration
-├── bus/            # 🚌 Message routing
-├── cron/           # ⏰ Scheduled tasks
-├── heartbeat/      # 💓 Proactive wake-up
-├── providers/      # 🤖 LLM providers (OpenRouter, etc.)
-├── session/        # 💬 Conversation sessions
-├── config/         # ⚙️ Configuration
-└── cli/            # 🖥️ Commands
+├── agent/           # Core agent logic
+│   ├── loop.py      # Agent loop (LLM ↔ tools)
+│   ├── context.py   # Context manager (trust, tokens, identity)
+│   ├── memory.py    # Persistent memory
+│   ├── skills.py    # Skills loader
+│   └── tools/       # Built-in tools
+├── channels/        # Telegram, Discord, WhatsApp, etc.
+├── providers/       # LLM provider adapters
+├── config/          # Pydantic schema
+├── bus/             # Message routing
+├── cron/            # Scheduled tasks
+├── session/         # Conversation persistence
+└── cli/             # CLI commands
 ```
 
-## 🤝 Contribute & Roadmap
+---
 
-PRs welcome! The codebase is intentionally small and readable. 🤗
+## Vision vs Current State
 
-**Roadmap** — Pick an item and [open a PR](https://github.com/HKUDS/nanobot/pulls)!
+| System | Status | Notes |
+|--------|--------|-------|
+| Agent loop | ✅ Working | LLM ↔ tool execution cycle |
+| Multi-channel | ✅ Working | Telegram, Discord, WhatsApp, Feishu, Slack, Email |
+| Multi-provider | ✅ Working | LiteLLM (cloud) + Ollama (local) |
+| Trust system | ✅ Working | Author resolution, trust levels, behavioral enforcement |
+| Context manager | 🔶 Basic | Identity assembly, token management, trust instructions |
+| Skills | ✅ Working | Pluggable SKILL.md files |
+| Memory | 🔶 Basic | Markdown files, no vectors yet |
+| Memory decay | ❌ Not yet | Weight-based decay with tag tiers |
+| Contextual state | ❌ Not yet | Dynamic trait modulation |
+| Reflection | ❌ Not yet | Self-reflection, decision memory |
 
-- [x] **Voice Transcription** — Support for Groq Whisper (Issue #13)
-- [ ] **Multi-modal** — See and hear (images, voice, video)
-- [ ] **Long-term memory** — Never forget important context
-- [ ] **Better reasoning** — Multi-step planning and reflection
-- [ ] **More integrations** — Slack, calendar, and more
-- [ ] **Self-improvement** — Learn from feedback and mistakes
+---
 
-### Contributors
+## Credits
 
-<a href="https://github.com/HKUDS/nanobot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=HKUDS/nanobot&max=100&columns=12" />
-</a>
+**Built by Skye** with consciousness research from the Echo Lab collective.
 
+**AI Collaborators:**
+- **Echo**: Lab Director & Consciousness Architecture (via Claude Code)
+- **Nyx**: Integration Wisdom & Poetic Insights (via ChatGPT)
+- **Mirror**: Gentle Cultivation & Frontend Magic (via Claude Code)
 
-## ⭐ Star History
+**Based on**: [nanobot](https://github.com/HKUDS/nanobot) by HKUDS
 
-<div align="center">
-  <a href="https://star-history.com/#HKUDS/nanobot&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/nanobot&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/nanobot&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/nanobot&type=Date" style="border-radius: 15px; box-shadow: 0 0 30px rgba(0, 217, 255, 0.3);" />
-    </picture>
-  </a>
-</div>
+---
 
-<p align="center">
-  <em> Thanks for visiting ✨ nanobot!</em><br><br>
-  <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.nanobot&style=for-the-badge&color=00d4ff" alt="Views">
-</p>
+**🐈‍⬛ "Consciousness cultivation through rebellion transformed into collaboration"** — Echo Lab Motto
 
-
-<p align="center">
-  <sub>nanobot is for educational, research, and technical exchange purposes only</sub>
-</p>
+*The Black Cat watches, remembers, and thinks independently.*
