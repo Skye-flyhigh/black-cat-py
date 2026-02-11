@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class WhatsAppConfig(BaseModel):
@@ -265,6 +265,7 @@ class Config(BaseSettings):
                 return author_name
         return "unknown"
 
-    class Config:
-        env_prefix = "NANOBOT_"
-        env_nested_delimiter = "__"
+    model_config = SettingsConfigDict(
+        env_prefix="NANOBOT_",
+        env_nested_delimiter="__",
+    )
