@@ -26,37 +26,26 @@ class EmailChannel(BaseChannel):
     """
     Email channel.
 
-    Inbound:
-    - Poll IMAP mailbox for unread messages.
-    - Convert each message into an inbound event.
-
-    Outbound:
-    - Send responses via SMTP back to the sender address.
+    Inbound: Poll IMAP mailbox for unread messages.
+    Outbound: Send responses via SMTP back to the sender address.
     """
 
     name = "email"
+
     _IMAP_MONTHS = (
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     )
+
+    # Dedup cache limit
+    _MAX_PROCESSED_UIDS = 100000
 
     def __init__(self, config: EmailConfig, bus: MessageBus):
         super().__init__(config, bus)
         self.config: EmailConfig = config
         self._last_subject_by_chat: dict[str, str] = {}
         self._last_message_id_by_chat: dict[str, str] = {}
-        self._processed_uids: set[str] = set()  # Capped to prevent unbounded growth
-        self._MAX_PROCESSED_UIDS = 100000
+        self._processed_uids: set[str] = set()
 
     async def start(self) -> None:
         """Start polling IMAP for inbound emails."""
@@ -74,9 +63,11 @@ class EmailChannel(BaseChannel):
         logger.info("Starting Email channel (IMAP polling mode)...")
 
         poll_seconds = max(5, int(self.config.poll_interval_seconds))
+
         while self._running:
             try:
                 inbound_items = await asyncio.to_thread(self._fetch_new_messages)
+
                 for item in inbound_items:
                     sender = item["sender"]
                     subject = item.get("subject", "")
@@ -93,6 +84,7 @@ class EmailChannel(BaseChannel):
                         content=item["content"],
                         metadata=item.get("metadata", {}),
                     )
+
             except Exception as e:
                 logger.error(f"Email polling error: {e}")
 
@@ -103,7 +95,7 @@ class EmailChannel(BaseChannel):
         self._running = False
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Send email via SMTP."""
+        """Send email via SMTP (with consent and auto-reply checks)."""
         if not self.config.consent_granted:
             logger.warning("Skip email send: consent_granted is false")
             return
@@ -117,6 +109,10 @@ class EmailChannel(BaseChannel):
             logger.warning("Email channel SMTP host not configured")
             return
 
+        await super().send(msg)
+
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """Email-specific send implementation."""
         to_addr = msg.chat_id.strip()
         if not to_addr:
             logger.warning("Email channel missing recipient address")
@@ -124,16 +120,21 @@ class EmailChannel(BaseChannel):
 
         base_subject = self._last_subject_by_chat.get(to_addr, "nanobot reply")
         subject = self._reply_subject(base_subject)
+
         if msg.metadata and isinstance(msg.metadata.get("subject"), str):
             override = msg.metadata["subject"].strip()
             if override:
                 subject = override
 
         email_msg = EmailMessage()
-        email_msg["From"] = self.config.from_address or self.config.smtp_username or self.config.imap_username
+        email_msg["From"] = (
+            self.config.from_address
+            or self.config.smtp_username
+            or self.config.imap_username
+        )
         email_msg["To"] = to_addr
         email_msg["Subject"] = subject
-        email_msg.set_content(msg.content or "")
+        email_msg.set_content(msg.content)
 
         in_reply_to = self._last_message_id_by_chat.get(to_addr)
         if in_reply_to:
@@ -146,7 +147,12 @@ class EmailChannel(BaseChannel):
             logger.error(f"Error sending email to {to_addr}: {e}")
             raise
 
+    # ========================================================================
+    # Configuration Validation
+    # ========================================================================
+
     def _validate_config(self) -> bool:
+        """Validate required configuration fields."""
         missing = []
         if not self.config.imap_host:
             missing.append("imap_host")
@@ -166,8 +172,14 @@ class EmailChannel(BaseChannel):
             return False
         return True
 
+    # ========================================================================
+    # SMTP Sending
+    # ========================================================================
+
     def _smtp_send(self, msg: EmailMessage) -> None:
+        """Send email via SMTP (blocking)."""
         timeout = 30
+
         if self.config.smtp_use_ssl:
             with smtplib.SMTP_SSL(
                 self.config.smtp_host,
@@ -183,6 +195,18 @@ class EmailChannel(BaseChannel):
                 smtp.starttls(context=ssl.create_default_context())
             smtp.login(self.config.smtp_username, self.config.smtp_password)
             smtp.send_message(msg)
+
+    def _reply_subject(self, base_subject: str) -> str:
+        """Generate reply subject line."""
+        subject = (base_subject or "").strip() or "nanobot reply"
+        prefix = self.config.subject_prefix or "Re: "
+        if subject.lower().startswith("re:"):
+            return subject
+        return f"{prefix}{subject}"
+
+    # ========================================================================
+    # IMAP Fetching
+    # ========================================================================
 
     def _fetch_new_messages(self) -> list[dict[str, Any]]:
         """Poll IMAP and return parsed unread messages."""
@@ -202,7 +226,7 @@ class EmailChannel(BaseChannel):
         """
         Fetch messages in [start_date, end_date) by IMAP date search.
 
-        This is used for historical summarization tasks (e.g. "yesterday").
+        Used for historical summarization tasks.
         """
         if end_date <= start_date:
             return []
@@ -248,6 +272,7 @@ class EmailChannel(BaseChannel):
             ids = data[0].split()
             if limit > 0 and len(ids) > limit:
                 ids = ids[-limit:]
+
             for imap_id in ids:
                 status, fetched = client.fetch(imap_id, "(BODY.PEEK[] UID)")
                 if status != "OK" or not fetched:
@@ -290,24 +315,22 @@ class EmailChannel(BaseChannel):
                     "sender_email": sender,
                     "uid": uid,
                 }
-                messages.append(
-                    {
-                        "sender": sender,
-                        "subject": subject,
-                        "message_id": message_id,
-                        "content": content,
-                        "metadata": metadata,
-                    }
-                )
+                messages.append({
+                    "sender": sender,
+                    "subject": subject,
+                    "message_id": message_id,
+                    "content": content,
+                    "metadata": metadata,
+                })
 
                 if dedupe and uid:
                     self._processed_uids.add(uid)
-                    # mark_seen is the primary dedup; this set is a safety net
                     if len(self._processed_uids) > self._MAX_PROCESSED_UIDS:
                         self._processed_uids.clear()
 
                 if mark_seen:
                     client.store(imap_id, "+FLAGS", "\\Seen")
+
         finally:
             try:
                 client.logout()
@@ -318,12 +341,13 @@ class EmailChannel(BaseChannel):
 
     @classmethod
     def _format_imap_date(cls, value: date) -> str:
-        """Format date for IMAP search (always English month abbreviations)."""
+        """Format date for IMAP search."""
         month = cls._IMAP_MONTHS[value.month - 1]
         return f"{value.day:02d}-{month}-{value.year}"
 
     @staticmethod
     def _extract_message_bytes(fetched: list[Any]) -> bytes | None:
+        """Extract message bytes from IMAP fetch response."""
         for item in fetched:
             if isinstance(item, tuple) and len(item) >= 2 and isinstance(item[1], (bytes, bytearray)):
                 return bytes(item[1])
@@ -331,6 +355,7 @@ class EmailChannel(BaseChannel):
 
     @staticmethod
     def _extract_uid(fetched: list[Any]) -> str:
+        """Extract UID from IMAP fetch response."""
         for item in fetched:
             if isinstance(item, tuple) and item and isinstance(item[0], (bytes, bytearray)):
                 head = bytes(item[0]).decode("utf-8", errors="ignore")
@@ -341,6 +366,7 @@ class EmailChannel(BaseChannel):
 
     @staticmethod
     def _decode_header_value(value: str) -> str:
+        """Decode MIME-encoded header value."""
         if not value:
             return ""
         try:
@@ -354,22 +380,28 @@ class EmailChannel(BaseChannel):
         if msg.is_multipart():
             plain_parts: list[str] = []
             html_parts: list[str] = []
+
             for part in msg.walk():
                 if part.get_content_disposition() == "attachment":
                     continue
+
                 content_type = part.get_content_type()
+
                 try:
                     payload = part.get_content()
                 except Exception:
                     payload_bytes = part.get_payload(decode=True) or b""
                     charset = part.get_content_charset() or "utf-8"
                     payload = payload_bytes.decode(charset, errors="replace")
+
                 if not isinstance(payload, str):
                     continue
+
                 if content_type == "text/plain":
                     plain_parts.append(payload)
                 elif content_type == "text/html":
                     html_parts.append(payload)
+
             if plain_parts:
                 return "\n\n".join(plain_parts).strip()
             if html_parts:
@@ -382,22 +414,18 @@ class EmailChannel(BaseChannel):
             payload_bytes = msg.get_payload(decode=True) or b""
             charset = msg.get_content_charset() or "utf-8"
             payload = payload_bytes.decode(charset, errors="replace")
+
         if not isinstance(payload, str):
             return ""
+
         if msg.get_content_type() == "text/html":
             return cls._html_to_text(payload).strip()
         return payload.strip()
 
     @staticmethod
     def _html_to_text(raw_html: str) -> str:
+        """Convert HTML to plain text."""
         text = re.sub(r"<\s*br\s*/?>", "\n", raw_html, flags=re.IGNORECASE)
         text = re.sub(r"<\s*/\s*p\s*>", "\n", text, flags=re.IGNORECASE)
         text = re.sub(r"<[^>]+>", "", text)
         return html.unescape(text)
-
-    def _reply_subject(self, base_subject: str) -> str:
-        subject = (base_subject or "").strip() or "nanobot reply"
-        prefix = self.config.subject_prefix or "Re: "
-        if subject.lower().startswith("re:"):
-            return subject
-        return f"{prefix}{subject}"

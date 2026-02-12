@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -12,17 +11,22 @@ from loguru import logger
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
+from nanobot.channels.utils import (
+    MAX_ATTACHMENT_BYTES,
+    RECONNECT_DELAY_SECONDS,
+    TYPING_INTERVAL_DISCORD,
+    format_reply_context,
+)
 from nanobot.config.schema import DiscordConfig
 
-
 DISCORD_API_BASE = "https://discord.com/api/v10"
-MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20MB
 
 
 class DiscordChannel(BaseChannel):
     """Discord channel using Gateway websocket."""
 
     name = "discord"
+    typing_interval = TYPING_INTERVAL_DISCORD
 
     def __init__(self, config: DiscordConfig, bus: MessageBus):
         super().__init__(config, bus)
@@ -30,7 +34,6 @@ class DiscordChannel(BaseChannel):
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._seq: int | None = None
         self._heartbeat_task: asyncio.Task | None = None
-        self._typing_tasks: dict[str, asyncio.Task] = {}
         self._http: httpx.AsyncClient | None = None
 
     async def start(self) -> None:
@@ -53,27 +56,29 @@ class DiscordChannel(BaseChannel):
             except Exception as e:
                 logger.warning(f"Discord gateway error: {e}")
                 if self._running:
-                    logger.info("Reconnecting to Discord gateway in 5 seconds...")
-                    await asyncio.sleep(5)
+                    logger.info(f"Reconnecting to Discord gateway in {RECONNECT_DELAY_SECONDS} seconds...")
+                    await asyncio.sleep(RECONNECT_DELAY_SECONDS)
 
     async def stop(self) -> None:
         """Stop the Discord channel."""
         self._running = False
+
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
             self._heartbeat_task = None
-        for task in self._typing_tasks.values():
-            task.cancel()
-        self._typing_tasks.clear()
+
+        self._stop_all_typing()
+
         if self._ws:
             await self._ws.close()
             self._ws = None
+
         if self._http:
             await self._http.aclose()
             self._http = None
 
-    async def send(self, msg: OutboundMessage) -> None:
-        """Send a message through Discord REST API."""
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """Discord-specific send implementation."""
         if not self._http:
             logger.warning("Discord HTTP client not initialized")
             return
@@ -87,25 +92,39 @@ class DiscordChannel(BaseChannel):
 
         headers = {"Authorization": f"Bot {self.config.token}"}
 
+        for attempt in range(3):
+            try:
+                response = await self._http.post(url, headers=headers, json=payload)
+                if response.status_code == 429:
+                    data = response.json()
+                    retry_after = float(data.get("retry_after", 1.0))
+                    logger.warning(f"Discord rate limited, retrying in {retry_after}s")
+                    await asyncio.sleep(retry_after)
+                    continue
+                response.raise_for_status()
+                return
+            except Exception as e:
+                if attempt == 2:
+                    logger.error(f"Error sending Discord message: {e}")
+                else:
+                    await asyncio.sleep(1)
+
+    async def _send_typing_indicator(self, chat_id: str) -> None:
+        """Send typing indicator to Discord."""
+        if not self._http:
+            return
+
+        url = f"{DISCORD_API_BASE}/channels/{chat_id}/typing"
+        headers = {"Authorization": f"Bot {self.config.token}"}
+
         try:
-            for attempt in range(3):
-                try:
-                    response = await self._http.post(url, headers=headers, json=payload)
-                    if response.status_code == 429:
-                        data = response.json()
-                        retry_after = float(data.get("retry_after", 1.0))
-                        logger.warning(f"Discord rate limited, retrying in {retry_after}s")
-                        await asyncio.sleep(retry_after)
-                        continue
-                    response.raise_for_status()
-                    return
-                except Exception as e:
-                    if attempt == 2:
-                        logger.error(f"Error sending Discord message: {e}")
-                    else:
-                        await asyncio.sleep(1)
-        finally:
-            await self._stop_typing(msg.chat_id)
+            await self._http.post(url, headers=headers)
+        except Exception:
+            pass  # Typing indicator failure is not critical
+
+    # ========================================================================
+    # Gateway Protocol
+    # ========================================================================
 
     async def _gateway_loop(self) -> None:
         """Main gateway loop: identify, heartbeat, dispatch events."""
@@ -137,11 +156,11 @@ class DiscordChannel(BaseChannel):
             elif op == 0 and event_type == "MESSAGE_CREATE":
                 await self._handle_message_create(payload)
             elif op == 7:
-                # RECONNECT: exit loop to reconnect
+                # RECONNECT
                 logger.info("Discord gateway requested reconnect")
                 break
             elif op == 9:
-                # INVALID_SESSION: reconnect
+                # INVALID_SESSION
                 logger.warning("Discord gateway invalid session")
                 break
 
@@ -181,6 +200,10 @@ class DiscordChannel(BaseChannel):
 
         self._heartbeat_task = asyncio.create_task(heartbeat_loop())
 
+    # ========================================================================
+    # Message Handling
+    # ========================================================================
+
     async def _handle_message_create(self, payload: dict[str, Any]) -> None:
         """Handle incoming Discord messages."""
         author = payload.get("author") or {}
@@ -197,32 +220,28 @@ class DiscordChannel(BaseChannel):
         if not self.is_allowed(sender_id):
             return
 
-        content_parts = [content] if content else []
+        content_parts: list[str] = []
         media_paths: list[str] = []
-        media_dir = Path.home() / ".nanobot" / "media"
 
+        # Include referenced message content for context (replies)
+        ref_msg = payload.get("referenced_message")
+        if ref_msg:
+            reply_ctx = format_reply_context(
+                author=(ref_msg.get("author") or {}).get("username"),
+                content=ref_msg.get("content", ""),
+            )
+            if reply_ctx:
+                content_parts.append(reply_ctx)
+
+        # Add the actual message content
+        if content:
+            content_parts.append(content)
+
+        # Process attachments
         for attachment in payload.get("attachments") or []:
-            url = attachment.get("url")
-            filename = attachment.get("filename") or "attachment"
-            size = attachment.get("size") or 0
-            if not url or not self._http:
-                continue
-            if size and size > MAX_ATTACHMENT_BYTES:
-                content_parts.append(f"[attachment: {filename} - too large]")
-                continue
-            try:
-                media_dir.mkdir(parents=True, exist_ok=True)
-                file_path = media_dir / f"{attachment.get('id', 'file')}_{filename.replace('/', '_')}"
-                resp = await self._http.get(url)
-                resp.raise_for_status()
-                file_path.write_bytes(resp.content)
-                media_paths.append(str(file_path))
-                content_parts.append(f"[attachment: {file_path}]")
-            except Exception as e:
-                logger.warning(f"Failed to download Discord attachment: {e}")
-                content_parts.append(f"[attachment: {filename} - download failed]")
+            await self._process_attachment(attachment, content_parts, media_paths)
 
-        reply_to = (payload.get("referenced_message") or {}).get("id")
+        reply_to = (ref_msg or {}).get("id")
 
         await self._start_typing(channel_id)
 
@@ -238,24 +257,38 @@ class DiscordChannel(BaseChannel):
             },
         )
 
-    async def _start_typing(self, channel_id: str) -> None:
-        """Start periodic typing indicator for a channel."""
-        await self._stop_typing(channel_id)
+    async def _process_attachment(
+        self,
+        attachment: dict[str, Any],
+        content_parts: list[str],
+        media_paths: list[str],
+    ) -> None:
+        """Process a single Discord attachment."""
+        url = attachment.get("url")
+        filename = attachment.get("filename") or "attachment"
+        size = attachment.get("size") or 0
+        file_id = attachment.get("id", "file")
 
-        async def typing_loop() -> None:
-            url = f"{DISCORD_API_BASE}/channels/{channel_id}/typing"
-            headers = {"Authorization": f"Bot {self.config.token}"}
-            while self._running:
-                try:
-                    await self._http.post(url, headers=headers)
-                except Exception:
-                    pass
-                await asyncio.sleep(8)
+        if not url or not self._http:
+            return
 
-        self._typing_tasks[channel_id] = asyncio.create_task(typing_loop())
+        if size and size > MAX_ATTACHMENT_BYTES:
+            content_parts.append(f"[attachment: {filename} - too large]")
+            return
 
-    async def _stop_typing(self, channel_id: str) -> None:
-        """Stop typing indicator for a channel."""
-        task = self._typing_tasks.pop(channel_id, None)
-        if task:
-            task.cancel()
+        try:
+            resp = await self._http.get(url)
+            resp.raise_for_status()
+
+            file_path = await self._download_media(
+                data=resp.content,
+                filename=filename,
+                file_id=file_id,
+            )
+
+            media_paths.append(str(file_path))
+            content_parts.append(f"[attachment: {file_path}]")
+
+        except Exception as e:
+            logger.warning(f"Failed to download Discord attachment: {e}")
+            content_parts.append(f"[attachment: {filename} - download failed]")

@@ -2,7 +2,6 @@
 
 import asyncio
 import re
-from typing import Any
 
 from loguru import logger
 from slack_sdk.socket_mode.aiohttp import SocketModeClient
@@ -33,6 +32,7 @@ class SlackChannel(BaseChannel):
         if not self.config.bot_token or not self.config.app_token:
             logger.error("Slack bot/app token not configured")
             return
+
         if self.config.mode != "socket":
             logger.error(f"Unsupported Slack mode: {self.config.mode}")
             return
@@ -64,6 +64,7 @@ class SlackChannel(BaseChannel):
     async def stop(self) -> None:
         """Stop the Slack client."""
         self._running = False
+
         if self._socket_client:
             try:
                 await self._socket_client.close()
@@ -71,24 +72,31 @@ class SlackChannel(BaseChannel):
                 logger.warning(f"Slack socket close failed: {e}")
             self._socket_client = None
 
-    async def send(self, msg: OutboundMessage) -> None:
-        """Send a message through Slack."""
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """Slack-specific send implementation."""
         if not self._web_client:
             logger.warning("Slack client not running")
             return
+
         try:
             slack_meta = msg.metadata.get("slack", {}) if msg.metadata else {}
             thread_ts = slack_meta.get("thread_ts")
             channel_type = slack_meta.get("channel_type")
+
             # Only reply in thread for channel/group messages; DMs don't use threads
             use_thread = thread_ts and channel_type != "im"
+
             await self._web_client.chat_postMessage(
                 channel=msg.chat_id,
-                text=msg.content or "",
+                text=msg.content,
                 thread_ts=thread_ts if use_thread else None,
             )
         except Exception as e:
             logger.error(f"Error sending Slack message: {e}")
+
+    # ========================================================================
+    # Event Handling
+    # ========================================================================
 
     async def _on_socket_request(
         self,
@@ -99,7 +107,7 @@ class SlackChannel(BaseChannel):
         if req.type != "events_api":
             return
 
-        # Acknowledge right away
+        # Acknowledge immediately
         await client.send_socket_mode_response(
             SocketModeResponse(envelope_id=req.envelope_id)
         )
@@ -108,35 +116,28 @@ class SlackChannel(BaseChannel):
         event = payload.get("event") or {}
         event_type = event.get("type")
 
-        # Handle app mentions or plain messages
         if event_type not in ("message", "app_mention"):
             return
 
         sender_id = event.get("user")
         chat_id = event.get("channel")
 
-        # Ignore bot/system messages to prevent loops
-        if event.get("subtype") == "bot_message" or event.get("subtype"):
+        # Ignore bot/system messages
+        if event.get("subtype"):
             return
         if self._bot_user_id and sender_id == self._bot_user_id:
             return
 
-        # Avoid double-processing: Slack sends both `message` and `app_mention`
-        # for mentions in channels. Prefer `app_mention`.
         text = event.get("text") or ""
+
+        # Avoid double-processing: Slack sends both `message` and `app_mention`
         if event_type == "message" and self._bot_user_id and f"<@{self._bot_user_id}>" in text:
             return
 
-        # Debug: log basic event shape
         logger.debug(
-            "Slack event: type={} subtype={} user={} channel={} channel_type={} text={}",
-            event_type,
-            event.get("subtype"),
-            sender_id,
-            chat_id,
-            event.get("channel_type"),
-            text[:80],
+            f"Slack event: type={event_type} user={sender_id} channel={chat_id} text={text[:80]}"
         )
+
         if not sender_id or not chat_id:
             return
 
@@ -145,22 +146,14 @@ class SlackChannel(BaseChannel):
         if not self._is_allowed(sender_id, chat_id, channel_type):
             return
 
-        if channel_type != "im" and not self._should_respond_in_channel(event_type, text, chat_id):
+        if channel_type != "im" and not self._should_respond(event_type, text, chat_id):
             return
 
         text = self._strip_bot_mention(text)
-
         thread_ts = event.get("thread_ts") or event.get("ts")
-        # Add :eyes: reaction to the triggering message (best-effort)
-        try:
-            if self._web_client and event.get("ts"):
-                await self._web_client.reactions_add(
-                    channel=chat_id,
-                    name="eyes",
-                    timestamp=event.get("ts"),
-                )
-        except Exception as e:
-            logger.debug(f"Slack reactions_add failed: {e}")
+
+        # Add :eyes: reaction (best-effort)
+        await self._add_reaction(chat_id, event.get("ts"), "eyes")
 
         await self._handle_message(
             sender_id=sender_id,
@@ -175,7 +168,26 @@ class SlackChannel(BaseChannel):
             },
         )
 
+    async def _add_reaction(self, channel: str, timestamp: str | None, emoji: str) -> None:
+        """Add a reaction to a message."""
+        if not self._web_client or not timestamp:
+            return
+
+        try:
+            await self._web_client.reactions_add(
+                channel=channel,
+                name=emoji,
+                timestamp=timestamp,
+            )
+        except Exception as e:
+            logger.debug(f"Slack reactions_add failed: {e}")
+
+    # ========================================================================
+    # Policy Checks
+    # ========================================================================
+
     def _is_allowed(self, sender_id: str, chat_id: str, channel_type: str) -> bool:
+        """Check if sender/channel is allowed based on config."""
         if channel_type == "im":
             if not self.config.dm.enabled:
                 return False
@@ -183,12 +195,13 @@ class SlackChannel(BaseChannel):
                 return sender_id in self.config.dm.allow_from
             return True
 
-        # Group / channel messages
+        # Group/channel messages
         if self.config.group_policy == "allowlist":
             return chat_id in self.config.group_allow_from
         return True
 
-    def _should_respond_in_channel(self, event_type: str, text: str, chat_id: str) -> bool:
+    def _should_respond(self, event_type: str, text: str, chat_id: str) -> bool:
+        """Check if bot should respond in a channel based on policy."""
         if self.config.group_policy == "open":
             return True
         if self.config.group_policy == "mention":
@@ -200,6 +213,7 @@ class SlackChannel(BaseChannel):
         return False
 
     def _strip_bot_mention(self, text: str) -> str:
+        """Remove bot mention from message text."""
         if not text or not self._bot_user_id:
             return text
         return re.sub(rf"<@{re.escape(self._bot_user_id)}>\s*", "", text).strip()
