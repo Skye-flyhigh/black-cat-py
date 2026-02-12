@@ -387,6 +387,7 @@ def gateway(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         session_manager=session_manager,
         config=config,
+        llm_timeout=config.agents.defaults.llm_timeout,
     )
     
     # Set cron callback (needs agent)
@@ -482,6 +483,7 @@ def agent(
         exec_config=config.tools.exec,
         restrict_to_workspace=config.tools.restrict_to_workspace,
         config=config,
+        llm_timeout=config.agents.defaults.llm_timeout,
     )
     
     if message:

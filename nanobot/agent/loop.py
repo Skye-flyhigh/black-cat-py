@@ -53,6 +53,7 @@ class AgentLoop:
         restrict_to_workspace: bool = False,
         session_manager: SessionManager | None = None,
         config: Config | None = None,
+        llm_timeout: int | None = 60,
     ):
         from nanobot.config.schema import ExecToolConfig as ExecToolConfigRuntime
         self.bus = bus
@@ -65,6 +66,7 @@ class AgentLoop:
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
         self.config = config
+        self.llm_timeout = llm_timeout
         
         self.context = ContextManager(workspace)
         self.sessions = session_manager or SessionManager(workspace)
@@ -77,6 +79,7 @@ class AgentLoop:
             brave_api_key=brave_api_key,
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
+            llm_timeout=llm_timeout,
         )
         
         self._running = False
@@ -210,7 +213,8 @@ class AgentLoop:
             response = await self.provider.chat(
                 messages=messages,
                 tools=self.tools.get_definitions(),
-                model=self.model
+                model=self.model,
+                timeout=self.llm_timeout,
             )
             
             # Handle tool calls
@@ -245,9 +249,9 @@ class AgentLoop:
                 final_content = response.content
                 break
         
-        if final_content is None:
+        if not final_content or not final_content.strip():
             final_content = "I've completed processing but have no response to give."
-        
+
         # Log response preview
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
         logger.info(f"Response to {msg.channel}:{msg.sender_id}: {preview}")
@@ -320,7 +324,8 @@ class AgentLoop:
             response = await self.provider.chat(
                 messages=messages,
                 tools=self.tools.get_definitions(),
-                model=self.model
+                model=self.model,
+                timeout=self.llm_timeout,
             )
             
             if response.has_tool_calls:
@@ -351,9 +356,9 @@ class AgentLoop:
                 final_content = response.content
                 break
         
-        if final_content is None:
+        if not final_content or not final_content.strip():
             final_content = "Background task completed."
-        
+
         # Save to session (mark as system message in history)
         session.add_message("user", f"[System: {msg.sender_id}] {msg.content}")
         session.add_message("assistant", final_content)

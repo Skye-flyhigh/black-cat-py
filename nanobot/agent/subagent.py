@@ -35,6 +35,7 @@ class SubagentManager:
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
+        llm_timeout: int | None = 60,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.provider = provider
@@ -44,6 +45,7 @@ class SubagentManager:
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
+        self.llm_timeout = llm_timeout
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
     
     async def spawn(
@@ -129,6 +131,7 @@ class SubagentManager:
                     messages=messages,
                     tools=tools.get_definitions(),
                     model=self.model,
+                    timeout=self.llm_timeout,
                 )
                 
                 if response.has_tool_calls:
