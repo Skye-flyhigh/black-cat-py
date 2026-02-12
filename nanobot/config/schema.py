@@ -38,6 +38,15 @@ class DiscordConfig(BaseModel):
     gateway_url: str = "wss://gateway.discord.gg/?v=10&encoding=json"
     intents: int = 37377  # GUILDS + GUILD_MESSAGES + DIRECT_MESSAGES + MESSAGE_CONTENT
 
+
+class SlackConfig(BaseModel):
+    """Slack channel configuration (Socket Mode)."""
+    enabled: bool = False
+    app_token: str = ""  # xapp-... token for Socket Mode
+    bot_token: str = ""  # xoxb-... token for API calls
+    allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs
+
+
 class EmailConfig(BaseModel):
     """Email channel configuration (IMAP inbound + SMTP outbound)."""
     enabled: bool = False
@@ -86,6 +95,7 @@ class AgentDefaults(BaseModel):
     max_tokens: int = 8192
     temperature: float = 0.7
     max_tool_iterations: int = 20
+    llm_timeout: int = 60  # Timeout for LLM API calls in seconds
 
 
 class AgentsConfig(BaseModel):
