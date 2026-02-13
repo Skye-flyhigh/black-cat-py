@@ -19,7 +19,7 @@ from loguru import logger
 
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
-from nanobot.channels.utils import MEDIA_DIR, TYPING_INTERVAL_DEFAULT
+from nanobot.channels.utils import MEDIA_DIR
 
 
 class BaseChannel(ABC):
