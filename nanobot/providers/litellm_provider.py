@@ -122,6 +122,9 @@ class LiteLLMProvider(LLMProvider):
         """
         model = self._resolve_model(model or self.default_model)
 
+        # Clamp max_tokens to at least 1
+        max_tokens = max(1, max_tokens)
+
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
