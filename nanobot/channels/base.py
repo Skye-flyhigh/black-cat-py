@@ -234,7 +234,7 @@ class BaseChannel(ABC):
         chat_id: str,
         content: str,
         media: list[str] | None = None,
-        metadata: dict[str, Any] | None = None
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Handle an incoming message from the chat platform.
@@ -261,7 +261,7 @@ class BaseChannel(ABC):
             chat_id=str(chat_id),
             content=content,
             media=media or [],
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         await self.bus.publish_inbound(msg)

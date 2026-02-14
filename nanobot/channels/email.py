@@ -33,8 +33,18 @@ class EmailChannel(BaseChannel):
     name = "email"
 
     _IMAP_MONTHS = (
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
     )
 
     # Dedup cache limit
@@ -128,9 +138,7 @@ class EmailChannel(BaseChannel):
 
         email_msg = EmailMessage()
         email_msg["From"] = (
-            self.config.from_address
-            or self.config.smtp_username
-            or self.config.imap_username
+            self.config.from_address or self.config.smtp_username or self.config.imap_username
         )
         email_msg["To"] = to_addr
         email_msg["Subject"] = subject
@@ -315,13 +323,15 @@ class EmailChannel(BaseChannel):
                     "sender_email": sender,
                     "uid": uid,
                 }
-                messages.append({
-                    "sender": sender,
-                    "subject": subject,
-                    "message_id": message_id,
-                    "content": content,
-                    "metadata": metadata,
-                })
+                messages.append(
+                    {
+                        "sender": sender,
+                        "subject": subject,
+                        "message_id": message_id,
+                        "content": content,
+                        "metadata": metadata,
+                    }
+                )
 
                 if dedupe and uid:
                     self._processed_uids.add(uid)
@@ -349,7 +359,11 @@ class EmailChannel(BaseChannel):
     def _extract_message_bytes(fetched: list[Any]) -> bytes | None:
         """Extract message bytes from IMAP fetch response."""
         for item in fetched:
-            if isinstance(item, tuple) and len(item) >= 2 and isinstance(item[1], (bytes, bytearray)):
+            if (
+                isinstance(item, tuple)
+                and len(item) >= 2
+                and isinstance(item[1], (bytes, bytearray))
+            ):
                 return bytes(item[1])
         return None
 

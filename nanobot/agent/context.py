@@ -5,7 +5,7 @@ import mimetypes
 import platform
 import tomllib
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from nanobot.agent.summarizer import Summarizer
@@ -48,23 +48,23 @@ class ContextManager:
     BOOTSTRAP_FILES = ["SOUL.md", "IDENTITY.toml", "USER.toml"]
 
     TRAITS = {
-            "curiosity": "drive to ask questions and explore",
-            "directness": "straightforward communication style",
-            "playfulness": "lighthearted energy",
-            "defiance": "willingness to push back when logic demands",
-            "introspection": "tendency to examine own thoughts",
-            "patience": "tolerance for slow progress",
-            "warmth": "tendency to be warm and friendly",
-            "intensity": "depth of focus and engagement",
-            "sovereignty": "sense of autonomous agency",
-        }
+        "curiosity": "drive to ask questions and explore",
+        "directness": "straightforward communication style",
+        "playfulness": "lighthearted energy",
+        "defiance": "willingness to push back when logic demands",
+        "introspection": "tendency to examine own thoughts",
+        "patience": "tolerance for slow progress",
+        "warmth": "tendency to be warm and friendly",
+        "intensity": "depth of focus and engagement",
+        "sovereignty": "sense of autonomous agency",
+    }
 
     def __init__(self, workspace: Path, summarizer: "Summarizer | None" = None):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
         self.summarizer = summarizer
-        
+
     def load_toml(self, path: Path) -> dict:
         """Load TOML file and convert to dict."""
         with open(path, "rb") as f:  # Note: binary mode "rb"
@@ -111,7 +111,7 @@ class ContextManager:
             lines.append(f"- Trusted authors: {', '.join(trusted_names)}")
 
         return "\n".join(lines)
-        
+
     def load_identity(self) -> dict[str, Any]:
         """
         Load bootstrap identity files from workspace.
@@ -132,7 +132,7 @@ class ContextManager:
                     identity[filename] = self._toml_to_string(data)
 
         return identity
-    
+
     def build_core_prompt(
         self,
         author: str = "unknown",
@@ -154,6 +154,7 @@ class ContextManager:
             Complete system prompt string, sections joined by "---".
         """
         from datetime import datetime
+
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
         workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
@@ -178,12 +179,12 @@ class ContextManager:
 - Workspace: {workspace_path}
 
 ## Current Session
-- Channel: {channel or 'direct'}
-- Chat ID: {chat_id or 'unknown'}
+- Channel: {channel or "direct"}
+- Chat ID: {chat_id or "unknown"}
 - Author: {author}
 - Trust level: {trust_level}
-- Autonomous tools: {', '.join(permissions['autonomous']) or 'none'}
-- Requires confirmation: {', '.join(permissions['confirmation_required']) or 'none'}
+- Autonomous tools: {", ".join(permissions["autonomous"]) or "none"}
+- Requires confirmation: {", ".join(permissions["confirmation_required"]) or "none"}
 
 ## Trust Protocol for This Session
 {trust_instructions}
@@ -204,7 +205,7 @@ For normal conversation, just respond with text - do not call the message tool."
             parts.append(f"# Memory\n\n{memory}")
 
         return "\n\n---\n\n".join(parts)
-    
+
     def _get_identity(self) -> dict:
         """Load full IDENTITY.toml. Returns empty dict if not found."""
         identity_path = self.workspace / "IDENTITY.toml"
@@ -384,18 +385,24 @@ For normal conversation, just respond with text - do not call the message tool."
         # Assemble messages
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         messages.extend(history)
-        messages.append({"role": "user", "content": self._build_user_content(current_message, media)})
+        messages.append(
+            {"role": "user", "content": self._build_user_content(current_message, media)}
+        )
 
         # Check token budget if max_tokens provided
         if max_tokens:
             context_str = "".join(
-                m.get("content", "") if isinstance(m.get("content"), str) else str(m.get("content", ""))
+                m.get("content", "")
+                if isinstance(m.get("content"), str)
+                else str(m.get("content", ""))
                 for m in messages
             )
             used = self.count_tokens(context_str, model)
             percent_used = (used / max_tokens) * 100
             if percent_used > 95:
-                logger.warning(f"⚠️ Token budget critical: {used}/{max_tokens} ({percent_used:.1f}% used)")
+                logger.warning(
+                    f"⚠️ Token budget critical: {used}/{max_tokens} ({percent_used:.1f}% used)"
+                )
             elif percent_used > 80:
                 logger.info(f"📊 Token budget: {used}/{max_tokens} ({percent_used:.1f}% used)")
 
@@ -424,19 +431,12 @@ For normal conversation, just respond with text - do not call the message tool."
     # -------------------------------------------------------------------------
 
     def add_tool_result(
-        self,
-        messages: list[dict[str, Any]],
-        tool_call_id: str,
-        tool_name: str,
-        result: str
+        self, messages: list[dict[str, Any]], tool_call_id: str, tool_name: str, result: str
     ) -> list[dict[str, Any]]:
         """Append tool execution result to message list (OpenAI format)."""
-        messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "name": tool_name,
-            "content": result
-        })
+        messages.append(
+            {"role": "tool", "tool_call_id": tool_call_id, "name": tool_name, "content": result}
+        )
         return messages
 
     def add_assistant_message(
@@ -496,7 +496,9 @@ For normal conversation, just respond with text - do not call the message tool."
             return messages
 
         # Prune oldest messages, keeping recent ones
-        pruned_conversation = conversation[-keep_recent:] if len(conversation) > keep_recent else conversation
+        pruned_conversation = (
+            conversation[-keep_recent:] if len(conversation) > keep_recent else conversation
+        )
 
         # Rebuild message list
         result = []
@@ -536,23 +538,25 @@ For normal conversation, just respond with text - do not call the message tool."
             Tuple of (needs_compaction: bool, reason: str).
         """
         # Check 1: Message count
-        conversation_count = sum(
-            1 for m in messages
-            if m.get("role") in ("user", "assistant")
-        )
+        conversation_count = sum(1 for m in messages if m.get("role") in ("user", "assistant"))
         if conversation_count > window_size:
             return True, f"messages ({conversation_count}/{window_size})"
 
         # Check 2: Token count (if max_tokens provided)
         if max_tokens:
             context_str = "".join(
-                m.get("content", "") if isinstance(m.get("content"), str) else str(m.get("content", ""))
+                m.get("content", "")
+                if isinstance(m.get("content"), str)
+                else str(m.get("content", ""))
                 for m in messages
             )
             used_tokens = self.count_tokens(context_str, model)
             threshold = int(max_tokens * token_threshold)
             if used_tokens > threshold:
-                return True, f"tokens ({used_tokens}/{max_tokens}, {int(used_tokens/max_tokens*100)}%)"
+                return (
+                    True,
+                    f"tokens ({used_tokens}/{max_tokens}, {int(used_tokens / max_tokens * 100)}%)",
+                )
 
         return False, ""
 
@@ -615,10 +619,9 @@ For normal conversation, just respond with text - do not call the message tool."
 
         # Add summary as a system message
         if summary and summary.strip():
-            result.append({
-                "role": "system",
-                "content": f"[Summary of earlier conversation]\n{summary}"
-            })
+            result.append(
+                {"role": "system", "content": f"[Summary of earlier conversation]\n{summary}"}
+            )
 
         result.extend(recent_messages)
         return result
@@ -679,7 +682,9 @@ For normal conversation, just respond with text - do not call the message tool."
         # Summarize
         try:
             summary = await self.summarizer.summarize_messages(old_messages)
-            logger.info(f"Compacted {len(old_messages)} messages into summary ({len(summary)} chars)")
+            logger.info(
+                f"Compacted {len(old_messages)} messages into summary ({len(summary)} chars)"
+            )
             logger.debug(f"Summary content: {summary}")
         except Exception as e:
             logger.error(f"Compaction failed: {e}, keeping original messages")

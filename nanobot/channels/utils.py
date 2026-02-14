@@ -21,8 +21,7 @@ MEDIA_DIR = Path.home() / ".nanobot" / "media"
 
 # Typing indicator intervals (seconds) - platforms have different timeout behaviors
 TYPING_INTERVAL_TELEGRAM = 4  # Telegram typing expires after ~5s
-TYPING_INTERVAL_DISCORD = 8   # Discord typing expires after ~10s
-TYPING_INTERVAL_DEFAULT = 5
+TYPING_INTERVAL_DISCORD = 8  # Discord typing expires after ~10s
 
 # Reconnect delays
 RECONNECT_DELAY_SECONDS = 5
@@ -34,6 +33,7 @@ MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20MB
 # ============================================================================
 # Markdown Conversion
 # ============================================================================
+
 
 def markdown_to_telegram_html(text: str) -> str:
     """
@@ -47,44 +47,46 @@ def markdown_to_telegram_html(text: str) -> str:
 
     # 1. Extract and protect code blocks
     code_blocks: list[str] = []
+
     def save_code_block(m: re.Match) -> str:
         code_blocks.append(m.group(1))
         return f"\x00CB{len(code_blocks) - 1}\x00"
 
-    text = re.sub(r'```[\w]*\n?([\s\S]*?)```', save_code_block, text)
+    text = re.sub(r"```[\w]*\n?([\s\S]*?)```", save_code_block, text)
 
     # 2. Extract and protect inline code
     inline_codes: list[str] = []
+
     def save_inline_code(m: re.Match) -> str:
         inline_codes.append(m.group(1))
         return f"\x00IC{len(inline_codes) - 1}\x00"
 
-    text = re.sub(r'`([^`]+)`', save_inline_code, text)
+    text = re.sub(r"`([^`]+)`", save_inline_code, text)
 
     # 3. Headers -> plain text
-    text = re.sub(r'^#{1,6}\s+(.+)$', r'\1', text, flags=re.MULTILINE)
+    text = re.sub(r"^#{1,6}\s+(.+)$", r"\1", text, flags=re.MULTILINE)
 
     # 4. Blockquotes -> plain text
-    text = re.sub(r'^>\s*(.*)$', r'\1', text, flags=re.MULTILINE)
+    text = re.sub(r"^>\s*(.*)$", r"\1", text, flags=re.MULTILINE)
 
     # 5. Escape HTML special characters
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     # 6. Links [text](url)
-    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
 
     # 7. Bold **text** or __text__
-    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
-    text = re.sub(r'__(.+?)__', r'<b>\1</b>', text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"__(.+?)__", r"<b>\1</b>", text)
 
     # 8. Italic _text_ (avoid matching inside words)
-    text = re.sub(r'(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])', r'<i>\1</i>', text)
+    text = re.sub(r"(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])", r"<i>\1</i>", text)
 
     # 9. Strikethrough ~~text~~
-    text = re.sub(r'~~(.+?)~~', r'<s>\1</s>', text)
+    text = re.sub(r"~~(.+?)~~", r"<s>\1</s>", text)
 
     # 10. Bullet lists
-    text = re.sub(r'^[-*]\s+', '• ', text, flags=re.MULTILINE)
+    text = re.sub(r"^[-*]\s+", "• ", text, flags=re.MULTILINE)
 
     # 11. Restore inline code
     for i, code in enumerate(inline_codes):
@@ -128,8 +130,7 @@ def parse_markdown_table(table_text: str) -> dict | None:
         "page_size": len(rows) + 1,
         "columns": columns,
         "rows": [
-            {f"c{i}": row[i] if i < len(row) else "" for i in range(len(headers))}
-            for row in rows
+            {f"c{i}": row[i] if i < len(row) else "" for i in range(len(headers))} for row in rows
         ],
     }
 
@@ -144,7 +145,7 @@ def extract_markdown_tables(content: str) -> list[dict]:
     last_end = 0
 
     for m in _TABLE_RE.finditer(content):
-        before = content[last_end:m.start()].strip()
+        before = content[last_end : m.start()].strip()
         if before:
             elements.append({"tag": "markdown", "content": before})
 
@@ -199,6 +200,7 @@ def get_file_extension(media_type: str, mime_type: str | None = None) -> str:
 # ============================================================================
 # Reply Context
 # ============================================================================
+
 
 def format_reply_context(author: str, content: str, max_length: int = 200) -> str | None:
     """

@@ -32,7 +32,7 @@ from nanobot.session.manager import SessionManager
 class AgentLoop:
     """
     The agent loop is the core processing engine.
-    
+
     It:
     1. Receives messages from the bus
     2. Builds context with history, memory, skills
@@ -40,7 +40,7 @@ class AgentLoop:
     4. Executes tool calls
     5. Sends responses back
     """
-    
+
     def __init__(
         self,
         bus: MessageBus,
@@ -57,6 +57,7 @@ class AgentLoop:
         llm_timeout: int | None = 60,
     ):
         from nanobot.config.schema import ExecToolConfig as ExecToolConfigRuntime
+
         self.bus = bus
         self.provider = provider
         self.workspace = workspace
@@ -94,7 +95,7 @@ class AgentLoop:
         self.memory_window = config.agents.defaults.memory_window if config else 50
         self._running = False
         self._register_default_tools()
-    
+
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
         # File tools (restrict to workspace if configured)
@@ -103,22 +104,24 @@ class AgentLoop:
         self.tools.register(WriteFileTool(allowed_dir=allowed_dir))
         self.tools.register(EditFileTool(allowed_dir=allowed_dir))
         self.tools.register(ListDirTool(allowed_dir=allowed_dir))
-        
+
         # Shell tool
-        self.tools.register(ExecTool(
-            working_dir=str(self.workspace),
-            timeout=self.exec_config.timeout,
-            restrict_to_workspace=self.restrict_to_workspace,
-        ))
-        
+        self.tools.register(
+            ExecTool(
+                working_dir=str(self.workspace),
+                timeout=self.exec_config.timeout,
+                restrict_to_workspace=self.restrict_to_workspace,
+            )
+        )
+
         # Web tools
         self.tools.register(WebSearchTool(api_key=self.brave_api_key))
         self.tools.register(WebFetchTool())
-        
+
         # Message tool
         message_tool = MessageTool(send_callback=self.bus.publish_outbound)
         self.tools.register(message_tool)
-        
+
         # Spawn tool (for subagents)
         spawn_tool = SpawnTool(manager=self.subagents)
         self.tools.register(spawn_tool)
@@ -137,15 +140,12 @@ class AgentLoop:
         """Run the agent loop, processing messages from the bus."""
         self._running = True
         logger.info("Agent loop started")
-        
+
         while self._running:
             try:
                 # Wait for next message
-                msg = await asyncio.wait_for(
-                    self.bus.consume_inbound(),
-                    timeout=1.0
-                )
-                
+                msg = await asyncio.wait_for(self.bus.consume_inbound(), timeout=1.0)
+
                 # Process it
                 try:
                     response = await self._process_message(msg)
@@ -154,11 +154,13 @@ class AgentLoop:
                 except Exception as e:
                     logger.error(f"Error processing message: {e}")
                     # Send error response
-                    await self.bus.publish_outbound(OutboundMessage(
-                        channel=msg.channel,
-                        chat_id=msg.chat_id,
-                        content=f"Sorry, I encountered an error: {str(e)}"
-                    ))
+                    await self.bus.publish_outbound(
+                        OutboundMessage(
+                            channel=msg.channel,
+                            chat_id=msg.chat_id,
+                            content=f"Sorry, I encountered an error: {str(e)}",
+                        )
+                    )
             except asyncio.TimeoutError:
                 continue
 
@@ -221,7 +223,11 @@ class AgentLoop:
         final_content = await self._run_agent_loop(messages)
 
         if not final_content or not final_content.strip():
-            final_content = "Background task completed." if is_system else "I've completed processing but have no response to give."
+            final_content = (
+                "Background task completed."
+                if is_system
+                else "I've completed processing but have no response to give."
+            )
 
         # Log response preview
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
@@ -279,15 +285,14 @@ class AgentLoop:
                     {
                         "id": tc.id,
                         "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": json.dumps(tc.arguments)
-                        }
+                        "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
                     }
                     for tc in response.tool_calls
                 ]
                 messages = self.context.add_assistant_message(
-                    messages, response.content, tool_call_dicts,
+                    messages,
+                    response.content,
+                    tool_call_dicts,
                     reasoning_content=response.reasoning_content,
                 )
 
@@ -304,7 +309,7 @@ class AgentLoop:
                 return response.content
 
         return None
-    
+
     async def process_direct(
         self,
         content: str,
@@ -322,12 +327,7 @@ class AgentLoop:
         Returns:
             The agent's response.
         """
-        msg = InboundMessage(
-            channel=channel,
-            sender_id="user",
-            chat_id=chat_id,
-            content=content
-        )
-        
+        msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
+
         response = await self._process_message(msg)
         return response.content if response else ""
