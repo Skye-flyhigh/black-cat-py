@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from telegram import BotCommand, Update
+from telegram import BotCommand, Message, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from nanobot.bus.events import OutboundMessage
@@ -74,7 +74,13 @@ class TelegramChannel(BaseChannel):
         self._app.add_handler(CommandHandler("help", self._on_help))
         self._app.add_handler(
             MessageHandler(
-                (filters.TEXT | filters.PHOTO | filters.VOICE | filters.AUDIO | filters.Document.ALL)
+                (
+                    filters.TEXT
+                    | filters.PHOTO
+                    | filters.VOICE
+                    | filters.AUDIO
+                    | filters.Document.ALL
+                )
                 & ~filters.COMMAND,
                 self._on_message,
             )
@@ -94,10 +100,11 @@ class TelegramChannel(BaseChannel):
         except Exception as e:
             logger.warning(f"Failed to register bot commands: {e}")
 
-        await self._app.updater.start_polling(
-            allowed_updates=["message"],
-            drop_pending_updates=True,
-        )
+        if self._app.updater:
+            await self._app.updater.start_polling(
+                allowed_updates=["message"],
+                drop_pending_updates=True,
+            )
 
         while self._running:
             await asyncio.sleep(1)
@@ -109,7 +116,8 @@ class TelegramChannel(BaseChannel):
 
         if self._app:
             logger.info("Stopping Telegram bot...")
-            await self._app.updater.stop()
+            if self._app.updater:
+                await self._app.updater.stop()
             await self._app.stop()
             await self._app.shutdown()
             self._app = None
@@ -260,7 +268,7 @@ class TelegramChannel(BaseChannel):
 
     async def _process_media(
         self,
-        message: Update.message,
+        message: Message,
         content_parts: list[str],
         media_paths: list[str],
     ) -> None:
@@ -281,7 +289,7 @@ class TelegramChannel(BaseChannel):
             media_file = message.document
             media_type = "file"
 
-        if not media_file or not self._app:
+        if not media_file or not media_type or not self._app:
             return
 
         try:

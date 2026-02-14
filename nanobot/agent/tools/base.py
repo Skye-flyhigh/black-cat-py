@@ -21,23 +21,10 @@ class Tool(ABC):
         "object": dict,
     }
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Tool name used in function calls."""
-        pass
-
-    @property
-    @abstractmethod
-    def description(self) -> str:
-        """Description of what the tool does."""
-        pass
-
-    @property
-    @abstractmethod
-    def parameters(self) -> dict[str, Any]:
-        """JSON Schema for tool parameters."""
-        pass
+    # Subclasses must define these as class attributes
+    name: str
+    description: str
+    parameters: dict[str, Any]
 
     @abstractmethod
     async def execute(self, **kwargs: Any) -> str:
@@ -45,12 +32,12 @@ class Tool(ABC):
         Execute the tool with given parameters.
 
         Args:
-            **kwargs: Tool-specific parameters.
+            **kwargs: Tool parameters as defined in self.parameters schema.
 
         Returns:
             String result of the tool execution.
         """
-        pass
+        ...
 
     def validate_params(self, params: dict[str, Any]) -> list[str]:
         """Validate tool parameters against JSON schema. Returns error list (empty if valid)."""

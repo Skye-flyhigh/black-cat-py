@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 import websockets
+from websockets.asyncio.client import ClientConnection
 from loguru import logger
 
 from nanobot.bus.events import OutboundMessage
@@ -31,7 +32,7 @@ class DiscordChannel(BaseChannel):
     def __init__(self, config: DiscordConfig, bus: MessageBus):
         super().__init__(config, bus)
         self.config: DiscordConfig = config
-        self._ws: websockets.WebSocketClientProtocol | None = None
+        self._ws: ClientConnection | None = None
         self._seq: int | None = None
         self._heartbeat_task: asyncio.Task | None = None
         self._http: httpx.AsyncClient | None = None
@@ -56,7 +57,9 @@ class DiscordChannel(BaseChannel):
             except Exception as e:
                 logger.warning(f"Discord gateway error: {e}")
                 if self._running:
-                    logger.info(f"Reconnecting to Discord gateway in {RECONNECT_DELAY_SECONDS} seconds...")
+                    logger.info(
+                        f"Reconnecting to Discord gateway in {RECONNECT_DELAY_SECONDS} seconds..."
+                    )
                     await asyncio.sleep(RECONNECT_DELAY_SECONDS)
 
     async def stop(self) -> None:

@@ -4,9 +4,12 @@ import asyncio
 import json
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from nanobot.config.schema import ExecToolConfig
 
 from nanobot.agent.tools.filesystem import ListDirTool, ReadFileTool, WriteFileTool
 from nanobot.agent.tools.registry import ToolRegistry

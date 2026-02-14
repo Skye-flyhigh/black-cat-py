@@ -11,7 +11,6 @@ from nanobot.agent.memory import MemoryStore
 from nanobot.agent.summarizer import Summarizer
 from nanobot.session.manager import SessionManager
 
-
 # Default: run at 3am
 DEFAULT_SUMMARY_HOUR = 3
 
@@ -107,8 +106,8 @@ class DailySummaryService:
         all_summaries = []
         all_facts = []
 
-        for session_key in sessions:
-            
+        for session_info in sessions:
+            session_key = session_info["key"]
             session = self.session_manager.get_or_create(session_key)
             messages = session.get_history()
 
@@ -135,7 +134,7 @@ class DailySummaryService:
 
         # Write daily summary to memory notes
         if all_summaries:
-            summary_content = f"## Conversation Summaries\n\n" + "\n\n".join(all_summaries)
+            summary_content = "## Conversation Summaries\n\n" + "\n\n".join(all_summaries)
             self.memory.append_today(summary_content)
             logger.info(f"Appended {len(all_summaries)} session summaries to daily notes")
 
@@ -143,7 +142,9 @@ class DailySummaryService:
         if all_facts:
             await self._update_long_term_memory(all_facts)
 
-        logger.info(f"Daily summary complete: {len(all_summaries)} sessions, {len(all_facts)} fact extractions")
+        logger.info(
+            f"Daily summary complete: {len(all_summaries)} sessions, {len(all_facts)} fact extractions"
+        )
 
     async def _update_long_term_memory(self, facts_list: list[str]) -> None:
         """Append extracted facts to long-term memory."""

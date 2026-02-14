@@ -202,7 +202,7 @@ def get_file_extension(media_type: str, mime_type: str | None = None) -> str:
 # ============================================================================
 
 
-def format_reply_context(author: str, content: str, max_length: int = 200) -> str | None:
+def format_reply_context(author: str | None, content: str, max_length: int = 200) -> str | None:
     """
     Format a reply/reference message as context.
 
