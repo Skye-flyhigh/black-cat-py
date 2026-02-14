@@ -1,6 +1,7 @@
 """Configuration schema using Pydantic."""
 
 from pathlib import Path
+
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
@@ -92,10 +93,13 @@ class AgentDefaults(BaseModel):
     """Default agent configuration."""
     workspace: str = "~/.nanobot/workspace"
     model: str = "anthropic/claude-opus-4-5"
+    summarizer_model: str | None = None  # Model for summarization (defaults to main model)
     max_tokens: int = 8192
     temperature: float = 0.7
     max_tool_iterations: int = 20
     llm_timeout: int = 60  # Timeout for LLM API calls in seconds
+    memory_window: int = 50  # Max messages before triggering summarization
+    daily_summary_hour: int = 3  # Hour to run daily summary (0-23, default 3am)
 
 
 class AgentsConfig(BaseModel):

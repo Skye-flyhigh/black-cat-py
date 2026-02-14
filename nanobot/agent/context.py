@@ -5,7 +5,10 @@ import mimetypes
 import platform
 import tomllib
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from nanobot.agent.summarizer import Summarizer
 
 import tiktoken
 import tomli_w
@@ -56,10 +59,11 @@ class ContextManager:
             "sovereignty": "sense of autonomous agency",
         }
 
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, summarizer: "Summarizer | None" = None):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
+        self.summarizer = summarizer
         
     def load_toml(self, path: Path) -> dict:
         """Load TOML file and convert to dict."""
@@ -502,53 +506,185 @@ For normal conversation, just respond with text - do not call the message tool."
 
         return result
 
-    def compact_history(
+    # -------------------------------------------------------------------------
+    # Sliding Window Compaction
+    # -------------------------------------------------------------------------
+
+    def needs_compaction(
         self,
         messages: list[dict[str, Any]],
-        summarizer_callback: Callable[[str], str] | None = None,
+        window_size: int = 10,
+        max_tokens: int | None = None,
+        token_threshold: float = 0.75,
         model: str = "gpt-4",
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[bool, str]:
         """
-        Summarize old messages to reduce context size while preserving meaning.
+        Check if conversation needs compaction (by message count OR token usage).
 
-        Keeps: system prompt + summary of old messages + last 6 recent messages.
-        Requires summarizer_callback(text) → summary string.
-        Falls back to context_pruning() if no callback provided.
+        Triggers compaction if EITHER:
+        - Message count exceeds window_size
+        - Token usage exceeds token_threshold of max_tokens (if max_tokens provided)
+
+        Args:
+            messages: Current message list.
+            window_size: Maximum messages before compaction needed.
+            max_tokens: Model's context window size (optional, enables token-based check).
+            token_threshold: Fraction of max_tokens that triggers compaction (default 75%).
+            model: Model name for tokenizer selection.
+
+        Returns:
+            Tuple of (needs_compaction: bool, reason: str).
         """
-        if not messages or len(messages) < 10:
-            return messages
+        # Check 1: Message count
+        conversation_count = sum(
+            1 for m in messages
+            if m.get("role") in ("user", "assistant")
+        )
+        if conversation_count > window_size:
+            return True, f"messages ({conversation_count}/{window_size})"
 
-        # Keep system prompt
-        system_msg = messages[0] if messages[0]["role"] == "system" else None
+        # Check 2: Token count (if max_tokens provided)
+        if max_tokens:
+            context_str = "".join(
+                m.get("content", "") if isinstance(m.get("content"), str) else str(m.get("content", ""))
+                for m in messages
+            )
+            used_tokens = self.count_tokens(context_str, model)
+            threshold = int(max_tokens * token_threshold)
+            if used_tokens > threshold:
+                return True, f"tokens ({used_tokens}/{max_tokens}, {int(used_tokens/max_tokens*100)}%)"
+
+        return False, ""
+
+    def prepare_for_compaction(
+        self,
+        messages: list[dict[str, Any]],
+        keep_recent: int = 10,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None]:
+        """
+        Split messages into old (to summarize) and recent (to keep).
+
+        Args:
+            messages: Full message list.
+            keep_recent: Number of recent messages to preserve verbatim.
+
+        Returns:
+            Tuple of (old_messages, recent_messages, system_message).
+            old_messages: Messages that should be summarized.
+            recent_messages: Messages to keep as-is.
+            system_message: The system prompt (or None).
+        """
+        if not messages:
+            return [], [], None
+
+        # Extract system prompt
+        system_msg = messages[0] if messages[0].get("role") == "system" else None
         conversation = messages[1:] if system_msg else messages
 
-        if not summarizer_callback:
-            # No summarizer - just keep recent messages
-            return self.context_pruning(messages, max_tokens=4000, keep_recent=6, model=model)
+        if len(conversation) <= keep_recent:
+            return [], conversation, system_msg
 
-        # Split into old (to summarize) and recent (to keep)
-        split_point = len(conversation) - 6
+        # Split at the boundary
+        split_point = len(conversation) - keep_recent
         old_messages = conversation[:split_point]
         recent_messages = conversation[split_point:]
 
-        # Build text to summarize
-        old_text = "\n".join(
-            f"{m['role']}: {m.get('content', '')}"
-            for m in old_messages
-            if m.get("content")
-        )
+        return old_messages, recent_messages, system_msg
 
+    def apply_compaction(
+        self,
+        system_msg: dict[str, Any] | None,
+        summary: str,
+        recent_messages: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        Build compacted message list with summary replacing old messages.
+
+        Args:
+            system_msg: Original system prompt.
+            summary: Summary of old messages (from Summarizer).
+            recent_messages: Recent messages to keep verbatim.
+
+        Returns:
+            New message list: [system, summary_msg, ...recent_messages]
+        """
         result = []
+
         if system_msg:
             result.append(system_msg)
 
-        # TODO: Make this async when integrated into agent loop
-        summary = summarizer_callback(old_text)
-        result.append({
-            "role": "system",
-            "content": f"[Summary of previous conversation]\n{summary}"
-        })
+        # Add summary as a system message
+        if summary and summary.strip():
+            result.append({
+                "role": "system",
+                "content": f"[Summary of earlier conversation]\n{summary}"
+            })
 
         result.extend(recent_messages)
-
         return result
+
+    async def compact_if_needed(
+        self,
+        messages: list[dict[str, Any]],
+        window_size: int = 10,
+        max_tokens: int | None = None,
+        model: str = "gpt-4",
+        keep_recent: int = 10,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """
+        Check if compaction is needed and perform it if so.
+
+        Consolidates the full compaction flow:
+        1. Check if compaction is needed (by message count or token usage)
+        2. Split messages into old and recent
+        3. Summarize old messages via Summarizer
+        4. Rebuild with summary + recent messages
+
+        Args:
+            messages: Current message list.
+            window_size: Maximum messages before compaction triggers.
+            max_tokens: Model's context limit (enables token-based check).
+            model: Model name for tokenizer selection.
+            keep_recent: Number of recent messages to preserve verbatim.
+
+        Returns:
+            Tuple of (messages, was_compacted).
+            If compaction failed or wasn't needed, returns original messages.
+        """
+        needs_compact, reason = self.needs_compaction(
+            messages,
+            window_size=window_size,
+            max_tokens=max_tokens,
+            model=model,
+        )
+
+        if not needs_compact:
+            return messages, False
+
+        logger.info(f"Context compaction triggered: {reason}")
+
+        # Need summarizer for compaction
+        if not self.summarizer:
+            logger.warning("Compaction needed but no summarizer configured")
+            return messages, False
+
+        # Split messages
+        old_messages, recent_messages, system_msg = self.prepare_for_compaction(
+            messages, keep_recent=keep_recent
+        )
+
+        if not old_messages:
+            return messages, False
+
+        # Summarize
+        try:
+            summary = await self.summarizer.summarize_messages(old_messages)
+            logger.info(f"Compacted {len(old_messages)} messages into summary ({len(summary)} chars)")
+            logger.debug(f"Summary content: {summary}")
+        except Exception as e:
+            logger.error(f"Compaction failed: {e}, keeping original messages")
+            return messages, False
+
+        # Apply compaction
+        compacted = self.apply_compaction(system_msg, summary, recent_messages)
+        return compacted, True

@@ -8,17 +8,16 @@ import sys
 from pathlib import Path
 
 import typer
+from prompt_toolkit import PromptSession
+from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
 from rich.text import Text
 
-from prompt_toolkit import PromptSession
-from prompt_toolkit.formatted_text import HTML
-from prompt_toolkit.history import FileHistory
-from prompt_toolkit.patch_stdout import patch_stdout
-
-from nanobot import __version__, __logo__
+from nanobot import __logo__, __version__
 
 app = typer.Typer(
     name="nanobot",
@@ -464,14 +463,15 @@ def gateway(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """Start the nanobot gateway."""
-    from nanobot.config.loader import load_config, get_data_dir
-    from nanobot.bus.queue import MessageBus
     from nanobot.agent.loop import AgentLoop
+    from nanobot.bus.queue import MessageBus
     from nanobot.channels.manager import ChannelManager
-    from nanobot.session.manager import SessionManager
+    from nanobot.config.loader import get_data_dir, load_config
+    from nanobot.cron.daily_summary import DailySummaryService
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
     from nanobot.heartbeat.service import HeartbeatService
+    from nanobot.session.manager import SessionManager
     
     if verbose:
         import logging
@@ -509,9 +509,8 @@ def gateway(
         """Execute a cron job through the agent."""
         response = await agent.process_direct(
             job.payload.message,
-            session_key=f"cron:{job.id}",
-            channel=job.payload.channel or "cli",
-            chat_id=job.payload.to or "direct",
+            channel=job.payload.channel or "cron",
+            chat_id=job.payload.to or job.id,
         )
         if job.payload.deliver and job.payload.to:
             from nanobot.bus.events import OutboundMessage
@@ -526,7 +525,7 @@ def gateway(
     # Create heartbeat service
     async def on_heartbeat(prompt: str) -> str:
         """Execute heartbeat through the agent."""
-        return await agent.process_direct(prompt, session_key="heartbeat")
+        return await agent.process_direct(prompt, channel="heartbeat", chat_id="task")
     
     heartbeat = HeartbeatService(
         workspace=config.workspace_path,
@@ -534,7 +533,16 @@ def gateway(
         interval_s=30 * 60,  # 30 minutes
         enabled=True
     )
-    
+
+    # Create daily summary service (uses agent's summarizer)
+    daily_summary = DailySummaryService(
+        workspace=config.workspace_path,
+        summarizer=agent.summarizer,
+        session_manager=session_manager,
+        summary_hour=config.agents.defaults.daily_summary_hour,
+        enabled=True,
+    )
+
     # Create channel manager
     channels = ChannelManager(config, bus, session_manager=session_manager)
     
@@ -548,17 +556,69 @@ def gateway(
         console.print(f"[green]✓[/green] Cron: {cron_status['jobs']} scheduled jobs")
     
     console.print(f"[green]✓[/green] Heartbeat: every 30m")
-    
+    console.print(f"[green]✓[/green] Daily summary: at {config.agents.defaults.daily_summary_hour:02d}:00")
+
+    async def compact_sessions_on_startup():
+        """Compact any oversized sessions before processing new messages."""
+        from loguru import logger
+
+        sessions = session_manager.list_sessions()
+        if not sessions:
+            logger.debug("Startup compaction: no sessions found")
+            return
+
+        logger.info(f"Startup compaction: checking {len(sessions)} sessions (window={agent.memory_window})")
+
+        compacted = 0
+        for session_info in sessions:
+            session_key = session_info["key"]
+            session = session_manager.get_or_create(session_key)
+            messages = [{"role": "system", "content": ""}]  # Dummy system msg
+            messages.extend(session.get_history())
+
+            needs_compact, reason = agent.context.needs_compaction(
+                messages,
+                window_size=agent.memory_window,
+                model=agent.model,
+            )
+
+            if needs_compact:
+                logger.info(f"Startup compwe action for {session_key}: {reason}")
+                old_msgs, recent_msgs, _ = agent.context.prepare_for_compaction(
+                    messages[1:], keep_recent=10  # Skip dummy system msg
+                )
+
+                if old_msgs:
+                    summary = await agent.summarizer.summarize_messages(old_msgs)
+                    # Replace session history with compacted version
+                    session.clear()
+                    if summary:
+                        session.add_message("system", f"[Summary of earlier conversation]\n{summary}")
+                    for msg in recent_msgs:
+                        session.add_message(msg["role"], msg.get("content", ""))
+                    session_manager.save(session)
+                    compacted += 1
+
+        if compacted:
+            console.print(f"[green]✓[/green] Compacted {compacted} sessions on startup")
+        else:
+            console.print(f"[dim]✓ Checked {len(sessions)} sessions, none needed compaction[/dim]")
+
     async def run():
         try:
+            # Compact stale sessions before starting
+            await compact_sessions_on_startup()
+
             await cron.start()
             await heartbeat.start()
+            await daily_summary.start()
             await asyncio.gather(
                 agent.run(),
                 channels.start_all(),
             )
         except KeyboardInterrupt:
             console.print("\nShutting down...")
+            daily_summary.stop()
             heartbeat.stop()
             cron.stop()
             agent.stop()
@@ -582,9 +642,9 @@ def agent(
     markdown: bool = typer.Option(True, "--markdown/--no-markdown", help="Render markdown in responses"),
 ):
     """Interact with the agent directly."""
-    from nanobot.config.loader import load_config
-    from nanobot.bus.queue import MessageBus
     from nanobot.agent.loop import AgentLoop
+    from nanobot.bus.queue import MessageBus
+    from nanobot.config.loader import load_config
     
     config = load_config()
     
@@ -610,10 +670,16 @@ def agent(
         # Animated spinner is safe to use with prompt_toolkit input handling
         return console.status("[dim]nanobot is thinking...[/dim]", spinner="dots")
 
+    # Parse session_id into channel:chat_id
+    if ":" in session_id:
+        session_channel, session_chat_id = session_id.split(":", 1)
+    else:
+        session_channel, session_chat_id = "cli", session_id
+
     if message:
         # Single message mode
         async def run_once():
-            response = await agent_loop.process_direct(message, session_id)
+            response = await agent_loop.process_direct(message, channel=session_channel, chat_id=session_chat_id)
             console.print(f"\n{__logo__} {response}")
         
         asyncio.run(run_once())
@@ -642,7 +708,7 @@ def agent(
                         break
                     
                     with _thinking_ctx():
-                        response = await agent_loop.process_direct(user_input, session_id)
+                        response = await agent_loop.process_direct(user_input, channel=session_channel, chat_id=session_chat_id)
                     _print_agent_response(response, render_markdown=markdown)
                 except KeyboardInterrupt:
                     _restore_terminal()
@@ -954,7 +1020,7 @@ def cron_run(
 @app.command()
 def status():
     """Show nanobot status."""
-    from nanobot.config.loader import load_config, get_config_path
+    from nanobot.config.loader import get_config_path, load_config
 
     config_path = get_config_path()
     config = load_config()
