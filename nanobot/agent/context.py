@@ -451,9 +451,9 @@ For normal conversation, just respond with text - do not call the message tool."
         """Append assistant response to message list (with optional tool_calls and reasoning)."""
         msg: dict[str, Any] = {"role": "assistant"}
 
-        # Only include content when non-empty — some LLM backends reject empty text blocks
-        if content is not None and content != "":
-            msg["content"] = content
+        # Always include content — some providers (e.g. StepFun) reject
+        # assistant messages that omit the key entirely.
+        msg["content"] = content
 
         if tool_calls:
             msg["tool_calls"] = tool_calls
