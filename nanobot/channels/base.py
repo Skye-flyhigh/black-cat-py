@@ -55,6 +55,14 @@ class BaseChannel(ABC):
         self._running = False
         self._typing_tasks: dict[str, asyncio.Task] = {}
 
+    def _require_config(self, **fields: Any) -> bool:
+        """Check that required config fields are set. Logs error and returns False if any missing."""
+        for name, value in fields.items():
+            if not value:
+                logger.error("{} {} not configured", self.name, name)
+                return False
+        return True
+
     @abstractmethod
     async def start(self) -> None:
         """

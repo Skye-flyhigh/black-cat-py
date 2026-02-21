@@ -8,7 +8,7 @@ from typing import Any
 
 from loguru import logger
 
-from nanobot.utils.helpers import ensure_dir, safe_filename
+from nanobot.utils.helpers import ensure_dir, safe_filename, timestamp
 
 
 @dataclass
@@ -27,7 +27,7 @@ class Session:
 
     def add_message(self, role: str, content: str, **kwargs: Any) -> None:
         """Add a message to the session."""
-        msg = {"role": role, "content": content, "timestamp": datetime.now().isoformat(), **kwargs}
+        msg = {"role": role, "content": content, "timestamp": timestamp(), **kwargs}
         self.messages.append(msg)
         self.updated_at = datetime.now()
 

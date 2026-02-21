@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
@@ -11,6 +10,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
+
+from nanobot.utils.helpers import (
+    build_tool_call_dicts,
+    parse_session_key,
+    safe_json_dumps,
+    truncate_string,
+)
 
 if TYPE_CHECKING:
     from nanobot.config.schema import Config, ExecToolConfig
@@ -240,7 +246,7 @@ class AgentLoop:
         # Parse origin (system messages encode origin in chat_id as "channel:chat_id")
         if is_system:
             if ":" in msg.chat_id:
-                origin_channel, origin_chat_id = msg.chat_id.split(":", 1)
+                origin_channel, origin_chat_id = parse_session_key(msg.chat_id)
             else:
                 origin_channel, origin_chat_id = "cli", msg.chat_id
             session_key = f"{origin_channel}:{origin_chat_id}"
@@ -248,8 +254,10 @@ class AgentLoop:
         else:
             origin_channel, origin_chat_id = msg.channel, msg.chat_id
             session_key = msg.session_key
-            preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-            logger.info("Processing message from {}:{}: {}", origin_channel, msg.sender_id, preview)
+            logger.info(
+                "Processing message from {}:{}: {}",
+                origin_channel, msg.sender_id, truncate_string(msg.content, 80),
+            )
 
         # Connect MCP servers lazily on first message
         await self._connect_mcp()
@@ -306,8 +314,10 @@ class AgentLoop:
                 final_content = "I've completed processing but have no response to give."
 
         # Log response preview
-        preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
-        logger.info("Response to {}:{}: {}", origin_channel, msg.sender_id, preview)
+        logger.info(
+            "Response to {}:{}: {}",
+            origin_channel, msg.sender_id, truncate_string(final_content, 120),
+        )
 
         # Save to session
         user_content = f"[System: {msg.sender_id}] {msg.content}" if is_system else msg.content
@@ -399,28 +409,17 @@ class AgentLoop:
                     await on_progress(self._tool_hint(response.tool_calls))
 
                 # Add assistant message with tool calls
-                tool_call_dicts = [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": json.dumps(tc.arguments, ensure_ascii=False),
-                        },
-                    }
-                    for tc in response.tool_calls
-                ]
                 messages = self.context.add_assistant_message(
                     messages,
                     response.content,
-                    tool_call_dicts,
+                    build_tool_call_dicts(response.tool_calls),
                     reasoning_content=response.reasoning_content,
                 )
 
                 # Execute tools
                 for tool_call in response.tool_calls:
                     tools_used.append(tool_call.name)
-                    args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
+                    args_str = safe_json_dumps(tool_call.arguments)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
                     messages = self.context.add_tool_result(

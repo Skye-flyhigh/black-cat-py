@@ -5,19 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from nanobot.agent.tools.base import Tool
-
-
-def _resolve_path(
-    path: str, workspace: Path | None = None, allowed_dir: Path | None = None
-) -> Path:
-    """Resolve path against workspace (if relative) and enforce directory restriction."""
-    p = Path(path).expanduser()
-    if not p.is_absolute() and workspace:
-        p = workspace / p
-    resolved = p.resolve()
-    if allowed_dir and not str(resolved).startswith(str(allowed_dir.resolve())):
-        raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
-    return resolved
+from nanobot.utils.helpers import resolve_path as _resolve_path
 
 
 class ReadFileTool(Tool):

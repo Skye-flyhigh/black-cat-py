@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -11,10 +10,8 @@ from typing import Any, Callable, Coroutine
 from loguru import logger
 
 from nanobot.cron.types import CronJob, CronJobState, CronPayload, CronSchedule, CronStore
-
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
+from nanobot.utils.helpers import ensure_dir
+from nanobot.utils.helpers import now_ms as _now_ms
 
 
 def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
@@ -127,7 +124,7 @@ class CronService:
         if not self._store:
             return
 
-        self.store_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_dir(self.store_path.parent)
 
         data = {
             "version": self._store.version,

@@ -1,12 +1,13 @@
 """Subagent manager for background task execution."""
 
 import asyncio
-import json
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+from nanobot.utils.helpers import build_tool_call_dicts, safe_json_dumps
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ExecToolConfig
@@ -140,30 +141,20 @@ class SubagentManager:
 
                 if response.has_tool_calls:
                     # Add assistant message with tool calls
-                    tool_call_dicts = [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": json.dumps(tc.arguments),
-                            },
-                        }
-                        for tc in response.tool_calls
-                    ]
                     messages.append(
                         {
                             "role": "assistant",
                             "content": response.content or "",
-                            "tool_calls": tool_call_dicts,
+                            "tool_calls": build_tool_call_dicts(response.tool_calls),
                         }
                     )
 
                     # Execute tools
                     for tool_call in response.tool_calls:
-                        args_str = json.dumps(tool_call.arguments)
+                        args_str = safe_json_dumps(tool_call.arguments)
                         logger.debug(
-                            f"Subagent [{task_id}] executing: {tool_call.name} with arguments: {args_str}"
+                            "Subagent [{}] executing: {} with arguments: {}",
+                            task_id, tool_call.name, args_str,
                         )
                         result = await tools.execute(tool_call.name, tool_call.arguments)
                         messages.append(

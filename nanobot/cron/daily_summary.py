@@ -10,6 +10,7 @@ from loguru import logger
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.summarizer import Summarizer
 from nanobot.session.manager import SessionManager
+from nanobot.utils.helpers import today_date
 
 # Default: run at 3am
 DEFAULT_SUMMARY_HOUR = 3
@@ -78,19 +79,18 @@ class DailySummaryService:
 
     def _should_run(self) -> bool:
         """Check if we should run the daily summary now."""
-        now = datetime.now()
-        today = now.strftime("%Y-%m-%d")
+        today = today_date()
 
         # Already ran today?
         if self._last_run_date == today:
             return False
 
         # Is it the right hour?
-        return now.hour == self.summary_hour
+        return datetime.now().hour == self.summary_hour
 
     async def _run_daily_summary(self) -> None:
         """Execute the daily summary consolidation."""
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = today_date()
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
         logger.info("Running daily summary for {}", yesterday)
@@ -152,12 +152,12 @@ class DailySummaryService:
 
         # Combine all facts
         new_facts = "\n".join(facts_list)
-        timestamp = datetime.now().strftime("%Y-%m-%d")
+        today = today_date()
 
-        update = f"\n\n## Updates from {timestamp}\n\n{new_facts}"
+        update = f"\n\n## Updates from {today}\n\n{new_facts}"
 
         self.memory.write_long_term(existing + update)
-        logger.info("Updated long-term memory with facts from {}", timestamp)
+        logger.info("Updated long-term memory with facts from {}", today)
 
     async def run_now(self) -> dict[str, Any]:
         """Manually trigger the daily summary (for testing)."""
@@ -171,5 +171,5 @@ class DailySummaryService:
 
         return {
             "sessions_processed": session_count,
-            "date": datetime.now().strftime("%Y-%m-%d"),
+            "date": today_date(),
         }

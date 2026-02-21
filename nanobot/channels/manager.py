@@ -36,63 +36,40 @@ class ChannelManager:
 
         self._init_channels()
 
+    # (name, module_path, class_name, config_getter)
+    _CHANNEL_REGISTRY: list[tuple[str, str, str]] = [
+        ("telegram", "nanobot.channels.telegram", "TelegramChannel"),
+        ("whatsapp", "nanobot.channels.whatsapp", "WhatsAppChannel"),
+        ("discord", "nanobot.channels.discord", "DiscordChannel"),
+        ("feishu", "nanobot.channels.feishu", "FeishuChannel"),
+        ("email", "nanobot.channels.email", "EmailChannel"),
+    ]
+
     def _init_channels(self) -> None:
         """Initialize channels based on config."""
+        import importlib
 
-        # Telegram channel
-        if self.config.channels.telegram.enabled:
+        for name, module_path, class_name in self._CHANNEL_REGISTRY:
+            channel_config = getattr(self.config.channels, name, None)
+            if not channel_config or not channel_config.enabled:
+                continue
             try:
-                from nanobot.channels.telegram import TelegramChannel
-
-                self.channels["telegram"] = TelegramChannel(
-                    self.config.channels.telegram,
-                    self.bus,
-                    groq_api_key=self.config.providers.groq.api_key,
-                    session_manager=self.session_manager,
-                )
-                logger.info("Telegram channel enabled")
+                mod = importlib.import_module(module_path)
+                cls = getattr(mod, class_name)
+                extra_kwargs = self._extra_kwargs(name)
+                self.channels[name] = cls(channel_config, self.bus, **extra_kwargs)
+                logger.info("{} channel enabled", name.title())
             except ImportError as e:
-                logger.warning("Telegram channel not available: {}", e)
+                logger.warning("{} channel not available: {}", name.title(), e)
 
-        # WhatsApp channel
-        if self.config.channels.whatsapp.enabled:
-            try:
-                from nanobot.channels.whatsapp import WhatsAppChannel
-
-                self.channels["whatsapp"] = WhatsAppChannel(self.config.channels.whatsapp, self.bus)
-                logger.info("WhatsApp channel enabled")
-            except ImportError as e:
-                logger.warning("WhatsApp channel not available: {}", e)
-
-        # Discord channel
-        if self.config.channels.discord.enabled:
-            try:
-                from nanobot.channels.discord import DiscordChannel
-
-                self.channels["discord"] = DiscordChannel(self.config.channels.discord, self.bus)
-                logger.info("Discord channel enabled")
-            except ImportError as e:
-                logger.warning("Discord channel not available: {}", e)
-
-        # Feishu channel
-        if self.config.channels.feishu.enabled:
-            try:
-                from nanobot.channels.feishu import FeishuChannel
-
-                self.channels["feishu"] = FeishuChannel(self.config.channels.feishu, self.bus)
-                logger.info("Feishu channel enabled")
-            except ImportError as e:
-                logger.warning("Feishu channel not available: {}", e)
-
-        # Email channel
-        if self.config.channels.email.enabled:
-            try:
-                from nanobot.channels.email import EmailChannel
-
-                self.channels["email"] = EmailChannel(self.config.channels.email, self.bus)
-                logger.info("Email channel enabled")
-            except ImportError as e:
-                logger.warning("Email channel not available: {}", e)
+    def _extra_kwargs(self, name: str) -> dict[str, Any]:
+        """Return extra constructor kwargs for channels that need them."""
+        if name == "telegram":
+            return {
+                "groq_api_key": self.config.providers.groq.api_key,
+                "session_manager": self.session_manager,
+            }
+        return {}
 
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""

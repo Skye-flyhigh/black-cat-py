@@ -63,12 +63,10 @@ class HeartbeatService:
 
     def _read_heartbeat_file(self) -> str | None:
         """Read HEARTBEAT.md content."""
-        if self.heartbeat_file.exists():
-            try:
-                return self.heartbeat_file.read_text()
-            except Exception:
-                return None
-        return None
+        try:
+            return self.heartbeat_file.read_text() if self.heartbeat_file.exists() else None
+        except Exception:
+            return None
 
     async def start(self) -> None:
         """Start the heartbeat service."""

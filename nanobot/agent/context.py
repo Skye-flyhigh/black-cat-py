@@ -16,6 +16,7 @@ from loguru import logger
 
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.skills import SkillsLoader
+from nanobot.utils.helpers import extract_system_message
 
 
 class ContextManager:
@@ -487,9 +488,7 @@ For normal conversation, just respond with text - do not call the message tool."
         if not messages:
             return messages
 
-        # Always keep system prompt (first message)
-        system_msg = messages[0] if messages[0]["role"] == "system" else None
-        conversation = messages[1:] if system_msg else messages
+        system_msg, conversation = extract_system_message(messages)
 
         # Calculate current size
         current_context = "".join(
@@ -589,9 +588,7 @@ For normal conversation, just respond with text - do not call the message tool."
         if not messages:
             return [], [], None
 
-        # Extract system prompt
-        system_msg = messages[0] if messages[0].get("role") == "system" else None
-        conversation = messages[1:] if system_msg else messages
+        system_msg, conversation = extract_system_message(messages)
 
         if len(conversation) <= keep_recent:
             return [], conversation, system_msg
