@@ -97,6 +97,41 @@ class LiteLLMProvider(LLMProvider):
                     kwargs.update(overrides)
                     return
 
+    def _supports_cache_control(self, model: str) -> bool:
+        """Check if the resolved model/provider supports cache_control."""
+        if self._gateway:
+            return self._gateway.supports_prompt_caching
+        spec = find_by_model(model)
+        return bool(spec and spec.supports_prompt_caching)
+
+    def _apply_cache_control(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None
+    ) -> None:
+        """Inject cache_control markers on system message and last tool definition.
+
+        Mutates ``messages`` and ``tools`` in place.  Anthropic and OpenRouter use
+        these markers to cache the prompt prefix, saving tokens and latency.
+        """
+        cache_ctrl = {"type": "ephemeral"}
+
+        # Mark the system message for caching
+        for msg in messages:
+            if msg.get("role") == "system":
+                content = msg.get("content")
+                if isinstance(content, str):
+                    msg["content"] = [
+                        {"type": "text", "text": content, "cache_control": cache_ctrl}
+                    ]
+                elif isinstance(content, list) and content:
+                    content[-1]["cache_control"] = cache_ctrl
+                break
+
+        # Mark the last tool definition for caching
+        if tools:
+            last_tool = tools[-1]
+            if "function" in last_tool:
+                last_tool["function"]["cache_control"] = cache_ctrl
+
     async def chat(
         self,
         messages: list[dict[str, Any]],
@@ -153,6 +188,10 @@ class LiteLLMProvider(LLMProvider):
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
+
+        # Inject cache_control for providers that support it (Anthropic, OpenRouter)
+        if self._supports_cache_control(model):
+            self._apply_cache_control(messages, tools)
 
         try:
             response = await acompletion(**kwargs)
