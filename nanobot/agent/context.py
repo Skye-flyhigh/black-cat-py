@@ -155,7 +155,9 @@ class ContextManager:
         """
         from datetime import datetime
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
+        now_dt = datetime.now().astimezone()
+        tz_name = now_dt.strftime("%Z") or "UTC"
+        now = now_dt.strftime(f"%Y-%m-%d %H:%M (%A) {tz_name}")
         workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"

@@ -659,12 +659,17 @@ def agent(
     """Interact with the agent directly."""
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
-    from nanobot.config.loader import load_config
+    from nanobot.config.loader import get_data_dir, load_config
+    from nanobot.cron.service import CronService
 
     config = load_config()
 
     bus = MessageBus()
     provider = _make_provider(config)
+
+    # Wire up cron so the agent can schedule jobs in interactive mode
+    cron_store_path = get_data_dir() / "cron" / "jobs.json"
+    cron = CronService(cron_store_path)
 
     agent_loop = AgentLoop(
         bus=bus,
@@ -672,6 +677,7 @@ def agent(
         workspace=config.workspace_path,
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
+        cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
         config=config,
         llm_timeout=config.agents.defaults.llm_timeout,
@@ -894,24 +900,28 @@ def cron_list(
     table.add_column("Status")
     table.add_column("Next Run")
 
-    import time
+    from datetime import datetime as _dt
 
     for job in jobs:
         # Format schedule
         if job.schedule.kind == "every":
             sched = f"every {(job.schedule.every_ms or 0) // 1000}s"
         elif job.schedule.kind == "cron":
-            sched = job.schedule.expr or ""
+            tz_label = f" ({job.schedule.tz})" if job.schedule.tz else ""
+            sched = (job.schedule.expr or "") + tz_label
         else:
             sched = "one-time"
 
-        # Format next run
+        # Format next run (use job's timezone if available)
         next_run = ""
         if job.state.next_run_at_ms:
-            next_time = time.strftime(
-                "%Y-%m-%d %H:%M", time.localtime(job.state.next_run_at_ms / 1000)
-            )
-            next_run = next_time
+            tz_info = None
+            if job.schedule.tz:
+                from zoneinfo import ZoneInfo
+
+                tz_info = ZoneInfo(job.schedule.tz)
+            next_dt = _dt.fromtimestamp(job.state.next_run_at_ms / 1000, tz=tz_info)
+            next_run = next_dt.strftime("%Y-%m-%d %H:%M")
 
         status = "[green]enabled[/green]" if job.enabled else "[dim]disabled[/dim]"
 
@@ -927,6 +937,7 @@ def cron_add(
     every: int = typer.Option(None, "--every", "-e", help="Run every N seconds"),
     cron_expr: str = typer.Option(None, "--cron", "-c", help="Cron expression (e.g. '0 9 * * *')"),
     at: str = typer.Option(None, "--at", help="Run once at time (ISO format)"),
+    tz: str = typer.Option(None, "--tz", help="IANA timezone for cron (e.g. 'America/Vancouver')"),
     deliver: bool = typer.Option(False, "--deliver", "-d", help="Deliver response to channel"),
     to: str = typer.Option(None, "--to", help="Recipient for delivery"),
     channel: str = typer.Option(
@@ -942,7 +953,7 @@ def cron_add(
     if every:
         schedule = CronSchedule(kind="every", every_ms=every * 1000)
     elif cron_expr:
-        schedule = CronSchedule(kind="cron", expr=cron_expr)
+        schedule = CronSchedule(kind="cron", expr=cron_expr, tz=tz)
     elif at:
         import datetime
 
@@ -955,14 +966,18 @@ def cron_add(
     store_path = get_data_dir() / "cron" / "jobs.json"
     service = CronService(store_path)
 
-    job = service.add_job(
-        name=name,
-        schedule=schedule,
-        message=message,
-        deliver=deliver,
-        to=to,
-        channel=channel,
-    )
+    try:
+        job = service.add_job(
+            name=name,
+            schedule=schedule,
+            message=message,
+            deliver=deliver,
+            to=to,
+            channel=channel,
+        )
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
 
     console.print(f"[green]✓[/green] Added job '{job.name}' ({job.id})")
 
@@ -1010,14 +1025,46 @@ def cron_run(
     force: bool = typer.Option(False, "--force", "-f", help="Run even if disabled"),
 ):
     """Manually run a job."""
-    from nanobot.config.loader import get_data_dir
+    from nanobot.agent.loop import AgentLoop
+    from nanobot.bus.queue import MessageBus
+    from nanobot.config.loader import get_data_dir, load_config
     from nanobot.cron.service import CronService
+    from nanobot.cron.types import CronJob
 
+    config = load_config()
     store_path = get_data_dir() / "cron" / "jobs.json"
+
+    bus = MessageBus()
+    provider = _make_provider(config)
+
+    agent_loop = AgentLoop(
+        bus=bus,
+        provider=provider,
+        workspace=config.workspace_path,
+        model=config.agents.defaults.model,
+        brave_api_key=config.tools.web.search.api_key or None,
+        exec_config=config.tools.exec,
+        restrict_to_workspace=config.tools.restrict_to_workspace,
+        config=config,
+        llm_timeout=config.agents.defaults.llm_timeout,
+        mcp_servers=config.tools.mcp_servers or None,
+    )
+
     service = CronService(store_path)
 
+    async def on_job(job: CronJob) -> str | None:
+        return await agent_loop.process_direct(
+            job.payload.message,
+            channel=job.payload.channel or "cron",
+            chat_id=job.payload.to or job.id,
+        )
+
+    service.on_job = on_job
+
     async def run():
-        return await service.run_job(job_id, force=force)
+        result = await service.run_job(job_id, force=force)
+        await agent_loop.close_mcp()
+        return result
 
     if asyncio.run(run()):
         console.print("[green]✓[/green] Job executed")
