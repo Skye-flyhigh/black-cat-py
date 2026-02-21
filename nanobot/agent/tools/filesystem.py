@@ -1,14 +1,20 @@
 """File system tools: read, write, edit."""
 
+import difflib
 from pathlib import Path
 from typing import Any
 
 from nanobot.agent.tools.base import Tool
 
 
-def _resolve_path(path: str, allowed_dir: Path | None = None) -> Path:
-    """Resolve path and optionally enforce directory restriction."""
-    resolved = Path(path).expanduser().resolve()
+def _resolve_path(
+    path: str, workspace: Path | None = None, allowed_dir: Path | None = None
+) -> Path:
+    """Resolve path against workspace (if relative) and enforce directory restriction."""
+    p = Path(path).expanduser()
+    if not p.is_absolute() and workspace:
+        p = workspace / p
+    resolved = p.resolve()
     if allowed_dir and not str(resolved).startswith(str(allowed_dir.resolve())):
         raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
     return resolved
@@ -25,13 +31,14 @@ class ReadFileTool(Tool):
         "required": ["path"],
     }
 
-    def __init__(self, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path | None = None, allowed_dir: Path | None = None):
+        self._workspace = workspace
         self._allowed_dir = allowed_dir
 
     async def execute(self, **kwargs: Any) -> str:
         path: str = kwargs["path"]
         try:
-            file_path = _resolve_path(path, self._allowed_dir)
+            file_path = _resolve_path(path, self._workspace, self._allowed_dir)
             if not file_path.exists():
                 return f"Error: File not found: {path}"
             if not file_path.is_file():
@@ -59,14 +66,15 @@ class WriteFileTool(Tool):
         "required": ["path", "content"],
     }
 
-    def __init__(self, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path | None = None, allowed_dir: Path | None = None):
+        self._workspace = workspace
         self._allowed_dir = allowed_dir
 
     async def execute(self, **kwargs: Any) -> str:
         path: str = kwargs["path"]
         content: str = kwargs["content"]
         try:
-            file_path = _resolve_path(path, self._allowed_dir)
+            file_path = _resolve_path(path, self._workspace, self._allowed_dir)
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content, encoding="utf-8")
             return f"Successfully wrote {len(content)} bytes to {path}"
@@ -91,7 +99,8 @@ class EditFileTool(Tool):
         "required": ["path", "old_text", "new_text"],
     }
 
-    def __init__(self, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path | None = None, allowed_dir: Path | None = None):
+        self._workspace = workspace
         self._allowed_dir = allowed_dir
 
     async def execute(self, **kwargs: Any) -> str:
@@ -99,14 +108,14 @@ class EditFileTool(Tool):
         old_text: str = kwargs["old_text"]
         new_text: str = kwargs["new_text"]
         try:
-            file_path = _resolve_path(path, self._allowed_dir)
+            file_path = _resolve_path(path, self._workspace, self._allowed_dir)
             if not file_path.exists():
                 return f"Error: File not found: {path}"
 
             content = file_path.read_text(encoding="utf-8")
 
             if old_text not in content:
-                return "Error: old_text not found in file. Make sure it matches exactly."
+                return self._not_found_message(old_text, content, str(file_path))
 
             # Count occurrences
             count = content.count(old_text)
@@ -116,11 +125,40 @@ class EditFileTool(Tool):
             new_content = content.replace(old_text, new_text, 1)
             file_path.write_text(new_content, encoding="utf-8")
 
-            return f"Successfully edited {path}"
+            return f"Successfully edited {file_path}"
         except PermissionError as e:
             return f"Error: {e}"
         except Exception as e:
             return f"Error editing file: {str(e)}"
+
+    @staticmethod
+    def _not_found_message(old_text: str, content: str, path: str) -> str:
+        """Build a helpful error with diff hints when old_text is not found."""
+        lines = content.splitlines(keepends=True)
+        old_lines = old_text.splitlines(keepends=True)
+        window = len(old_lines)
+
+        best_ratio, best_start = 0.0, 0
+        for i in range(max(1, len(lines) - window + 1)):
+            ratio = difflib.SequenceMatcher(None, old_lines, lines[i : i + window]).ratio()
+            if ratio > best_ratio:
+                best_ratio, best_start = ratio, i
+
+        if best_ratio > 0.5:
+            diff = "\n".join(
+                difflib.unified_diff(
+                    old_lines,
+                    lines[best_start : best_start + window],
+                    fromfile="old_text (provided)",
+                    tofile=f"{path} (actual, line {best_start + 1})",
+                    lineterm="",
+                )
+            )
+            return (
+                f"Error: old_text not found in {path}.\n"
+                f"Best match ({best_ratio:.0%} similar) at line {best_start + 1}:\n{diff}"
+            )
+        return f"Error: old_text not found in {path}. No similar text found. Verify the file content."
 
 
 class ListDirTool(Tool):
@@ -134,13 +172,14 @@ class ListDirTool(Tool):
         "required": ["path"],
     }
 
-    def __init__(self, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path | None = None, allowed_dir: Path | None = None):
+        self._workspace = workspace
         self._allowed_dir = allowed_dir
 
     async def execute(self, **kwargs: Any) -> str:
         path: str = kwargs["path"]
         try:
-            dir_path = _resolve_path(path, self._allowed_dir)
+            dir_path = _resolve_path(path, self._workspace, self._allowed_dir)
             if not dir_path.exists():
                 return f"Error: Directory not found: {path}"
             if not dir_path.is_dir():
