@@ -303,11 +303,13 @@ class AgentLoop:
         session.add_message("assistant", final_content)
         self.sessions.save(session)
 
+        metadata = msg.metadata or {}
         return OutboundMessage(
             channel=origin_channel,
             chat_id=origin_chat_id,
             content=final_content,
-            metadata=msg.metadata or {},
+            reply_to=str(metadata["reply_to"]) if metadata.get("reply_to") else None,
+            metadata=metadata,
         )
 
     def _update_tool_contexts(self, channel: str, chat_id: str) -> None:

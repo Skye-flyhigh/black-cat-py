@@ -13,10 +13,12 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.channels.utils import (
+    MAX_MESSAGE_LENGTH_TELEGRAM,
     TYPING_INTERVAL_TELEGRAM,
     format_reply_context,
     get_file_extension,
     markdown_to_telegram_html,
+    split_message,
 )
 from nanobot.config.schema import TelegramConfig
 
@@ -62,8 +64,11 @@ class TelegramChannel(BaseChannel):
 
         self._running = True
 
-        # Build the application
-        builder = Application.builder().token(self.config.token)
+        # Build the application with a larger connection pool for stability
+        from telegram.request import HTTPXRequest
+
+        request = HTTPXRequest(connection_pool_size=16, connect_timeout=20.0)
+        builder = Application.builder().token(self.config.token).request(request)
         if self.config.proxy:
             builder = builder.proxy(self.config.proxy).get_updates_proxy(self.config.proxy)
         self._app = builder.build()
@@ -130,24 +135,39 @@ class TelegramChannel(BaseChannel):
 
         try:
             chat_id = int(msg.chat_id)
-            html_content = markdown_to_telegram_html(msg.content)
-            await self._app.bot.send_message(
-                chat_id=chat_id,
-                text=html_content,
-                parse_mode="HTML",
-            )
         except ValueError:
             logger.error(f"Invalid chat_id: {msg.chat_id}")
-        except Exception as e:
-            # Fallback to plain text if HTML parsing fails
-            logger.warning(f"HTML parse failed, falling back to plain text: {e}")
+            return
+
+        # Reply-to support (configurable)
+        reply_params: dict = {}
+        if self.config.reply_to_message and msg.reply_to:
+            reply_params["reply_to_message_id"] = int(msg.reply_to)
+
+        # Split long messages to stay within Telegram's 4096-char limit
+        chunks = split_message(msg.content, MAX_MESSAGE_LENGTH_TELEGRAM)
+        for chunk in chunks:
+            html_content = markdown_to_telegram_html(chunk)
             try:
                 await self._app.bot.send_message(
-                    chat_id=int(msg.chat_id),
-                    text=msg.content,
+                    chat_id=chat_id,
+                    text=html_content,
+                    parse_mode="HTML",
+                    **reply_params,
                 )
-            except Exception as e2:
-                logger.error(f"Error sending Telegram message: {e2}")
+            except Exception as e:
+                # Fallback to plain text if HTML parsing fails
+                logger.warning(f"HTML parse failed, falling back to plain text: {e}")
+                try:
+                    await self._app.bot.send_message(
+                        chat_id=chat_id,
+                        text=chunk,
+                        **reply_params,
+                    )
+                except Exception as e2:
+                    logger.error(f"Error sending Telegram message: {e2}")
+            # Only reply-to the first chunk
+            reply_params = {}
 
     async def _send_typing_indicator(self, chat_id: str) -> None:
         """Send typing indicator to Telegram."""
@@ -259,6 +279,7 @@ class TelegramChannel(BaseChannel):
             media=media_paths,
             metadata={
                 "message_id": message.message_id,
+                "reply_to": message.message_id if self.config.reply_to_message else None,
                 "user_id": user.id,
                 "username": user.username,
                 "first_name": user.first_name,

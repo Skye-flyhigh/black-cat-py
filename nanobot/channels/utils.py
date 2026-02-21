@@ -29,6 +29,10 @@ RECONNECT_DELAY_SECONDS = 5
 # Attachment limits
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20MB
 
+# Platform message length limits
+MAX_MESSAGE_LENGTH_TELEGRAM = 4096
+MAX_MESSAGE_LENGTH_DISCORD = 2000
+
 
 # ============================================================================
 # Markdown Conversion
@@ -200,6 +204,36 @@ def get_file_extension(media_type: str, mime_type: str | None = None) -> str:
 # ============================================================================
 # Reply Context
 # ============================================================================
+
+
+def split_message(text: str, limit: int) -> list[str]:
+    """Split a message into chunks that fit within a platform's character limit.
+
+    Tries to split on newlines first, then on spaces, and only hard-splits
+    as a last resort.
+    """
+    if len(text) <= limit:
+        return [text]
+
+    chunks: list[str] = []
+    while text:
+        if len(text) <= limit:
+            chunks.append(text)
+            break
+
+        # Try to split at the last newline within the limit
+        cut = text.rfind("\n", 0, limit)
+        if cut <= 0:
+            # Try to split at the last space within the limit
+            cut = text.rfind(" ", 0, limit)
+        if cut <= 0:
+            # Hard split
+            cut = limit
+
+        chunks.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+
+    return chunks
 
 
 def format_reply_context(author: str | None, content: str, max_length: int = 200) -> str | None:

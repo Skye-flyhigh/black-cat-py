@@ -41,7 +41,11 @@ class WhatsAppChannel(BaseChannel):
 
         while self._running:
             try:
-                async with websockets.connect(bridge_url) as ws:
+                extra_headers = {}
+                if self.config.bridge_token:
+                    extra_headers["Authorization"] = f"Bearer {self.config.bridge_token}"
+
+                async with websockets.connect(bridge_url, additional_headers=extra_headers) as ws:
                     self._ws = ws
                     self._connected = True
                     logger.info("Connected to WhatsApp bridge")
@@ -84,7 +88,7 @@ class WhatsAppChannel(BaseChannel):
                 "to": msg.chat_id,
                 "text": msg.content,
             }
-            await self._ws.send(json.dumps(payload))
+            await self._ws.send(json.dumps(payload, ensure_ascii=False))
         except Exception as e:
             logger.error(f"Error sending WhatsApp message: {e}")
 

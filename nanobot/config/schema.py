@@ -11,6 +11,7 @@ class WhatsAppConfig(BaseModel):
 
     enabled: bool = False
     bridge_url: str = "ws://localhost:3001"
+    bridge_token: str = ""  # Optional auth token for the bridge WebSocket
     allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
 
 
@@ -23,6 +24,7 @@ class TelegramConfig(BaseModel):
     proxy: str | None = (
         None  # HTTP/SOCKS5 proxy URL, e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
     )
+    reply_to_message: bool = False  # If true, bot replies are threaded to the user's message
 
 
 class FeishuConfig(BaseModel):

@@ -6,17 +6,19 @@ from typing import Any
 
 import httpx
 import websockets
-from websockets.asyncio.client import ClientConnection
 from loguru import logger
+from websockets.asyncio.client import ClientConnection
 
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.channels.utils import (
     MAX_ATTACHMENT_BYTES,
+    MAX_MESSAGE_LENGTH_DISCORD,
     RECONNECT_DELAY_SECONDS,
     TYPING_INTERVAL_DISCORD,
     format_reply_context,
+    split_message,
 )
 from nanobot.config.schema import DiscordConfig
 
@@ -87,14 +89,24 @@ class DiscordChannel(BaseChannel):
             return
 
         url = f"{DISCORD_API_BASE}/channels/{msg.chat_id}/messages"
-        payload: dict[str, Any] = {"content": msg.content}
-
-        if msg.reply_to:
-            payload["message_reference"] = {"message_id": msg.reply_to}
-            payload["allowed_mentions"] = {"replied_user": False}
-
         headers = {"Authorization": f"Bot {self.config.token}"}
 
+        # Split long messages to stay within Discord's 2000-char limit
+        chunks = split_message(msg.content, MAX_MESSAGE_LENGTH_DISCORD)
+        for i, chunk in enumerate(chunks):
+            payload: dict[str, Any] = {"content": chunk}
+
+            # Only attach reply reference to the first chunk
+            if i == 0 and msg.reply_to:
+                payload["message_reference"] = {"message_id": msg.reply_to}
+                payload["allowed_mentions"] = {"replied_user": False}
+
+            await self._send_discord_request(url, headers, payload)
+
+    async def _send_discord_request(
+        self, url: str, headers: dict[str, str], payload: dict[str, Any]
+    ) -> None:
+        """Send a single Discord API request with retry on rate-limit."""
         for attempt in range(3):
             try:
                 response = await self._http.post(url, headers=headers, json=payload)
