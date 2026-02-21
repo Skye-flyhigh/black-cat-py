@@ -70,6 +70,13 @@ class LiteLLMProvider(LLMProvider):
 
     def _resolve_model(self, model: str) -> str:
         """Resolve model name by applying provider/gateway prefixes."""
+        # Always use ollama_chat/ for proper tool calling support.
+        # The ollama/ prefix routes to /api/generate which causes infinite
+        # tool call loops. ollama_chat/ routes to /api/chat which handles
+        # tool calling correctly.
+        if model.startswith("ollama/") and not model.startswith("ollama_chat/"):
+            model = "ollama_chat/" + model[len("ollama/"):]
+
         if self._gateway:
             # Gateway mode: apply gateway prefix, skip provider-specific prefixes
             prefix = self._gateway.litellm_prefix
