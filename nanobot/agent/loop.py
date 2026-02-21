@@ -196,11 +196,20 @@ class AgentLoop:
                 # Process it
                 try:
                     response = await self._process_message(msg)
-                    if response:
+                    if response is not None:
                         await self.bus.publish_outbound(response)
+                    elif msg.channel == "cli":
+                        # CLI needs an empty response to unblock the prompt
+                        await self.bus.publish_outbound(
+                            OutboundMessage(
+                                channel=msg.channel,
+                                chat_id=msg.chat_id,
+                                content="",
+                                metadata=msg.metadata or {},
+                            )
+                        )
                 except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    # Send error response
+                    logger.error("Error processing message: {}", e)
                     await self.bus.publish_outbound(
                         OutboundMessage(
                             channel=msg.channel,
@@ -248,8 +257,11 @@ class AgentLoop:
         # Get or create session
         session = self.sessions.get_or_create(session_key)
 
-        # Update tool contexts
+        # Update tool contexts and reset per-turn tracking
         self._update_tool_contexts(origin_channel, origin_chat_id)
+        message_tool = self.tools.get("message")
+        if isinstance(message_tool, MessageTool):
+            message_tool.start_turn()
 
         # Build initial messages
         author = self._resolve_author(msg.sender_id, msg.channel)
@@ -281,27 +293,32 @@ class AgentLoop:
             )
 
         # Agent loop
-        final_content = await self._run_agent_loop(messages, on_progress=_send_progress)
+        final_content, tools_used = await self._run_agent_loop(
+            messages, on_progress=_send_progress
+        )
 
         if not final_content or not final_content.strip():
             if is_system:
                 final_content = "Background task completed."
             elif final_content is None:
-                final_content = (
-                    f"I've done {self.max_iterations} iterations without completion."
-                )
+                final_content = "I've completed processing but have no response to give."
             else:
                 final_content = "I've completed processing but have no response to give."
 
         # Log response preview
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
-        logger.info(f"Response to {origin_channel}:{msg.sender_id}: {preview}")
+        logger.info("Response to {}:{}: {}", origin_channel, msg.sender_id, preview)
 
         # Save to session
         user_content = f"[System: {msg.sender_id}] {msg.content}" if is_system else msg.content
         session.add_message("user", user_content)
         session.add_message("assistant", final_content)
         self.sessions.save(session)
+
+        # If the message tool already sent a reply this turn, don't send a duplicate
+        message_tool = self.tools.get("message")
+        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
+            return None
 
         metadata = msg.metadata or {}
         return OutboundMessage(
@@ -349,7 +366,7 @@ class AgentLoop:
         self,
         messages: list[dict],
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-    ) -> str | None:
+    ) -> tuple[str | None, list[str]]:
         """
         Run the agent loop: call LLM, execute tools, repeat until done.
 
@@ -358,9 +375,10 @@ class AgentLoop:
             on_progress: Optional callback to push intermediate progress to the user.
 
         Returns:
-            The final response content, or None if max iterations reached.
+            Tuple of (final_content, tools_used).
         """
         iteration = 0
+        tools_used: list[str] = []
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -376,14 +394,19 @@ class AgentLoop:
                 # Send progress to user (thinking text or tool hint)
                 if on_progress:
                     clean = self._strip_think(response.content)
-                    await on_progress(clean or self._tool_hint(response.tool_calls))
+                    if clean:
+                        await on_progress(clean)
+                    await on_progress(self._tool_hint(response.tool_calls))
 
                 # Add assistant message with tool calls
                 tool_call_dicts = [
                     {
                         "id": tc.id,
                         "type": "function",
-                        "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
+                        "function": {
+                            "name": tc.name,
+                            "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                        },
                     }
                     for tc in response.tool_calls
                 ]
@@ -396,18 +419,19 @@ class AgentLoop:
 
                 # Execute tools
                 for tool_call in response.tool_calls:
+                    tools_used.append(tool_call.name)
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
-                    logger.info(f"Tool call: {tool_call.name}({args_str[:200]})")
+                    logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
             else:
                 # No tool calls, we're done
-                return self._strip_think(response.content)
+                return self._strip_think(response.content), tools_used
 
-        logger.warning(f"Max iterations reached ({self.max_iterations})")
-        return None
+        logger.warning("Max iterations reached ({})", self.max_iterations)
+        return None, tools_used
 
     async def process_direct(
         self,

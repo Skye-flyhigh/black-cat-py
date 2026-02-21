@@ -33,6 +33,7 @@ class MessageTool(Tool):
         self._send_callback = send_callback
         self._default_channel = default_channel
         self._default_chat_id = default_chat_id
+        self._sent_in_turn: bool = False
 
     def set_context(self, channel: str, chat_id: str) -> None:
         """Set the current message context."""
@@ -42,6 +43,10 @@ class MessageTool(Tool):
     def set_send_callback(self, callback: Callable[[OutboundMessage], Awaitable[None]]) -> None:
         """Set the callback for sending messages."""
         self._send_callback = callback
+
+    def start_turn(self) -> None:
+        """Reset per-turn send tracking."""
+        self._sent_in_turn = False
 
     async def execute(self, **kwargs: Any) -> str:
         content: str = kwargs["content"]
@@ -60,6 +65,7 @@ class MessageTool(Tool):
 
         try:
             await self._send_callback(msg)
+            self._sent_in_turn = True
             return f"Message sent to {channel}:{chat_id}"
         except Exception as e:
             return f"Error sending message: {str(e)}"
