@@ -447,7 +447,11 @@ For normal conversation, just respond with text - do not call the message tool."
         reasoning_content: str | None = None,
     ) -> list[dict[str, Any]]:
         """Append assistant response to message list (with optional tool_calls and reasoning)."""
-        msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
+        msg: dict[str, Any] = {"role": "assistant"}
+
+        # Only include content when non-empty — some LLM backends reject empty text blocks
+        if content is not None and content != "":
+            msg["content"] = content
 
         if tool_calls:
             msg["tool_calls"] = tool_calls

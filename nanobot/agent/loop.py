@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -219,15 +221,29 @@ class AgentLoop:
             model=self.model,
         )
 
+        # Progress callback: sends intermediate output to the user's channel
+        async def _send_progress(content: str) -> None:
+            await self.bus.publish_outbound(
+                OutboundMessage(
+                    channel=origin_channel,
+                    chat_id=origin_chat_id,
+                    content=content,
+                    metadata=msg.metadata or {},
+                )
+            )
+
         # Agent loop
-        final_content = await self._run_agent_loop(messages)
+        final_content = await self._run_agent_loop(messages, on_progress=_send_progress)
 
         if not final_content or not final_content.strip():
-            final_content = (
-                "Background task completed."
-                if is_system
-                else "I've completed processing but have no response to give."
-            )
+            if is_system:
+                final_content = "Background task completed."
+            elif final_content is None:
+                final_content = (
+                    f"I've done {self.max_iterations} iterations without completion."
+                )
+            else:
+                final_content = "I've completed processing but have no response to give."
 
         # Log response preview
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
@@ -260,9 +276,36 @@ class AgentLoop:
         if isinstance(cron_tool, CronTool):
             cron_tool.set_context(channel, chat_id)
 
-    async def _run_agent_loop(self, messages: list[dict]) -> str | None:
+    @staticmethod
+    def _strip_think(text: str | None) -> str | None:
+        """Remove <think>...</think> blocks that some models embed in content."""
+        if not text:
+            return None
+        return re.sub(r"<think>[\s\S]*?</think>", "", text).strip() or None
+
+    @staticmethod
+    def _tool_hint(tool_calls: list) -> str:
+        """Format tool calls as concise hint, e.g. 'web_search("query")'."""
+
+        def _fmt(tc):
+            val = next(iter(tc.arguments.values()), None) if tc.arguments else None
+            if not isinstance(val, str):
+                return tc.name
+            return f'{tc.name}("{val[:40]}...")' if len(val) > 40 else f'{tc.name}("{val}")'
+
+        return ", ".join(_fmt(tc) for tc in tool_calls)
+
+    async def _run_agent_loop(
+        self,
+        messages: list[dict],
+        on_progress: Callable[[str], Awaitable[None]] | None = None,
+    ) -> str | None:
         """
         Run the agent loop: call LLM, execute tools, repeat until done.
+
+        Args:
+            messages: The conversation messages.
+            on_progress: Optional callback to push intermediate progress to the user.
 
         Returns:
             The final response content, or None if max iterations reached.
@@ -280,6 +323,11 @@ class AgentLoop:
             )
 
             if response.has_tool_calls:
+                # Send progress to user (thinking text or tool hint)
+                if on_progress:
+                    clean = self._strip_think(response.content)
+                    await on_progress(clean or self._tool_hint(response.tool_calls))
+
                 # Add assistant message with tool calls
                 tool_call_dicts = [
                     {
@@ -306,8 +354,9 @@ class AgentLoop:
                     )
             else:
                 # No tool calls, we're done
-                return response.content
+                return self._strip_think(response.content)
 
+        logger.warning(f"Max iterations reached ({self.max_iterations})")
         return None
 
     async def process_direct(
