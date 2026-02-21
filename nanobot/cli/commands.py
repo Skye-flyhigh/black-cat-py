@@ -465,6 +465,7 @@ def gateway(
 ):
     """Start the nanobot gateway."""
     from nanobot.agent.loop import AgentLoop
+    from nanobot.agent.memory_manager import create_memory_manager
     from nanobot.bus.queue import MessageBus
     from nanobot.channels.manager import ChannelManager
     from nanobot.config.loader import get_data_dir, load_config
@@ -486,6 +487,17 @@ def gateway(
     provider = _make_provider(config)
     session_manager = SessionManager(config.workspace_path)
 
+    # Create semantic memory (optional - requires embedding model)
+    memory = None
+    try:
+        memory = create_memory_manager(
+            workspace=config.workspace_path,
+            embedding_model=config.agents.defaults.embedding_model,
+        )
+        console.print("[green]✓[/green] Semantic memory enabled")
+    except Exception as e:
+        console.print(f"[yellow]⚠[/yellow] Semantic memory disabled: {e}")
+
     # Create cron service first (callback set after agent creation)
     cron_store_path = get_data_dir() / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
@@ -504,6 +516,7 @@ def gateway(
         session_manager=session_manager,
         config=config,
         llm_timeout=config.agents.defaults.llm_timeout,
+        memory=memory,
     )
 
     # Set cron callback (needs agent)
@@ -547,6 +560,7 @@ def gateway(
         session_manager=session_manager,
         summary_hour=config.agents.defaults.daily_summary_hour,
         enabled=True,
+        memory=memory,
     )
 
     # Create channel manager
@@ -656,6 +670,7 @@ def agent(
 ):
     """Interact with the agent directly."""
     from nanobot.agent.loop import AgentLoop
+    from nanobot.agent.memory_manager import create_memory_manager
     from nanobot.bus.queue import MessageBus
     from nanobot.config.loader import load_config
 
@@ -663,6 +678,19 @@ def agent(
 
     bus = MessageBus()
     provider = _make_provider(config)
+
+    # Create semantic memory (optional - requires embedding model)
+    memory = None
+    try:
+        memory = create_memory_manager(
+            workspace=config.workspace_path,
+            embedding_model=config.agents.defaults.embedding_model,
+        )
+        if logs:
+            console.print("[green]✓[/green] Semantic memory enabled")
+    except Exception as e:
+        if logs:
+            console.print(f"[yellow]⚠[/yellow] Semantic memory disabled: {e}")
 
     agent_loop = AgentLoop(
         bus=bus,
@@ -673,6 +701,7 @@ def agent(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         config=config,
         llm_timeout=config.agents.defaults.llm_timeout,
+        memory=memory,
     )
 
     # Show spinner when logs are off (no output to miss); skip when logs are on

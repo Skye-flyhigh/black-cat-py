@@ -48,7 +48,8 @@ class WhatsAppChannel(BaseChannel):
 
                     async for message in ws:
                         try:
-                            await self._handle_bridge_message(message)
+                            raw = message if isinstance(message, str) else message.decode("utf-8")
+                            await self._handle_bridge_message(raw)
                         except Exception as e:
                             logger.error(f"Error handling bridge message: {e}")
 

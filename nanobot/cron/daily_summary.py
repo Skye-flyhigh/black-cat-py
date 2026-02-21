@@ -1,15 +1,20 @@
 """Daily summary service - consolidates the day's conversations into memory."""
 
+from __future__ import annotations
+
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from nanobot.agent.memory import MemoryStore
+from nanobot.agent.memory import Journal
 from nanobot.agent.summarizer import Summarizer
 from nanobot.session.manager import SessionManager
+
+if TYPE_CHECKING:
+    from nanobot.agent.memory_manager import Memory
 
 # Default: run at 3am
 DEFAULT_SUMMARY_HOUR = 3
@@ -34,13 +39,15 @@ class DailySummaryService:
         session_manager: SessionManager,
         summary_hour: int = DEFAULT_SUMMARY_HOUR,
         enabled: bool = True,
+        memory: "Memory | None" = None,
     ):
         self.workspace = workspace
         self.summarizer = summarizer
         self.session_manager = session_manager
         self.summary_hour = summary_hour
         self.enabled = enabled
-        self.memory = MemoryStore(workspace)
+        self.journal = Journal(workspace)
+        self.memory = memory  # Semantic vector memory
         self._running = False
         self._task: asyncio.Task | None = None
         self._last_run_date: str | None = None
@@ -135,7 +142,7 @@ class DailySummaryService:
         # Write daily summary to memory notes
         if all_summaries:
             summary_content = "## Conversation Summaries\n\n" + "\n\n".join(all_summaries)
-            self.memory.append_today(summary_content)
+            self.journal.append_today(summary_content)
             logger.info(f"Appended {len(all_summaries)} session summaries to daily notes")
 
         # Update long-term memory with facts
@@ -147,8 +154,8 @@ class DailySummaryService:
         )
 
     async def _update_long_term_memory(self, facts_list: list[str]) -> None:
-        """Append extracted facts to long-term memory."""
-        existing = self.memory.read_long_term()
+        """Append extracted facts to long-term memory (journal + vector)."""
+        existing = self.journal.read_long_term()
 
         # Combine all facts
         new_facts = "\n".join(facts_list)
@@ -156,8 +163,30 @@ class DailySummaryService:
 
         update = f"\n\n## Updates from {timestamp}\n\n{new_facts}"
 
-        self.memory.write_long_term(existing + update)
-        logger.info(f"Updated long-term memory with facts from {timestamp}")
+        self.journal.write_long_term(existing + update)
+        logger.info(f"Updated journal long-term memory with facts from {timestamp}")
+
+        # Also store in vector memory if available
+        if self.memory:
+            stored_count = 0
+            for fact in facts_list:
+                # Each fact block may contain multiple lines - store each line as a fact
+                for line in fact.strip().split("\n"):
+                    line = line.strip()
+                    if line and not line.startswith("#"):  # Skip empty lines and headers
+                        try:
+                            await self.memory.add(
+                                content=line,
+                                author="daily_summary",
+                                source="consolidation",
+                                tag="default",
+                            )
+                            stored_count += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to store fact in vector memory: {e}")
+
+            if stored_count > 0:
+                logger.info(f"Stored {stored_count} facts in vector memory")
 
     async def run_now(self) -> dict[str, Any]:
         """Manually trigger the daily summary (for testing)."""

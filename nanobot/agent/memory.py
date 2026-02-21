@@ -1,4 +1,4 @@
-"""Memory system for persistent agent memory."""
+"""Journal system for daily notes and long-term memory."""
 
 from datetime import datetime
 from pathlib import Path
@@ -6,11 +6,14 @@ from pathlib import Path
 from nanobot.utils.helpers import ensure_dir, today_date
 
 
-class MemoryStore:
+class Journal:
     """
-    Memory system for the agent.
+    Chronological journal for the agent.
 
-    Supports daily notes (memory/YYYY-MM-DD.md) and long-term memory (MEMORY.md).
+    Stores daily notes (memory/YYYY-MM-DD.md) and long-term facts (MEMORY.md).
+    Human-readable markdown format for review and reflection.
+
+    For semantic memory with vector search, see Memory in memory_manager.py.
     """
 
     def __init__(self, workspace: Path):
@@ -107,3 +110,7 @@ class MemoryStore:
             parts.append("## Today's Notes\n" + today)
 
         return "\n\n".join(parts) if parts else ""
+
+
+# Backward compatibility alias
+MemoryStore = Journal

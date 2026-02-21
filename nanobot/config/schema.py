@@ -106,6 +106,7 @@ class AgentDefaults(BaseModel):
     workspace: str = "~/.nanobot/workspace"
     model: str = "anthropic/claude-opus-4-5"
     summarizer_model: str | None = None  # Model for summarization (defaults to main model)
+    embedding_model: str = "ollama/nomic-embed-text"  # Model for vector embeddings
     max_tokens: int = 8192
     temperature: float = 0.7
     max_tool_iterations: int = 20
