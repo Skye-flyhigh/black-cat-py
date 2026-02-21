@@ -36,7 +36,17 @@ def load_config(config_path: Path | None = None) -> Config:
             with open(path) as f:
                 data = json.load(f)
             data = _migrate_config(data)
-            return Config.model_validate(convert_keys(data))
+
+            # Extract MCP servers before key conversion — env vars and HTTP
+            # headers contain arbitrary keys that must not be mangled.
+            raw_mcp = data.get("tools", {}).pop("mcpServers", None)
+
+            converted = convert_keys(data)
+
+            if raw_mcp is not None:
+                converted.setdefault("tools", {})["mcp_servers"] = raw_mcp
+
+            return Config.model_validate(converted)
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Warning: Failed to load config from {path}: {e}")
             print("Using default configuration.")
@@ -57,7 +67,15 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
 
     # Convert to camelCase format
     data = config.model_dump()
+
+    # Extract MCP servers before camelCase conversion — env vars and HTTP
+    # headers contain arbitrary keys that must not be mangled.
+    raw_mcp = data.get("tools", {}).pop("mcp_servers", None)
+
     data = convert_to_camel(data)
+
+    if raw_mcp is not None:
+        data.setdefault("tools", {})["mcpServers"] = raw_mcp
 
     with open(path, "w") as f:
         json.dump(data, f, indent=2)

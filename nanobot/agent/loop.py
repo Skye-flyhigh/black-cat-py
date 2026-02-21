@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -57,6 +58,7 @@ class AgentLoop:
         session_manager: SessionManager | None = None,
         config: Config | None = None,
         llm_timeout: int | None = 60,
+        mcp_servers: dict | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig as ExecToolConfigRuntime
 
@@ -96,6 +98,13 @@ class AgentLoop:
 
         self.memory_window = config.agents.defaults.memory_window if config else 50
         self._running = False
+
+        # MCP server lifecycle
+        self._mcp_servers = mcp_servers or {}
+        self._mcp_stack: AsyncExitStack | None = None
+        self._mcp_connected = False
+        self._mcp_connecting = False
+
         self._register_default_tools()
 
     def _register_default_tools(self) -> None:
@@ -131,6 +140,42 @@ class AgentLoop:
         # Cron tool (for scheduling)
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
+
+    async def _connect_mcp(self) -> None:
+        """Connect to configured MCP servers (lazy, one-time).
+
+        Called on first message. If connection fails, retries on next message.
+        """
+        if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
+            return
+        self._mcp_connecting = True
+        from nanobot.agent.tools.mcp import connect_mcp_servers
+
+        try:
+            self._mcp_stack = AsyncExitStack()
+            await self._mcp_stack.__aenter__()
+            await connect_mcp_servers(self._mcp_servers, self.tools, self._mcp_stack)
+            self._mcp_connected = True
+        except Exception as e:
+            logger.error("Failed to connect MCP servers (will retry next message): {}", e)
+            if self._mcp_stack:
+                try:
+                    await self._mcp_stack.aclose()
+                except Exception:
+                    pass
+                self._mcp_stack = None
+        finally:
+            self._mcp_connecting = False
+
+    async def close_mcp(self) -> None:
+        """Shut down MCP server connections."""
+        if self._mcp_stack:
+            try:
+                await self._mcp_stack.aclose()
+            except Exception as e:
+                logger.warning("Error closing MCP connections: {}", e)
+            self._mcp_stack = None
+            self._mcp_connected = False
 
     def _resolve_author(self, sender_id: str, channel: str) -> str:
         """Resolve sender_id to author name using config, or return sender_id as-is."""
@@ -196,6 +241,9 @@ class AgentLoop:
             session_key = msg.session_key
             preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
             logger.info(f"Processing message from {origin_channel}:{msg.sender_id}: {preview}")
+
+        # Connect MCP servers lazily on first message
+        await self._connect_mcp()
 
         # Get or create session
         session = self.sessions.get_or_create(session_key)

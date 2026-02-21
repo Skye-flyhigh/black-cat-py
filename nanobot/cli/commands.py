@@ -504,6 +504,7 @@ def gateway(
         session_manager=session_manager,
         config=config,
         llm_timeout=config.agents.defaults.llm_timeout,
+        mcp_servers=config.tools.mcp_servers or None,
     )
 
     # Set cron callback (needs agent)
@@ -635,6 +636,7 @@ def gateway(
             heartbeat.stop()
             cron.stop()
             agent.stop()
+            await agent.close_mcp()
             await channels.stop_all()
 
     asyncio.run(run())
@@ -673,6 +675,7 @@ def agent(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         config=config,
         llm_timeout=config.agents.defaults.llm_timeout,
+        mcp_servers=config.tools.mcp_servers or None,
     )
 
     # Show spinner when logs are off (no output to miss); skip when logs are on
