@@ -97,13 +97,13 @@ class TelegramChannel(BaseChannel):
         await self._app.start()
 
         bot_info = await self._app.bot.get_me()
-        logger.info(f"Telegram bot @{bot_info.username} connected")
+        logger.info("Telegram bot @{} connected", bot_info.username)
 
         try:
             await self._app.bot.set_my_commands(self.BOT_COMMANDS)
             logger.debug("Telegram bot commands registered")
         except Exception as e:
-            logger.warning(f"Failed to register bot commands: {e}")
+            logger.warning("Failed to register bot commands: {}", e)
 
         if self._app.updater:
             await self._app.updater.start_polling(
@@ -136,7 +136,7 @@ class TelegramChannel(BaseChannel):
         try:
             chat_id = int(msg.chat_id)
         except ValueError:
-            logger.error(f"Invalid chat_id: {msg.chat_id}")
+            logger.error("Invalid chat_id: {}", msg.chat_id)
             return
 
         # Reply-to support (configurable)
@@ -157,7 +157,7 @@ class TelegramChannel(BaseChannel):
                 )
             except Exception as e:
                 # Fallback to plain text if HTML parsing fails
-                logger.warning(f"HTML parse failed, falling back to plain text: {e}")
+                logger.warning("HTML parse failed, falling back to plain text: {}", e)
                 try:
                     await self._app.bot.send_message(
                         chat_id=chat_id,
@@ -165,7 +165,7 @@ class TelegramChannel(BaseChannel):
                         **reply_params,
                     )
                 except Exception as e2:
-                    logger.error(f"Error sending Telegram message: {e2}")
+                    logger.error("Error sending Telegram message: {}", e2)
             # Only reply-to the first chunk
             reply_params = {}
 
@@ -208,7 +208,7 @@ class TelegramChannel(BaseChannel):
         session.clear()
         self.session_manager.save(session)
 
-        logger.info(f"Session reset for {session_key} (cleared {msg_count} messages)")
+        logger.info("Session reset for {} (cleared {} messages)", session_key, msg_count)
         await update.message.reply_text("Conversation history cleared. Let's start fresh!")
 
     async def _on_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -266,7 +266,7 @@ class TelegramChannel(BaseChannel):
 
         content = "\n".join(content_parts) if content_parts else "[empty message]"
 
-        logger.debug(f"Telegram message from {sender_id}: {content[:50]}...")
+        logger.debug("Telegram message from {}: {}...", sender_id, content[:50])
 
         # Start typing indicator
         await self._start_typing(chat_id)
@@ -332,10 +332,10 @@ class TelegramChannel(BaseChannel):
             else:
                 content_parts.append(f"[{media_type}: {file_path}]")
 
-            logger.debug(f"Downloaded {media_type} to {file_path}")
+            logger.debug("Downloaded {} to {}", media_type, file_path)
 
         except Exception as e:
-            logger.error(f"Failed to download media: {e}")
+            logger.error("Failed to download media: {}", e)
             content_parts.append(f"[{media_type}: download failed]")
 
     async def _transcribe_audio(self, file_path) -> str | None:
@@ -349,8 +349,8 @@ class TelegramChannel(BaseChannel):
             transcriber = GroqTranscriptionProvider(api_key=self.groq_api_key)
             transcription = await transcriber.transcribe(file_path)
             if transcription:
-                logger.info(f"Transcribed audio: {transcription[:50]}...")
+                logger.info("Transcribed audio: {}...", transcription[:50])
             return transcription
         except Exception as e:
-            logger.warning(f"Transcription failed: {e}")
+            logger.warning("Transcription failed: {}", e)
             return None

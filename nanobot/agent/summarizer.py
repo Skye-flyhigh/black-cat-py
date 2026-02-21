@@ -93,12 +93,12 @@ Format as bullet points."""
                 timeout=self.timeout,
             )
             summary = response.content or ""
-            logger.debug(f"Content: {summary}")
-            logger.debug(f"Summarized {len(messages)} messages into {len(summary)} chars")
+            logger.debug("Content: {}", summary)
+            logger.debug("Summarized {} messages into {} chars", len(messages), len(summary))
             return summary.strip()
 
         except Exception as e:
-            logger.error(f"Summarization failed: {e}")
+            logger.error("Summarization failed: {}", e)
             # Fallback: return truncated original if summarization fails
             return f"[Summary unavailable: {len(messages)} messages]"
 
@@ -141,11 +141,11 @@ Format as bullet points."""
             if "nothing to extract" in facts.lower() or not facts.strip():
                 return ""
 
-            logger.debug(f"Extracted facts from {len(messages)} messages")
+            logger.debug("Extracted facts from {} messages", len(messages))
             return facts.strip()
 
         except Exception as e:
-            logger.error(f"Fact extraction failed: {e}")
+            logger.error("Fact extraction failed: {}", e)
             return ""
 
     async def summarize_session(
@@ -163,7 +163,7 @@ Format as bullet points."""
         Returns:
             Dict with 'summary' and 'facts' keys.
         """
-        logger.info(f"Summarizing session {session_key} ({len(messages)} messages)")
+        logger.info("Summarizing session {} ({} messages)", session_key, len(messages))
 
         summary = await self.summarize_messages(messages)
         facts = await self.extract_facts(messages)

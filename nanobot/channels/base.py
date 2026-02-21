@@ -86,7 +86,7 @@ class BaseChannel(ABC):
         await self._stop_typing(msg.chat_id)
 
         if not msg.content or not msg.content.strip():
-            logger.warning(f"Skipping empty message to {msg.chat_id} on {self.name}")
+            logger.warning("Skipping empty message to {} on {}", msg.chat_id, self.name)
             return
 
         await self._send_impl(msg)
@@ -138,7 +138,7 @@ class BaseChannel(ABC):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.debug(f"Typing indicator stopped for {chat_id}: {e}")
+            logger.debug("Typing indicator stopped for {}: {}", chat_id, e)
 
     async def _send_typing_indicator(self, chat_id: str) -> None:
         """

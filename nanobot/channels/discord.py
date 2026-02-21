@@ -57,7 +57,7 @@ class DiscordChannel(BaseChannel):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.warning(f"Discord gateway error: {e}")
+                logger.warning("Discord gateway error: {}", e)
                 if self._running:
                     logger.info(
                         f"Reconnecting to Discord gateway in {RECONNECT_DELAY_SECONDS} seconds..."
@@ -113,14 +113,14 @@ class DiscordChannel(BaseChannel):
                 if response.status_code == 429:
                     data = response.json()
                     retry_after = float(data.get("retry_after", 1.0))
-                    logger.warning(f"Discord rate limited, retrying in {retry_after}s")
+                    logger.warning("Discord rate limited, retrying in {}s", retry_after)
                     await asyncio.sleep(retry_after)
                     continue
                 response.raise_for_status()
                 return
             except Exception as e:
                 if attempt == 2:
-                    logger.error(f"Error sending Discord message: {e}")
+                    logger.error("Error sending Discord message: {}", e)
                 else:
                     await asyncio.sleep(1)
 
@@ -150,7 +150,7 @@ class DiscordChannel(BaseChannel):
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
-                logger.warning(f"Invalid JSON from Discord gateway: {raw[:100]}")
+                logger.warning("Invalid JSON from Discord gateway: {}", raw[:100])
                 continue
 
             op = data.get("op")
@@ -209,7 +209,7 @@ class DiscordChannel(BaseChannel):
                 try:
                     await self._ws.send(json.dumps(payload))
                 except Exception as e:
-                    logger.warning(f"Discord heartbeat failed: {e}")
+                    logger.warning("Discord heartbeat failed: {}", e)
                     break
                 await asyncio.sleep(interval_s)
 
@@ -305,5 +305,5 @@ class DiscordChannel(BaseChannel):
             content_parts.append(f"[attachment: {file_path}]")
 
         except Exception as e:
-            logger.warning(f"Failed to download Discord attachment: {e}")
+            logger.warning("Failed to download Discord attachment: {}", e)
             content_parts.append(f"[attachment: {filename} - download failed]")

@@ -594,7 +594,7 @@ def gateway(
             )
 
             if needs_compact:
-                logger.info(f"Startup compwe action for {session_key}: {reason}")
+                logger.info("Startup compwe action for {}: {}", session_key, reason)
                 old_msgs, recent_msgs, _ = agent.context.prepare_for_compaction(
                     messages[1:],
                     keep_recent=10,  # Skip dummy system msg

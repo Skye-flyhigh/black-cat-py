@@ -244,12 +244,12 @@ class AgentLoop:
             else:
                 origin_channel, origin_chat_id = "cli", msg.chat_id
             session_key = f"{origin_channel}:{origin_chat_id}"
-            logger.info(f"Processing system message from {msg.sender_id}")
+            logger.info("Processing system message from {}", msg.sender_id)
         else:
             origin_channel, origin_chat_id = msg.channel, msg.chat_id
             session_key = msg.session_key
             preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-            logger.info(f"Processing message from {origin_channel}:{msg.sender_id}: {preview}")
+            logger.info("Processing message from {}:{}: {}", origin_channel, msg.sender_id, preview)
 
         # Connect MCP servers lazily on first message
         await self._connect_mcp()

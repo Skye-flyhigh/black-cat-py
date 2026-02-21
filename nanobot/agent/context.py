@@ -403,10 +403,12 @@ For normal conversation, just respond with text - do not call the message tool."
             percent_used = (used / max_tokens) * 100
             if percent_used > 95:
                 logger.warning(
-                    f"⚠️ Token budget critical: {used}/{max_tokens} ({percent_used:.1f}% used)"
+                    "Token budget critical: {}/{} ({:.1f}% used)", used, max_tokens, percent_used
                 )
             elif percent_used > 80:
-                logger.info(f"📊 Token budget: {used}/{max_tokens} ({percent_used:.1f}% used)")
+                logger.info(
+                    "Token budget: {}/{} ({:.1f}% used)", used, max_tokens, percent_used
+                )
 
         return messages
 
@@ -670,7 +672,7 @@ For normal conversation, just respond with text - do not call the message tool."
         if not needs_compact:
             return messages, False
 
-        logger.info(f"Context compaction triggered: {reason}")
+        logger.info("Context compaction triggered: {}", reason)
 
         # Need summarizer for compaction
         if not self.summarizer:
@@ -691,9 +693,9 @@ For normal conversation, just respond with text - do not call the message tool."
             logger.info(
                 f"Compacted {len(old_messages)} messages into summary ({len(summary)} chars)"
             )
-            logger.debug(f"Summary content: {summary}")
+            logger.debug("Summary content: {}", summary)
         except Exception as e:
-            logger.error(f"Compaction failed: {e}, keeping original messages")
+            logger.error("Compaction failed: {}, keeping original messages", e)
             return messages, False
 
         # Apply compaction

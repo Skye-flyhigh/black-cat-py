@@ -53,7 +53,7 @@ class DailySummaryService:
 
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
-        logger.info(f"Daily summary service started (runs at {self.summary_hour:02d}:00)")
+        logger.info("Daily summary service started (runs at {:02d}:00)", self.summary_hour)
 
     def stop(self) -> None:
         """Stop the daily summary service."""
@@ -74,7 +74,7 @@ class DailySummaryService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Daily summary error: {e}")
+                logger.error("Daily summary error: {}", e)
 
     def _should_run(self) -> bool:
         """Check if we should run the daily summary now."""
@@ -93,7 +93,7 @@ class DailySummaryService:
         today = datetime.now().strftime("%Y-%m-%d")
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
-        logger.info(f"Running daily summary for {yesterday}")
+        logger.info("Running daily summary for {}", yesterday)
         self._last_run_date = today
 
         # Get all sessions
@@ -129,14 +129,14 @@ class DailySummaryService:
                     all_facts.append(result["facts"])
 
             except Exception as e:
-                logger.error(f"Failed to summarize session {session_key}: {e}")
+                logger.error("Failed to summarize session {}: {}", session_key, e)
                 continue
 
         # Write daily summary to memory notes
         if all_summaries:
             summary_content = "## Conversation Summaries\n\n" + "\n\n".join(all_summaries)
             self.memory.append_today(summary_content)
-            logger.info(f"Appended {len(all_summaries)} session summaries to daily notes")
+            logger.info("Appended {} session summaries to daily notes", len(all_summaries))
 
         # Update long-term memory with facts
         if all_facts:
@@ -157,7 +157,7 @@ class DailySummaryService:
         update = f"\n\n## Updates from {timestamp}\n\n{new_facts}"
 
         self.memory.write_long_term(existing + update)
-        logger.info(f"Updated long-term memory with facts from {timestamp}")
+        logger.info("Updated long-term memory with facts from {}", timestamp)
 
     async def run_now(self) -> dict[str, Any]:
         """Manually trigger the daily summary (for testing)."""
