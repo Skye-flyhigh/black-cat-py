@@ -15,7 +15,8 @@ from nanobot.channels.base import BaseChannel
 from nanobot.channels.utils import (
     MAX_ATTACHMENT_BYTES,
     MAX_MESSAGE_LENGTH_DISCORD,
-    RECONNECT_DELAY_SECONDS,
+    RECONNECT_DELAY_INITIAL,
+    RECONNECT_DELAY_MAX,
     TYPING_INTERVAL_DISCORD,
     format_reply_context,
     split_message,
@@ -46,22 +47,24 @@ class DiscordChannel(BaseChannel):
 
         self._running = True
         self._http = httpx.AsyncClient(timeout=30.0)
+        delay = RECONNECT_DELAY_INITIAL
 
         while self._running:
             try:
                 logger.info("Connecting to Discord gateway...")
                 async with websockets.connect(self.config.gateway_url) as ws:
                     self._ws = ws
+                    delay = RECONNECT_DELAY_INITIAL  # reset on successful connection
                     await self._gateway_loop()
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.warning("Discord gateway error: {}", e)
-                if self._running:
-                    logger.info(
-                        f"Reconnecting to Discord gateway in {RECONNECT_DELAY_SECONDS} seconds..."
-                    )
-                    await asyncio.sleep(RECONNECT_DELAY_SECONDS)
+                if not self._running:
+                    break
+                logger.warning("Discord connection lost: {}", e)
+                logger.info("Retrying in {}s...", delay)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, RECONNECT_DELAY_MAX)
 
     async def stop(self) -> None:
         """Stop the Discord channel."""

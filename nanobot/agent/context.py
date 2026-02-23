@@ -454,7 +454,6 @@ For normal conversation, just respond with text - do not call the message tool."
         )
         return messages
 
-# TODO: clean or keep but use it
     def add_assistant_message(
         self,
         messages: list[dict[str, Any]],
@@ -478,53 +477,6 @@ For normal conversation, just respond with text - do not call the message tool."
 
         messages.append(msg)
         return messages
-
-    # -------------------------------------------------------------------------
-    # Context Reduction
-    # -------------------------------------------------------------------------
-# TODO: clean or keep but use it
-    # def context_pruning(
-    #     self,
-    #     messages: list[dict[str, Any]],
-    #     max_tokens: int,
-    #     keep_recent: int = 10,
-    #     model: str = "gpt-4",
-    # ) -> list[dict[str, Any]]:
-    #     """
-    #     Remove old messages to fit within token budget.
-
-    #     Keeps: system prompt + last `keep_recent` messages.
-    #     Use when budget is critical and summarization isn't available.
-    #     """
-    #     if not messages:
-    #         return messages
-
-    #     system_msg, conversation = extract_system_message(messages)
-
-    #     # Calculate current size
-    #     current_context = "".join(
-    #         m.get("content", "") if isinstance(m.get("content"), str) else str(m.get("content", ""))
-    #         for m in messages
-    #     )
-
-    #     remaining_budget = self.token_budget(max_tokens, current_context, model)
-
-    #     # If within budget, return as-is
-    #     if remaining_budget > 0:
-    #         return messages
-
-    #     # Prune oldest messages, keeping recent ones
-    #     pruned_conversation = (
-    #         conversation[-keep_recent:] if len(conversation) > keep_recent else conversation
-    #     )
-
-    #     # Rebuild message list
-    #     result = []
-    #     if system_msg:
-    #         result.append(system_msg)
-    #     result.extend(pruned_conversation)
-
-    #     return result
 
     # -------------------------------------------------------------------------
     # Sliding Window Compaction

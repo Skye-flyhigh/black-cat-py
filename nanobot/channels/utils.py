@@ -23,8 +23,10 @@ MEDIA_DIR = Path.home() / ".nanobot" / "media"
 TYPING_INTERVAL_TELEGRAM = 4  # Telegram typing expires after ~5s
 TYPING_INTERVAL_DISCORD = 8  # Discord typing expires after ~10s
 
-# Reconnect delays
-RECONNECT_DELAY_SECONDS = 5
+# Reconnect backoff: starts at 5s, doubles each failure, caps at 1 hour
+RECONNECT_DELAY_INITIAL = 5
+RECONNECT_DELAY_MAX = 3600  # 1 hour
+RECONNECT_DELAY_SECONDS = RECONNECT_DELAY_INITIAL  # backwards compat
 
 # Attachment limits
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20MB

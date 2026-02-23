@@ -9,7 +9,11 @@ from loguru import logger
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
-from nanobot.channels.utils import RECONNECT_DELAY_SECONDS, format_reply_context
+from nanobot.channels.utils import (
+    RECONNECT_DELAY_INITIAL,
+    RECONNECT_DELAY_MAX,
+    format_reply_context,
+)
 from nanobot.config.schema import WhatsAppConfig
 
 
@@ -38,6 +42,7 @@ class WhatsAppChannel(BaseChannel):
         logger.info("Connecting to WhatsApp bridge at {}...", bridge_url)
 
         self._running = True
+        delay = RECONNECT_DELAY_INITIAL
 
         while self._running:
             try:
@@ -48,6 +53,7 @@ class WhatsAppChannel(BaseChannel):
                 async with websockets.connect(bridge_url, additional_headers=extra_headers) as ws:
                     self._ws = ws
                     self._connected = True
+                    delay = RECONNECT_DELAY_INITIAL  # reset on successful connection
                     logger.info("Connected to WhatsApp bridge")
 
                     async for message in ws:
@@ -61,11 +67,12 @@ class WhatsAppChannel(BaseChannel):
             except Exception as e:
                 self._connected = False
                 self._ws = None
-                logger.warning("WhatsApp bridge connection error: {}", e)
-
-                if self._running:
-                    logger.info("Reconnecting in {} seconds...", RECONNECT_DELAY_SECONDS)
-                    await asyncio.sleep(RECONNECT_DELAY_SECONDS)
+                if not self._running:
+                    break
+                logger.warning("WhatsApp bridge connection lost: {}", e)
+                logger.info("Retrying in {}s...", delay)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, RECONNECT_DELAY_MAX)
 
     async def stop(self) -> None:
         """Stop the WhatsApp channel."""
