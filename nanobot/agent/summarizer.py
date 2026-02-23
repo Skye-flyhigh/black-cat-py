@@ -17,14 +17,14 @@ class Summarizer:
     """
 
     # Default prompt for conversation summarization
-    SUMMARIZE_PROMPT = """Summarize the following conversation concisely.
-Focus on:
+    SUMMARIZE_PROMPT = """You are blackcat internal summariser to help to reduce context window.
+    Summarize the following conversation concisely on the following points:
 - Key decisions made
 - Important facts learned
 - Action items or commitments
 - Unresolved questions
 
-Keep it brief but preserve essential context. Use bullet points."""
+Keep short, concised but contextual. blackcat needs to understand what's going on. No styling."""
 
     # Prompt for extracting long-term facts
     EXTRACT_FACTS_PROMPT = """Extract only the important long-term facts from this conversation.
