@@ -279,6 +279,9 @@ def find_by_model(model: str) -> ProviderSpec | None:
     """Match a standard provider by model-name keyword (case-insensitive).
     Skips gateways/local — those are matched by api_key/api_base instead."""
     model_lower = model.lower()
+    # Local model prefixes should never match cloud providers
+    if model_lower.startswith(("ollama/", "ollama_chat/")):
+        return None
     for spec in PROVIDERS:
         if spec.is_gateway or spec.is_local:
             continue
