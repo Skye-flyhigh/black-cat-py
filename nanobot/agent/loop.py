@@ -287,6 +287,7 @@ class AgentLoop:
             messages,
             window_size=self.memory_window,
             model=self.model,
+            session = session,
         )
 
         # Progress callback: sends intermediate output to the user's channel
@@ -408,7 +409,7 @@ class AgentLoop:
                         await on_progress(clean)
                     await on_progress(self._tool_hint(response.tool_calls))
 
-                # Add assistant message with tool calls
+                # TODO Add assistant message with tool calls
                 messages = self.context.add_assistant_message(
                     messages,
                     response.content,

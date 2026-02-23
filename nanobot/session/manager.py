@@ -35,14 +35,28 @@ class Session:
         """
         Get message history for LLM context.
 
+        Filters from the last compaction summary (role=system) onwards,
+        then applies the max_messages cap. The full session.messages is
+        preserved for persistence — this only affects what the LLM sees.
+
         Args:
             max_messages: Maximum messages to return.
 
         Returns:
             List of messages in LLM format, preserving tool call metadata.
         """
+        # Filter from last compaction summary to most recent
+        messages = self.messages
+        last_system_idx = None
+        for i, msg in enumerate(messages):
+            if msg.get("role") == "system":
+                last_system_idx = i
+
+        if last_system_idx is not None:
+            messages = messages[last_system_idx:]
+
         recent = (
-            self.messages[-max_messages:] if len(self.messages) > max_messages else self.messages
+            messages[-max_messages:] if len(messages) > max_messages else messages
         )
 
         out: list[dict[str, Any]] = []
