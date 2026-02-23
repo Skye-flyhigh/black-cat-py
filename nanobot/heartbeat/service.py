@@ -1,6 +1,7 @@
 """Heartbeat service - periodic agent wake-up to check for tasks."""
 
 import asyncio
+import tomllib
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
@@ -10,8 +11,8 @@ from loguru import logger
 DEFAULT_HEARTBEAT_INTERVAL_S = 30 * 60
 
 # The prompt sent to agent during heartbeat
-HEARTBEAT_PROMPT = """Read HEARTBEAT.md in your workspace (if it exists).
-Follow any instructions or tasks listed there.
+HEARTBEAT_PROMPT = """Read HEARTBEAT.toml in your workspace (if it exists).
+Follow any instructions or tasks listed in [tasks.active].
 If nothing needs attention, reply with just: HEARTBEAT_OK"""
 
 # Token that indicates "nothing to do"
@@ -19,28 +20,27 @@ HEARTBEAT_OK_TOKEN = "HEARTBEAT_OK"
 
 
 def _is_heartbeat_empty(content: str | None) -> bool:
-    """Check if HEARTBEAT.md has no actionable content."""
+    """Check if HEARTBEAT.toml has no actionable tasks."""
     if not content:
         return True
 
-    # Lines to skip: empty, headers, HTML comments, empty checkboxes
-    skip_patterns = {"- [ ]", "* [ ]", "- [x]", "* [x]"}
+    try:
+        data = tomllib.loads(content)
+    except Exception:
+        return True
 
-    for line in content.split("\n"):
-        line = line.strip()
-        if not line or line.startswith("#") or line.startswith("<!--") or line in skip_patterns:
-            continue
-        return False  # Found actionable content
-
-    return True
+    tasks = data.get("tasks", {})
+    active = tasks.get("active", {})
+    task_list = tasks.get("list", {})
+    return not active and not task_list
 
 
 class HeartbeatService:
     """
     Periodic heartbeat service that wakes the agent to check for tasks.
 
-    The agent reads HEARTBEAT.md from the workspace and executes any
-    tasks listed there. If nothing needs attention, it replies HEARTBEAT_OK.
+    The agent reads HEARTBEAT.toml from the workspace and executes any
+    tasks in [tasks.active]. If nothing needs attention, it replies HEARTBEAT_OK.
     """
 
     def __init__(
@@ -59,10 +59,10 @@ class HeartbeatService:
 
     @property
     def heartbeat_file(self) -> Path:
-        return self.workspace / "HEARTBEAT.md"
+        return self.workspace / "HEARTBEAT.toml"
 
     def _read_heartbeat_file(self) -> str | None:
-        """Read HEARTBEAT.md content."""
+        """Read HEARTBEAT.toml content."""
         try:
             return self.heartbeat_file.read_text() if self.heartbeat_file.exists() else None
         except Exception:
@@ -101,9 +101,9 @@ class HeartbeatService:
         """Execute a single heartbeat tick."""
         content = self._read_heartbeat_file()
 
-        # Skip if HEARTBEAT.md is empty or doesn't exist
+        # Skip if HEARTBEAT.toml is empty or doesn't exist
         if _is_heartbeat_empty(content):
-            logger.debug("Heartbeat: no tasks (HEARTBEAT.md empty)")
+            logger.debug("Heartbeat: no tasks (HEARTBEAT.toml empty)")
             return
 
         logger.info("Heartbeat: checking for tasks...")

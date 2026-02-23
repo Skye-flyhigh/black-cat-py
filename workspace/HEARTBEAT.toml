@@ -8,11 +8,11 @@
 [tasks.list]
 # Add your tasks below this line
 
+# Add your periodic tasks below this line
 [tasks.active]
-# <!-- Add your periodic tasks below this line -->
-
+notes = "Check notes in ~/notes"
 
 ## Completed
 [tasks.completed]
-# <!-- Move completed tasks here or delete them -->
+# Move completed tasks here or delete them
 

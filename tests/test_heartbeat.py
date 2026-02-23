@@ -23,28 +23,34 @@ def test_empty_blank():
     assert _is_heartbeat_empty("") is True
 
 
-def test_empty_only_header():
-    assert _is_heartbeat_empty("# Heartbeat\n\n") is True
+def test_empty_invalid_toml():
+    assert _is_heartbeat_empty("not valid toml {{{{") is True
 
 
-def test_empty_only_checkboxes():
-    content = "# Tasks\n- [ ]\n- [x]\n"
+def test_empty_no_tasks_section():
+    content = "[heartbeat]\n# just a header\n"
     assert _is_heartbeat_empty(content) is True
 
 
-def test_empty_with_html_comment():
-    content = "<!-- nothing here -->\n# Header\n"
+def test_empty_tasks_sections_empty():
+    content = "[tasks.active]\n[tasks.list]\n"
     assert _is_heartbeat_empty(content) is True
 
 
-def test_not_empty_has_text():
-    content = "# Tasks\n- Check server status\n"
+def test_not_empty_has_active_task():
+    content = '[tasks.active]\ncheck_server = "Check server status"\n'
     assert _is_heartbeat_empty(content) is False
 
 
-def test_not_empty_has_task():
-    content = "Send daily report\n"
+def test_not_empty_has_list_task():
+    content = '[tasks.list]\nreport = "Send daily report"\n'
     assert _is_heartbeat_empty(content) is False
+
+
+def test_empty_only_completed():
+    """Completed tasks don't count as actionable."""
+    content = '[tasks.completed]\nold_task = "Already done"\n'
+    assert _is_heartbeat_empty(content) is True
 
 
 # ── HeartbeatService ───────────────────────────────────────────────
@@ -52,7 +58,7 @@ def test_not_empty_has_task():
 
 def test_heartbeat_file_path(tmp_path):
     svc = HeartbeatService(workspace=tmp_path)
-    assert svc.heartbeat_file == tmp_path / "HEARTBEAT.md"
+    assert svc.heartbeat_file == tmp_path / "HEARTBEAT.toml"
 
 
 def test_read_heartbeat_file_missing(tmp_path):
@@ -61,8 +67,8 @@ def test_read_heartbeat_file_missing(tmp_path):
 
 
 def test_read_heartbeat_file_exists(tmp_path):
-    hb = tmp_path / "HEARTBEAT.md"
-    hb.write_text("# Tasks\n- Do something\n")
+    hb = tmp_path / "HEARTBEAT.toml"
+    hb.write_text('[tasks.active]\ncheck = "Do something"\n')
     svc = HeartbeatService(workspace=tmp_path)
     content = svc._read_heartbeat_file()
     assert "Do something" in content
@@ -70,7 +76,7 @@ def test_read_heartbeat_file_exists(tmp_path):
 
 @pytest.mark.asyncio
 async def test_tick_skips_empty_file(tmp_path):
-    """If HEARTBEAT.md is empty, _tick should not call on_heartbeat."""
+    """If HEARTBEAT.toml is empty, _tick should not call on_heartbeat."""
     called = False
 
     async def on_heartbeat(prompt):
@@ -85,9 +91,9 @@ async def test_tick_skips_empty_file(tmp_path):
 
 @pytest.mark.asyncio
 async def test_tick_calls_on_heartbeat(tmp_path):
-    """If HEARTBEAT.md has tasks, _tick should call on_heartbeat."""
-    hb = tmp_path / "HEARTBEAT.md"
-    hb.write_text("- Check server status\n")
+    """If HEARTBEAT.toml has active tasks, _tick should call on_heartbeat."""
+    hb = tmp_path / "HEARTBEAT.toml"
+    hb.write_text('[tasks.active]\ncheck = "Check server status"\n')
 
     received_prompt = None
 
