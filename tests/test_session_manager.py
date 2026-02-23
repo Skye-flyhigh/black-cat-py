@@ -161,3 +161,137 @@ def test_load_corrupted_file(session_mgr):
     # Should create a fresh session instead of crashing
     assert s.key == "bad:session"
     assert s.messages == []
+
+
+# ── Compaction filtering ──────────────────────────────────────────
+# Filtering happens in get_history (read boundary), not _load.
+# session.messages retains the full archive; get_history returns the working set.
+
+
+def test_load_preserves_full_archive(session_mgr):
+    """Loading should return ALL messages — full archive stays intact."""
+    s = session_mgr.get_or_create("t:archive")
+    s.add_message("user", "old message")
+    s.add_message("assistant", "old reply")
+    s.add_message("system", "Summary of old conversation")
+    s.add_message("user", "new message")
+    session_mgr.save(s)
+
+    session_mgr._cache.clear()
+    loaded = session_mgr.get_or_create("t:archive")
+
+    # Full archive preserved
+    assert len(loaded.messages) == 4
+    assert loaded.messages[0]["content"] == "old message"
+
+
+def test_get_history_filters_from_last_compaction():
+    """get_history should return only messages from the last system message onwards."""
+    s = Session(key="t:compact")
+    s.add_message("user", "old message 1")
+    s.add_message("assistant", "old reply 1")
+    s.add_message("user", "old message 2")
+    s.add_message("assistant", "old reply 2")
+    s.add_message("system", "Summary: user discussed topics 1 and 2")
+    s.add_message("user", "new message")
+    s.add_message("assistant", "new reply")
+
+    history = s.get_history(max_messages=50)
+
+    # Should only have the system summary + 2 post-compaction messages
+    assert len(history) == 3
+    assert history[0]["role"] == "system"
+    assert "Summary" in history[0]["content"]
+    assert history[1]["content"] == "new message"
+    assert history[2]["content"] == "new reply"
+
+
+def test_get_history_filters_from_latest_compaction():
+    """Multiple compactions: should filter from the most recent system message."""
+    s = Session(key="t:multi")
+    s.add_message("user", "ancient message")
+    s.add_message("system", "First compaction summary")
+    s.add_message("user", "old message")
+    s.add_message("assistant", "old reply")
+    s.add_message("system", "Second compaction summary")
+    s.add_message("user", "latest message")
+
+    history = s.get_history(max_messages=50)
+
+    assert len(history) == 2
+    assert history[0]["role"] == "system"
+    assert "Second" in history[0]["content"]
+    assert history[1]["content"] == "latest message"
+
+
+def test_get_history_no_compaction_returns_all():
+    """Session without compaction should return all messages unchanged."""
+    s = Session(key="t:nocompact")
+    s.add_message("user", "msg 1")
+    s.add_message("assistant", "reply 1")
+    s.add_message("user", "msg 2")
+
+    history = s.get_history(max_messages=50)
+
+    assert len(history) == 3
+    assert history[0]["content"] == "msg 1"
+
+
+def test_get_history_compaction_only_returns_summary():
+    """If the last message is the compaction summary, return just that."""
+    s = Session(key="t:justcompact")
+    s.add_message("user", "old stuff")
+    s.add_message("assistant", "old reply")
+    s.add_message("system", "Summary of everything")
+
+    history = s.get_history(max_messages=50)
+
+    assert len(history) == 1
+    assert history[0]["role"] == "system"
+
+
+def test_get_history_filtered_then_capped():
+    """get_history should filter from compaction, then apply max_messages cap."""
+    s = Session(key="t:histcount")
+    # 20 old messages
+    for i in range(20):
+        s.add_message("user", f"old {i}")
+    # Compaction
+    s.add_message("system", "Summary of 20 messages")
+    # 3 new messages
+    s.add_message("user", "new 1")
+    s.add_message("assistant", "reply 1")
+    s.add_message("user", "new 2")
+
+    # Full archive intact
+    assert len(s.messages) == 24
+
+    # get_history returns filtered set: system + 3 = 4
+    history = s.get_history(max_messages=50)
+    assert len(history) == 4
+    assert history[0]["role"] == "system"
+
+    # max_messages cap still works on the filtered set
+    history_capped = s.get_history(max_messages=2)
+    assert len(history_capped) == 2
+    assert history_capped[0]["content"] == "reply 1"
+    assert history_capped[1]["content"] == "new 2"
+
+
+def test_save_after_compaction_preserves_full_archive(session_mgr):
+    """Save after compaction should write the full archive, not just the filtered view."""
+    s = session_mgr.get_or_create("t:savefull")
+    s.add_message("user", "old message")
+    s.add_message("assistant", "old reply")
+    s.add_message("system", "Summary")
+    s.add_message("user", "new message")
+    session_mgr.save(s)
+
+    # Reload from disk — full archive should be there
+    session_mgr._cache.clear()
+    loaded = session_mgr.get_or_create("t:savefull")
+    assert len(loaded.messages) == 4
+
+    # But get_history only returns from the summary onwards
+    history = loaded.get_history(max_messages=50)
+    assert len(history) == 2

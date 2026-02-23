@@ -65,6 +65,23 @@ def test_find_by_model_skips_gateways():
     assert spec is None
 
 
+def test_find_by_model_skips_ollama_qwen():
+    """ollama/qwen3 must not match DashScope — it's a local model."""
+    assert find_by_model("ollama/qwen3-vl:8b") is None
+
+
+def test_find_by_model_skips_ollama_chat_qwen():
+    """ollama_chat/qwen3 must not match DashScope."""
+    assert find_by_model("ollama_chat/qwen3-vl:8b") is None
+
+
+def test_find_by_model_bare_qwen_still_matches_dashscope():
+    """Bare qwen (no local prefix) should still match DashScope."""
+    spec = find_by_model("qwen-max")
+    assert spec is not None
+    assert spec.name == "dashscope"
+
+
 # ── find_gateway ───────────────────────────────────────────────────
 
 

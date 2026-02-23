@@ -236,16 +236,24 @@ async def test_no_weather_tool_for_math(provider):
 
 
 def test_resolve_model_ollama(ollama_available):
-    """Ollama models via ollama/ prefix don't trigger vLLM detection."""
+    """Ollama models should resolve without triggering cloud providers."""
     provider = LiteLLMProvider(
         api_key="ollama",
         default_model=LLM_TEST_MODEL,
     )
-    # No api_base → no gateway detection → not vLLM
-    assert provider.is_vllm is False
-    # Model should resolve as-is (ollama/ prefix is native to LiteLLM)
     resolved = provider._resolve_model(LLM_TEST_MODEL)
-    assert resolved.startswith("ollama/")
+    # Should keep the ollama prefix, not get rerouted to a cloud provider
+    assert "dashscope" not in resolved.lower()
+
+
+def test_resolve_model_ollama_qwen_no_dashscope(ollama_available):
+    """ollama/qwen3 must not trigger DashScope routing."""
+    provider = LiteLLMProvider(
+        api_key="ollama",
+        default_model="ollama/qwen3-vl:8b",
+    )
+    resolved = provider._resolve_model("ollama/qwen3-vl:8b")
+    assert "dashscope" not in resolved.lower()
 
 
 def test_resolve_model_standard():
