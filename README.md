@@ -332,7 +332,8 @@ nanobot/
 | Multi-channel | ✅ Working | Telegram, Discord, WhatsApp, Feishu, Slack, Email |
 | Multi-provider | ✅ Working | LiteLLM (cloud) + Ollama (local) |
 | Trust system | ✅ Working | Author resolution, trust levels, behavioral enforcement |
-| Context manager | 🔶 Basic | Identity assembly, token management, trust instructions |
+| Context manager | 🔶 Basic | Identity assembly, token management, trust instructions, compaction |
+| Summariser | 🔶 Basic | Provides summary for compaction |
 | Skills | ✅ Working | Pluggable SKILL.md files |
 | Memory | 🔶 Basic | Markdown files, no vectors yet |
 | Memory decay | ❌ Not yet | Weight-based decay with tag tiers |
