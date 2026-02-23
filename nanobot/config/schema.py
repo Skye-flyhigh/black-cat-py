@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class WhatsAppConfig(BaseModel):
@@ -11,6 +11,7 @@ class WhatsAppConfig(BaseModel):
 
     enabled: bool = False
     bridge_url: str = "ws://localhost:3001"
+    bridge_token: str = ""  # Optional auth token for the bridge WebSocket
     allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
 
 
@@ -23,6 +24,7 @@ class TelegramConfig(BaseModel):
     proxy: str | None = (
         None  # HTTP/SOCKS5 proxy URL, e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
     )
+    reply_to_message: bool = False  # If true, bot replies are threaded to the user's message
 
 
 class FeishuConfig(BaseModel):
@@ -171,12 +173,27 @@ class ExecToolConfig(BaseModel):
     timeout: int = 60
 
 
+class MCPServerConfig(BaseModel):
+    """MCP server connection configuration (stdio or HTTP).
+
+    Stdio mode: set ``command`` (and optionally ``args``, ``env``).
+    HTTP mode: set ``url`` (and optionally ``headers``).
+    """
+
+    command: str = ""
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    url: str = ""
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
 class ToolsConfig(BaseModel):
     """Tools configuration."""
 
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
+    mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
 class AuthorIdentity(BaseModel):
@@ -266,6 +283,7 @@ class Config(BaseSettings):
                 return author_name
         return "unknown"
 
-    class Config:
-        env_prefix = "NANOBOT_"
-        env_nested_delimiter = "__"
+    model_config = SettingsConfigDict(
+        env_prefix="NANOBOT_",
+        env_nested_delimiter="__",
+    )

@@ -55,6 +55,14 @@ class BaseChannel(ABC):
         self._running = False
         self._typing_tasks: dict[str, asyncio.Task] = {}
 
+    def _require_config(self, **fields: Any) -> bool:
+        """Check that required config fields are set. Logs error and returns False if any missing."""
+        for name, value in fields.items():
+            if not value:
+                logger.error("{} {} not configured", self.name, name)
+                return False
+        return True
+
     @abstractmethod
     async def start(self) -> None:
         """
@@ -86,7 +94,7 @@ class BaseChannel(ABC):
         await self._stop_typing(msg.chat_id)
 
         if not msg.content or not msg.content.strip():
-            logger.warning(f"Skipping empty message to {msg.chat_id} on {self.name}")
+            logger.warning("Skipping empty message to {} on {}", msg.chat_id, self.name)
             return
 
         await self._send_impl(msg)
@@ -138,7 +146,7 @@ class BaseChannel(ABC):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.debug(f"Typing indicator stopped for {chat_id}: {e}")
+            logger.debug("Typing indicator stopped for {}: {}", chat_id, e)
 
     async def _send_typing_indicator(self, chat_id: str) -> None:
         """

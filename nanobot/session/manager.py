@@ -8,7 +8,7 @@ from typing import Any
 
 from loguru import logger
 
-from nanobot.utils.helpers import ensure_dir, safe_filename
+from nanobot.utils.helpers import ensure_dir, safe_filename, timestamp
 
 
 @dataclass
@@ -27,7 +27,7 @@ class Session:
 
     def add_message(self, role: str, content: str, **kwargs: Any) -> None:
         """Add a message to the session."""
-        msg = {"role": role, "content": content, "timestamp": datetime.now().isoformat(), **kwargs}
+        msg = {"role": role, "content": content, "timestamp": timestamp(), **kwargs}
         self.messages.append(msg)
         self.updated_at = datetime.now()
 
@@ -35,20 +35,39 @@ class Session:
         """
         Get message history for LLM context.
 
+        Filters from the last compaction summary (role=system) onwards,
+        then applies the max_messages cap. The full session.messages is
+        preserved for persistence — this only affects what the LLM sees.
+
         Args:
             max_messages: Maximum messages to return.
 
         Returns:
-            List of messages in LLM format.
+            List of messages in LLM format, preserving tool call metadata.
         """
-        # Get recent messages
+        # Filter from last compaction summary to most recent
+        messages = self.messages
+        last_system_idx = None
+        for i, msg in enumerate(messages):
+            if msg.get("role") == "system":
+                last_system_idx = i
+
+        if last_system_idx is not None:
+            messages = messages[last_system_idx:]
+
         recent = (
-            self.messages[-max_messages:] if len(self.messages) > max_messages else self.messages
+            messages[-max_messages:] if len(messages) > max_messages else messages
         )
 
-        # Convert to LLM format (just role and content)
-        # TODO: check the message if it needs to contain author
-        return [{"role": m["role"], "content": m["content"]} for m in recent]
+        out: list[dict[str, Any]] = []
+        for m in recent:
+            entry: dict[str, Any] = {"role": m["role"], "content": m.get("content", "")}
+            # Preserve tool call metadata for LLM context continuity
+            for k in ("tool_calls", "tool_call_id", "name"):
+                if k in m:
+                    entry[k] = m[k]
+            out.append(entry)
+        return out
 
     def clear(self) -> None:
         """Clear all messages in the session."""
@@ -107,7 +126,7 @@ class SessionManager:
             metadata = {}
             created_at = None
 
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -132,28 +151,33 @@ class SessionManager:
                 metadata=metadata,
             )
         except Exception as e:
-            logger.warning(f"Failed to load session {key}: {e}")
+            logger.warning("Failed to load session {}: {}", key, e)
             return None
 
     def save(self, session: Session) -> None:
         """Save a session to disk."""
         path = self._get_session_path(session.key)
 
-        with open(path, "w") as f:
-            # Write metadata first
+        with open(path, "w", encoding="utf-8") as f:
+            # Write metadata first (include key for reliable reconstruction)
             metadata_line = {
                 "_type": "metadata",
+                "key": session.key,
                 "created_at": session.created_at.isoformat(),
                 "updated_at": session.updated_at.isoformat(),
                 "metadata": session.metadata,
             }
-            f.write(json.dumps(metadata_line) + "\n")
+            f.write(json.dumps(metadata_line, ensure_ascii=False) + "\n")
 
             # Write messages
             for msg in session.messages:
-                f.write(json.dumps(msg) + "\n")
+                f.write(json.dumps(msg, ensure_ascii=False) + "\n")
 
         self._cache[session.key] = session
+
+    def invalidate(self, key: str) -> None:
+        """Remove a session from the in-memory cache (e.g. after /new)."""
+        self._cache.pop(key, None)
 
     def delete(self, key: str) -> bool:
         """
@@ -187,14 +211,16 @@ class SessionManager:
         for path in self.sessions_dir.glob("*.jsonl"):
             try:
                 # Read just the metadata line
-                with open(path) as f:
+                with open(path, encoding="utf-8") as f:
                     first_line = f.readline().strip()
                     if first_line:
                         data = json.loads(first_line)
                         if data.get("_type") == "metadata":
+                            # Use stored key; fall back to filename reconstruction
+                            key = data.get("key") or path.stem.replace("_", ":", 1)
                             sessions.append(
                                 {
-                                    "key": path.stem.replace("_", ":"),
+                                    "key": key,
                                     "created_at": data.get("created_at"),
                                     "updated_at": data.get("updated_at"),
                                     "path": str(path),

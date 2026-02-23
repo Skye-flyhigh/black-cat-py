@@ -1,12 +1,13 @@
 """Subagent manager for background task execution."""
 
 import asyncio
-import json
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+from nanobot.utils.helpers import build_tool_call_dicts, safe_json_dumps
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ExecToolConfig
@@ -86,7 +87,7 @@ class SubagentManager:
         # Cleanup when done
         bg_task.add_done_callback(lambda _: self._running_tasks.pop(task_id, None))
 
-        logger.info(f"Spawned subagent [{task_id}]: {display_label}")
+        logger.info("Spawned subagent [{}]: {}", task_id, display_label)
         return f"Subagent [{display_label}] started (id: {task_id}). I'll notify you when it completes."
 
     async def _run_subagent(
@@ -97,7 +98,7 @@ class SubagentManager:
         origin: dict[str, str],
     ) -> None:
         """Execute the subagent task and announce the result."""
-        logger.info(f"Subagent [{task_id}] starting task: {label}")
+        logger.info("Subagent [{}] starting task: {}", task_id, label)
 
         try:
             # Build subagent tools (no message tool, no spawn tool)
@@ -140,30 +141,20 @@ class SubagentManager:
 
                 if response.has_tool_calls:
                     # Add assistant message with tool calls
-                    tool_call_dicts = [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": json.dumps(tc.arguments),
-                            },
-                        }
-                        for tc in response.tool_calls
-                    ]
                     messages.append(
                         {
                             "role": "assistant",
                             "content": response.content or "",
-                            "tool_calls": tool_call_dicts,
+                            "tool_calls": build_tool_call_dicts(response.tool_calls),
                         }
                     )
 
                     # Execute tools
                     for tool_call in response.tool_calls:
-                        args_str = json.dumps(tool_call.arguments)
+                        args_str = safe_json_dumps(tool_call.arguments)
                         logger.debug(
-                            f"Subagent [{task_id}] executing: {tool_call.name} with arguments: {args_str}"
+                            "Subagent [{}] executing: {} with arguments: {}",
+                            task_id, tool_call.name, args_str,
                         )
                         result = await tools.execute(tool_call.name, tool_call.arguments)
                         messages.append(
@@ -181,12 +172,12 @@ class SubagentManager:
             if final_result is None:
                 final_result = "Task completed but no final response was generated."
 
-            logger.info(f"Subagent [{task_id}] completed successfully")
+            logger.info("Subagent [{}] completed successfully", task_id)
             await self._announce_result(task_id, label, task, final_result, origin, "ok")
 
         except Exception as e:
             error_msg = f"Error: {str(e)}"
-            logger.error(f"Subagent [{task_id}] failed: {e}")
+            logger.error("Subagent [{}] failed: {}", task_id, e)
             await self._announce_result(task_id, label, task, error_msg, origin, "error")
 
     async def _announce_result(

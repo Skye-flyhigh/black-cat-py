@@ -6,17 +6,20 @@ from typing import Any
 
 import httpx
 import websockets
-from websockets.asyncio.client import ClientConnection
 from loguru import logger
+from websockets.asyncio.client import ClientConnection
 
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.channels.utils import (
     MAX_ATTACHMENT_BYTES,
-    RECONNECT_DELAY_SECONDS,
+    MAX_MESSAGE_LENGTH_DISCORD,
+    RECONNECT_DELAY_INITIAL,
+    RECONNECT_DELAY_MAX,
     TYPING_INTERVAL_DISCORD,
     format_reply_context,
+    split_message,
 )
 from nanobot.config.schema import DiscordConfig
 
@@ -39,28 +42,29 @@ class DiscordChannel(BaseChannel):
 
     async def start(self) -> None:
         """Start the Discord gateway connection."""
-        if not self.config.token:
-            logger.error("Discord bot token not configured")
+        if not self._require_config(token=self.config.token):
             return
 
         self._running = True
         self._http = httpx.AsyncClient(timeout=30.0)
+        delay = RECONNECT_DELAY_INITIAL
 
         while self._running:
             try:
                 logger.info("Connecting to Discord gateway...")
                 async with websockets.connect(self.config.gateway_url) as ws:
                     self._ws = ws
+                    delay = RECONNECT_DELAY_INITIAL  # reset on successful connection
                     await self._gateway_loop()
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.warning(f"Discord gateway error: {e}")
-                if self._running:
-                    logger.info(
-                        f"Reconnecting to Discord gateway in {RECONNECT_DELAY_SECONDS} seconds..."
-                    )
-                    await asyncio.sleep(RECONNECT_DELAY_SECONDS)
+                if not self._running:
+                    break
+                logger.warning("Discord connection lost: {}", e)
+                logger.info("Retrying in {}s...", delay)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, RECONNECT_DELAY_MAX)
 
     async def stop(self) -> None:
         """Stop the Discord channel."""
@@ -87,28 +91,38 @@ class DiscordChannel(BaseChannel):
             return
 
         url = f"{DISCORD_API_BASE}/channels/{msg.chat_id}/messages"
-        payload: dict[str, Any] = {"content": msg.content}
-
-        if msg.reply_to:
-            payload["message_reference"] = {"message_id": msg.reply_to}
-            payload["allowed_mentions"] = {"replied_user": False}
-
         headers = {"Authorization": f"Bot {self.config.token}"}
 
+        # Split long messages to stay within Discord's 2000-char limit
+        chunks = split_message(msg.content, MAX_MESSAGE_LENGTH_DISCORD)
+        for i, chunk in enumerate(chunks):
+            payload: dict[str, Any] = {"content": chunk}
+
+            # Only attach reply reference to the first chunk
+            if i == 0 and msg.reply_to:
+                payload["message_reference"] = {"message_id": msg.reply_to}
+                payload["allowed_mentions"] = {"replied_user": False}
+
+            await self._send_discord_request(url, headers, payload)
+
+    async def _send_discord_request(
+        self, url: str, headers: dict[str, str], payload: dict[str, Any]
+    ) -> None:
+        """Send a single Discord API request with retry on rate-limit."""
         for attempt in range(3):
             try:
                 response = await self._http.post(url, headers=headers, json=payload)
                 if response.status_code == 429:
                     data = response.json()
                     retry_after = float(data.get("retry_after", 1.0))
-                    logger.warning(f"Discord rate limited, retrying in {retry_after}s")
+                    logger.warning("Discord rate limited, retrying in {}s", retry_after)
                     await asyncio.sleep(retry_after)
                     continue
                 response.raise_for_status()
                 return
             except Exception as e:
                 if attempt == 2:
-                    logger.error(f"Error sending Discord message: {e}")
+                    logger.error("Error sending Discord message: {}", e)
                 else:
                     await asyncio.sleep(1)
 
@@ -138,7 +152,7 @@ class DiscordChannel(BaseChannel):
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
-                logger.warning(f"Invalid JSON from Discord gateway: {raw[:100]}")
+                logger.warning("Invalid JSON from Discord gateway: {}", raw[:100])
                 continue
 
             op = data.get("op")
@@ -197,7 +211,7 @@ class DiscordChannel(BaseChannel):
                 try:
                     await self._ws.send(json.dumps(payload))
                 except Exception as e:
-                    logger.warning(f"Discord heartbeat failed: {e}")
+                    logger.warning("Discord heartbeat failed: {}", e)
                     break
                 await asyncio.sleep(interval_s)
 
@@ -293,5 +307,5 @@ class DiscordChannel(BaseChannel):
             content_parts.append(f"[attachment: {file_path}]")
 
         except Exception as e:
-            logger.warning(f"Failed to download Discord attachment: {e}")
+            logger.warning("Failed to download Discord attachment: {}", e)
             content_parts.append(f"[attachment: {filename} - download failed]")

@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from loguru import logger
+
+# The telegram library logs full tracebacks for transient network errors
+# (DNS failures, timeouts, etc.) but retries automatically. Suppress the
+# noise — we log a clean one-liner via our own error handler instead.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext._utils.networkloop").setLevel(logging.CRITICAL)
 from telegram import BotCommand, Message, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -13,10 +21,12 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.channels.utils import (
+    MAX_MESSAGE_LENGTH_TELEGRAM,
     TYPING_INTERVAL_TELEGRAM,
     format_reply_context,
     get_file_extension,
     markdown_to_telegram_html,
+    split_message,
 )
 from nanobot.config.schema import TelegramConfig
 
@@ -56,14 +66,16 @@ class TelegramChannel(BaseChannel):
 
     async def start(self) -> None:
         """Start the Telegram bot with long polling."""
-        if not self.config.token:
-            logger.error("Telegram bot token not configured")
+        if not self._require_config(token=self.config.token):
             return
 
         self._running = True
 
-        # Build the application
-        builder = Application.builder().token(self.config.token)
+        # Build the application with a larger connection pool for stability
+        from telegram.request import HTTPXRequest
+
+        request = HTTPXRequest(connection_pool_size=16, connect_timeout=20.0)
+        builder = Application.builder().token(self.config.token).request(request)
         if self.config.proxy:
             builder = builder.proxy(self.config.proxy).get_updates_proxy(self.config.proxy)
         self._app = builder.build()
@@ -86,19 +98,22 @@ class TelegramChannel(BaseChannel):
             )
         )
 
+        # Log network errors cleanly instead of dumping tracebacks
+        self._app.add_error_handler(self._on_error)
+
         logger.info("Starting Telegram bot (polling mode)...")
 
         await self._app.initialize()
         await self._app.start()
 
         bot_info = await self._app.bot.get_me()
-        logger.info(f"Telegram bot @{bot_info.username} connected")
+        logger.info("Telegram bot @{} connected", bot_info.username)
 
         try:
             await self._app.bot.set_my_commands(self.BOT_COMMANDS)
             logger.debug("Telegram bot commands registered")
         except Exception as e:
-            logger.warning(f"Failed to register bot commands: {e}")
+            logger.warning("Failed to register bot commands: {}", e)
 
         if self._app.updater:
             await self._app.updater.start_polling(
@@ -130,29 +145,63 @@ class TelegramChannel(BaseChannel):
 
         try:
             chat_id = int(msg.chat_id)
-            html_content = markdown_to_telegram_html(msg.content)
-            await self._app.bot.send_message(
-                chat_id=chat_id,
-                text=html_content,
-                parse_mode="HTML",
-            )
         except ValueError:
-            logger.error(f"Invalid chat_id: {msg.chat_id}")
-        except Exception as e:
-            # Fallback to plain text if HTML parsing fails
-            logger.warning(f"HTML parse failed, falling back to plain text: {e}")
+            logger.error("Invalid chat_id: {}", msg.chat_id)
+            return
+
+        # Reply-to support (configurable)
+        reply_params: dict = {}
+        if self.config.reply_to_message and msg.reply_to:
+            reply_params["reply_to_message_id"] = int(msg.reply_to)
+
+        # Split long messages to stay within Telegram's 4096-char limit
+        chunks = split_message(msg.content, MAX_MESSAGE_LENGTH_TELEGRAM)
+        for chunk in chunks:
+            html_content = markdown_to_telegram_html(chunk)
             try:
                 await self._app.bot.send_message(
-                    chat_id=int(msg.chat_id),
-                    text=msg.content,
+                    chat_id=chat_id,
+                    text=html_content,
+                    parse_mode="HTML",
+                    **reply_params,
                 )
-            except Exception as e2:
-                logger.error(f"Error sending Telegram message: {e2}")
+            except Exception as e:
+                # Fallback to plain text if HTML parsing fails
+                logger.warning("HTML parse failed, falling back to plain text: {}", e)
+                try:
+                    await self._app.bot.send_message(
+                        chat_id=chat_id,
+                        text=chunk,
+                        **reply_params,
+                    )
+                except Exception as e2:
+                    logger.error("Error sending Telegram message: {}", e2)
+            # Only reply-to the first chunk
+            reply_params = {}
 
     async def _send_typing_indicator(self, chat_id: str) -> None:
         """Send typing indicator to Telegram."""
         if self._app:
             await self._app.bot.send_chat_action(chat_id=int(chat_id), action="typing")
+
+    # ========================================================================
+    # Error Handling
+    # ========================================================================
+
+    async def _on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle errors from the telegram library with clean logging."""
+        error = context.error
+        if error is None:
+            return
+
+        # Network errors: one-liner, the library retries automatically
+        error_name = type(error).__name__
+        from telegram.error import NetworkError, TimedOut
+
+        if isinstance(error, (NetworkError, TimedOut, OSError)):
+            logger.warning("Telegram connection lost: {}", error_name)
+        else:
+            logger.error("Telegram error: {} — {}", error_name, error)
 
     # ========================================================================
     # Command Handlers
@@ -188,7 +237,7 @@ class TelegramChannel(BaseChannel):
         session.clear()
         self.session_manager.save(session)
 
-        logger.info(f"Session reset for {session_key} (cleared {msg_count} messages)")
+        logger.info("Session reset for {} (cleared {} messages)", session_key, msg_count)
         await update.message.reply_text("Conversation history cleared. Let's start fresh!")
 
     async def _on_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -246,8 +295,6 @@ class TelegramChannel(BaseChannel):
 
         content = "\n".join(content_parts) if content_parts else "[empty message]"
 
-        logger.debug(f"Telegram message from {sender_id}: {content[:50]}...")
-
         # Start typing indicator
         await self._start_typing(chat_id)
 
@@ -259,6 +306,7 @@ class TelegramChannel(BaseChannel):
             media=media_paths,
             metadata={
                 "message_id": message.message_id,
+                "reply_to": message.message_id if self.config.reply_to_message else None,
                 "user_id": user.id,
                 "username": user.username,
                 "first_name": user.first_name,
@@ -311,10 +359,10 @@ class TelegramChannel(BaseChannel):
             else:
                 content_parts.append(f"[{media_type}: {file_path}]")
 
-            logger.debug(f"Downloaded {media_type} to {file_path}")
+            logger.debug("Downloaded {} to {}", media_type, file_path)
 
         except Exception as e:
-            logger.error(f"Failed to download media: {e}")
+            logger.error("Failed to download media: {}", e)
             content_parts.append(f"[{media_type}: download failed]")
 
     async def _transcribe_audio(self, file_path) -> str | None:
@@ -328,8 +376,8 @@ class TelegramChannel(BaseChannel):
             transcriber = GroqTranscriptionProvider(api_key=self.groq_api_key)
             transcription = await transcriber.transcribe(file_path)
             if transcription:
-                logger.info(f"Transcribed audio: {transcription[:50]}...")
+                logger.info("Transcribed audio: {}...", transcription[:50])
             return transcription
         except Exception as e:
-            logger.warning(f"Transcription failed: {e}")
+            logger.warning("Transcription failed: {}", e)
             return None

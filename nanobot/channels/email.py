@@ -96,7 +96,7 @@ class EmailChannel(BaseChannel):
                     )
 
             except Exception as e:
-                logger.error(f"Email polling error: {e}")
+                logger.error("Email polling error: {}", e)
 
             await asyncio.sleep(poll_seconds)
 
@@ -152,7 +152,7 @@ class EmailChannel(BaseChannel):
         try:
             await asyncio.to_thread(self._smtp_send, email_msg)
         except Exception as e:
-            logger.error(f"Error sending email to {to_addr}: {e}")
+            logger.error("Error sending email to {}: {}", to_addr, e)
             raise
 
     # ========================================================================
@@ -176,7 +176,7 @@ class EmailChannel(BaseChannel):
             missing.append("smtp_password")
 
         if missing:
-            logger.error(f"Email channel not configured, missing: {', '.join(missing)}")
+            logger.error("Email channel not configured, missing: {}", ', '.join(missing))
             return False
         return True
 

@@ -2,18 +2,16 @@
 
 import asyncio
 import json
-import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
 from loguru import logger
 
 from nanobot.cron.types import CronJob, CronJobState, CronPayload, CronSchedule, CronStore
-
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
+from nanobot.utils.helpers import ensure_dir
+from nanobot.utils.helpers import now_ms as _now_ms
 
 
 def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
@@ -29,15 +27,33 @@ def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
 
     if schedule.kind == "cron" and schedule.expr:
         try:
+            from zoneinfo import ZoneInfo
+
             from croniter import croniter
 
-            cron = croniter(schedule.expr, time.time())
-            next_time = cron.get_next()
-            return int(next_time * 1000)
+            base_time = now_ms / 1000
+            tz = ZoneInfo(schedule.tz) if schedule.tz else datetime.now().astimezone().tzinfo
+            base_dt = datetime.fromtimestamp(base_time, tz=tz)
+            cron = croniter(schedule.expr, base_dt)
+            next_dt = cron.get_next(datetime)
+            return int(next_dt.timestamp() * 1000)
         except Exception:
             return None
 
     return None
+
+
+def _validate_schedule_for_add(schedule: CronSchedule) -> None:
+    """Validate schedule before persisting. Raises ValueError on problems."""
+    if schedule.tz and schedule.kind != "cron":
+        raise ValueError("tz can only be used with cron schedules")
+    if schedule.kind == "cron" and schedule.tz:
+        try:
+            from zoneinfo import ZoneInfo
+
+            ZoneInfo(schedule.tz)
+        except Exception:
+            raise ValueError(f"unknown timezone '{schedule.tz}'") from None
 
 
 class CronService:
@@ -96,7 +112,7 @@ class CronService:
                     )
                 self._store = CronStore(jobs=jobs)
             except Exception as e:
-                logger.warning(f"Failed to load cron store: {e}")
+                logger.warning("Failed to load cron store: {}", e)
                 self._store = CronStore()
         else:
             self._store = CronStore()
@@ -108,7 +124,7 @@ class CronService:
         if not self._store:
             return
 
-        self.store_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_dir(self.store_path.parent)
 
         data = {
             "version": self._store.version,
@@ -223,7 +239,7 @@ class CronService:
     async def _execute_job(self, job: CronJob) -> None:
         """Execute a single job."""
         start_ms = _now_ms()
-        logger.info(f"Cron: executing job '{job.name}' ({job.id})")
+        logger.info("Cron: executing job '{}' ({})", job.name, job.id)
 
         try:
             if self.on_job:
@@ -231,12 +247,12 @@ class CronService:
 
             job.state.last_status = "ok"
             job.state.last_error = None
-            logger.info(f"Cron: job '{job.name}' completed")
+            logger.info("Cron: job '{}' completed", job.name)
 
         except Exception as e:
             job.state.last_status = "error"
             job.state.last_error = str(e)
-            logger.error(f"Cron: job '{job.name}' failed: {e}")
+            logger.error("Cron: job '{}' failed: {}", job.name, e)
 
         job.state.last_run_at_ms = start_ms
         job.updated_at_ms = _now_ms()
@@ -271,6 +287,7 @@ class CronService:
         delete_after_run: bool = False,
     ) -> CronJob:
         """Add a new job."""
+        _validate_schedule_for_add(schedule)
         store = self._load_store()
         now = _now_ms()
 
@@ -296,7 +313,7 @@ class CronService:
         self._save_store()
         self._arm_timer()
 
-        logger.info(f"Cron: added job '{name}' ({job.id})")
+        logger.info("Cron: added job '{}' ({})", name, job.id)
         return job
 
     def remove_job(self, job_id: str) -> bool:
@@ -309,7 +326,7 @@ class CronService:
         if removed:
             self._save_store()
             self._arm_timer()
-            logger.info(f"Cron: removed job {job_id}")
+            logger.info("Cron: removed job {}", job_id)
 
         return removed
 

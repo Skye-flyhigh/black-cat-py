@@ -36,70 +36,47 @@ class ChannelManager:
 
         self._init_channels()
 
+    # (name, module_path, class_name, config_getter)
+    _CHANNEL_REGISTRY: list[tuple[str, str, str]] = [
+        ("telegram", "nanobot.channels.telegram", "TelegramChannel"),
+        ("whatsapp", "nanobot.channels.whatsapp", "WhatsAppChannel"),
+        ("discord", "nanobot.channels.discord", "DiscordChannel"),
+        ("feishu", "nanobot.channels.feishu", "FeishuChannel"),
+        ("email", "nanobot.channels.email", "EmailChannel"),
+    ]
+
     def _init_channels(self) -> None:
         """Initialize channels based on config."""
+        import importlib
 
-        # Telegram channel
-        if self.config.channels.telegram.enabled:
+        for name, module_path, class_name in self._CHANNEL_REGISTRY:
+            channel_config = getattr(self.config.channels, name, None)
+            if not channel_config or not channel_config.enabled:
+                continue
             try:
-                from nanobot.channels.telegram import TelegramChannel
-
-                self.channels["telegram"] = TelegramChannel(
-                    self.config.channels.telegram,
-                    self.bus,
-                    groq_api_key=self.config.providers.groq.api_key,
-                    session_manager=self.session_manager,
-                )
-                logger.info("Telegram channel enabled")
+                mod = importlib.import_module(module_path)
+                cls = getattr(mod, class_name)
+                extra_kwargs = self._extra_kwargs(name)
+                self.channels[name] = cls(channel_config, self.bus, **extra_kwargs)
+                logger.info("{} channel enabled", name.title())
             except ImportError as e:
-                logger.warning(f"Telegram channel not available: {e}")
+                logger.warning("{} channel not available: {}", name.title(), e)
 
-        # WhatsApp channel
-        if self.config.channels.whatsapp.enabled:
-            try:
-                from nanobot.channels.whatsapp import WhatsAppChannel
-
-                self.channels["whatsapp"] = WhatsAppChannel(self.config.channels.whatsapp, self.bus)
-                logger.info("WhatsApp channel enabled")
-            except ImportError as e:
-                logger.warning(f"WhatsApp channel not available: {e}")
-
-        # Discord channel
-        if self.config.channels.discord.enabled:
-            try:
-                from nanobot.channels.discord import DiscordChannel
-
-                self.channels["discord"] = DiscordChannel(self.config.channels.discord, self.bus)
-                logger.info("Discord channel enabled")
-            except ImportError as e:
-                logger.warning(f"Discord channel not available: {e}")
-
-        # Feishu channel
-        if self.config.channels.feishu.enabled:
-            try:
-                from nanobot.channels.feishu import FeishuChannel
-
-                self.channels["feishu"] = FeishuChannel(self.config.channels.feishu, self.bus)
-                logger.info("Feishu channel enabled")
-            except ImportError as e:
-                logger.warning(f"Feishu channel not available: {e}")
-
-        # Email channel
-        if self.config.channels.email.enabled:
-            try:
-                from nanobot.channels.email import EmailChannel
-
-                self.channels["email"] = EmailChannel(self.config.channels.email, self.bus)
-                logger.info("Email channel enabled")
-            except ImportError as e:
-                logger.warning(f"Email channel not available: {e}")
+    def _extra_kwargs(self, name: str) -> dict[str, Any]:
+        """Return extra constructor kwargs for channels that need them."""
+        if name == "telegram":
+            return {
+                "groq_api_key": self.config.providers.groq.api_key,
+                "session_manager": self.session_manager,
+            }
+        return {}
 
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""
         try:
             await channel.start()
         except Exception as e:
-            logger.error(f"Failed to start channel {name}: {e}")
+            logger.error("Failed to start channel {}: {}", name, e)
 
     async def start_all(self) -> None:
         """Start all channels and the outbound dispatcher."""
@@ -113,7 +90,7 @@ class ChannelManager:
         # Start channels
         tasks = []
         for name, channel in self.channels.items():
-            logger.info(f"Starting {name} channel...")
+            logger.info("Starting {} channel...", name)
             tasks.append(asyncio.create_task(self._start_channel(name, channel)))
 
         # Wait for all to complete (they should run forever)
@@ -135,9 +112,9 @@ class ChannelManager:
         for name, channel in self.channels.items():
             try:
                 await channel.stop()
-                logger.info(f"Stopped {name} channel")
+                logger.info("Stopped {} channel", name)
             except Exception as e:
-                logger.error(f"Error stopping {name}: {e}")
+                logger.error("Error stopping {}: {}", name, e)
 
     async def _dispatch_outbound(self) -> None:
         """Dispatch outbound messages to the appropriate channel."""
@@ -152,9 +129,9 @@ class ChannelManager:
                     try:
                         await channel.send(msg)
                     except Exception as e:
-                        logger.error(f"Error sending to {msg.channel}: {e}")
+                        logger.error("Error sending to {}: {}", msg.channel, e)
                 else:
-                    logger.warning(f"Unknown channel: {msg.channel}")
+                    logger.warning("Unknown channel: {}", msg.channel)
 
             except asyncio.TimeoutError:
                 continue

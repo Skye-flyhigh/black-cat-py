@@ -17,14 +17,14 @@ class Summarizer:
     """
 
     # Default prompt for conversation summarization
-    SUMMARIZE_PROMPT = """Summarize the following conversation concisely.
-Focus on:
+    SUMMARIZE_PROMPT = """You are blackcat internal summariser to help to reduce context window.
+    Summarize the following conversation concisely on the following points:
 - Key decisions made
 - Important facts learned
 - Action items or commitments
 - Unresolved questions
 
-Keep it brief but preserve essential context. Use bullet points."""
+Keep short, concised but contextual. blackcat needs to understand what's going on. No styling."""
 
     # Prompt for extracting long-term facts
     EXTRACT_FACTS_PROMPT = """Extract only the important long-term facts from this conversation.
@@ -93,12 +93,12 @@ Format as bullet points."""
                 timeout=self.timeout,
             )
             summary = response.content or ""
-            logger.debug(f"Content: {summary}")
-            logger.debug(f"Summarized {len(messages)} messages into {len(summary)} chars")
+            logger.debug("Content: {}", summary)
+            logger.debug("Summarized {} messages into {} chars", len(messages), len(summary))
             return summary.strip()
 
         except Exception as e:
-            logger.error(f"Summarization failed: {e}")
+            logger.error("Summarization failed: {}", e)
             # Fallback: return truncated original if summarization fails
             return f"[Summary unavailable: {len(messages)} messages]"
 
@@ -141,11 +141,11 @@ Format as bullet points."""
             if "nothing to extract" in facts.lower() or not facts.strip():
                 return ""
 
-            logger.debug(f"Extracted facts from {len(messages)} messages")
+            logger.debug("Extracted facts from {} messages", len(messages))
             return facts.strip()
 
         except Exception as e:
-            logger.error(f"Fact extraction failed: {e}")
+            logger.error("Fact extraction failed: {}", e)
             return ""
 
     async def summarize_session(
@@ -163,7 +163,7 @@ Format as bullet points."""
         Returns:
             Dict with 'summary' and 'facts' keys.
         """
-        logger.info(f"Summarizing session {session_key} ({len(messages)} messages)")
+        logger.info("Summarizing session {} ({} messages)", session_key, len(messages))
 
         summary = await self.summarize_messages(messages)
         facts = await self.extract_facts(messages)

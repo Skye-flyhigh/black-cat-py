@@ -45,6 +45,8 @@ class LiteLLMProvider(LLMProvider):
 
         # Disable LiteLLM logging noise
         litellm.suppress_debug_info = True
+        # Drop unsupported parameters for providers (e.g., gpt-5 rejects some params)
+        litellm.drop_params = True
 
     def _setup_env(self, api_key: str, api_base: str | None, model: str) -> None:
         """Set environment variables based on detected provider."""
@@ -68,6 +70,13 @@ class LiteLLMProvider(LLMProvider):
 
     def _resolve_model(self, model: str) -> str:
         """Resolve model name by applying provider/gateway prefixes."""
+        # Always use ollama_chat/ for proper tool calling support.
+        # The ollama/ prefix routes to /api/generate which causes infinite
+        # tool call loops. ollama_chat/ routes to /api/chat which handles
+        # tool calling correctly.
+        if model.startswith("ollama/") and not model.startswith("ollama_chat/"):
+            model = "ollama_chat/" + model[len("ollama/"):]
+
         if self._gateway:
             # Gateway mode: apply gateway prefix, skip provider-specific prefixes
             prefix = self._gateway.litellm_prefix
@@ -95,6 +104,41 @@ class LiteLLMProvider(LLMProvider):
                     kwargs.update(overrides)
                     return
 
+    def _supports_cache_control(self, model: str) -> bool:
+        """Check if the resolved model/provider supports cache_control."""
+        if self._gateway:
+            return self._gateway.supports_prompt_caching
+        spec = find_by_model(model)
+        return bool(spec and spec.supports_prompt_caching)
+
+    def _apply_cache_control(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None
+    ) -> None:
+        """Inject cache_control markers on system message and last tool definition.
+
+        Mutates ``messages`` and ``tools`` in place.  Anthropic and OpenRouter use
+        these markers to cache the prompt prefix, saving tokens and latency.
+        """
+        cache_ctrl = {"type": "ephemeral"}
+
+        # Mark the system message for caching
+        for msg in messages:
+            if msg.get("role") == "system":
+                content = msg.get("content")
+                if isinstance(content, str):
+                    msg["content"] = [
+                        {"type": "text", "text": content, "cache_control": cache_ctrl}
+                    ]
+                elif isinstance(content, list) and content:
+                    content[-1]["cache_control"] = cache_ctrl
+                break
+
+        # Mark the last tool definition for caching
+        if tools:
+            last_tool = tools[-1]
+            if "function" in last_tool:
+                last_tool["function"]["cache_control"] = cache_ctrl
+
     async def chat(
         self,
         messages: list[dict[str, Any]],
@@ -120,6 +164,9 @@ class LiteLLMProvider(LLMProvider):
         """
         model = self._resolve_model(model or self.default_model)
 
+        # Clamp max_tokens to at least 1
+        max_tokens = max(1, max_tokens)
+
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -133,6 +180,10 @@ class LiteLLMProvider(LLMProvider):
         # Apply model-specific overrides (e.g. kimi-k2.5 temperature)
         self._apply_model_overrides(model, kwargs)
 
+        # Pass api_key directly — more reliable than env vars alone
+        if self.api_key:
+            kwargs["api_key"] = self.api_key
+
         # Pass api_base directly for custom endpoints (vLLM, etc.)
         if self.api_base:
             kwargs["api_base"] = self.api_base
@@ -144,6 +195,10 @@ class LiteLLMProvider(LLMProvider):
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
+
+        # Inject cache_control for providers that support it (Anthropic, OpenRouter)
+        if self._supports_cache_control(model):
+            self._apply_cache_control(messages, tools)
 
         try:
             response = await acompletion(**kwargs)

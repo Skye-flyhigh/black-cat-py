@@ -51,6 +51,9 @@ class ProviderSpec:
     # per-model param overrides, e.g. (("kimi-k2.5", {"temperature": 1.0}),)
     model_overrides: tuple[tuple[str, dict[str, Any]], ...] = ()
 
+    # prompt caching support (Anthropic, OpenRouter)
+    supports_prompt_caching: bool = False
+
     @property
     def label(self) -> str:
         return self.display_name or self.name.title()
@@ -79,6 +82,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         default_api_base="https://openrouter.ai/api/v1",
         strip_model_prefix=False,
         model_overrides=(),
+        supports_prompt_caching=True,
     ),
     # AiHubMix: global gateway, OpenAI-compatible interface.
     # strip_model_prefix=True: it doesn't understand "anthropic/claude-3",
@@ -116,6 +120,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         default_api_base="",
         strip_model_prefix=False,
         model_overrides=(),
+        supports_prompt_caching=True,
     ),
     # OpenAI: LiteLLM recognizes "gpt-*" natively, no prefix needed.
     ProviderSpec(
@@ -274,6 +279,9 @@ def find_by_model(model: str) -> ProviderSpec | None:
     """Match a standard provider by model-name keyword (case-insensitive).
     Skips gateways/local — those are matched by api_key/api_base instead."""
     model_lower = model.lower()
+    # Local model prefixes should never match cloud providers
+    if model_lower.startswith(("ollama/", "ollama_chat/")):
+        return None
     for spec in PROVIDERS:
         if spec.is_gateway or spec.is_local:
             continue

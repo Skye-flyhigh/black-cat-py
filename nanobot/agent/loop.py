@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import re
+from collections.abc import Awaitable, Callable
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
+
+from nanobot.utils.helpers import (
+    build_tool_call_dicts,
+    parse_session_key,
+    safe_json_dumps,
+    truncate_string,
+)
 
 if TYPE_CHECKING:
     from nanobot.agent.memory_manager import Memory
@@ -58,6 +67,7 @@ class AgentLoop:
         config: Config | None = None,
         llm_timeout: int | None = 60,
         memory: "Memory | None" = None,
+        mcp_servers: dict | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig as ExecToolConfigRuntime
 
@@ -100,16 +110,21 @@ class AgentLoop:
 
         self.memory_window = config.agents.defaults.memory_window if config else 50
         self._running = False
+
+        # MCP server lifecycle
+        self._mcp_servers = mcp_servers or {}
+        self._mcp_stack: AsyncExitStack | None = None
+        self._mcp_connected = False
+        self._mcp_connecting = False
+
         self._register_default_tools()
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
-        # File tools (restrict to workspace if configured)
+        # File tools (workspace for relative paths, restrict if configured)
         allowed_dir = self.workspace if self.restrict_to_workspace else None
-        self.tools.register(ReadFileTool(allowed_dir=allowed_dir))
-        self.tools.register(WriteFileTool(allowed_dir=allowed_dir))
-        self.tools.register(EditFileTool(allowed_dir=allowed_dir))
-        self.tools.register(ListDirTool(allowed_dir=allowed_dir))
+        for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool):
+            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
 
         # Shell tool
         self.tools.register(
@@ -140,6 +155,44 @@ class AgentLoop:
         if self.memory:
             self.tools.register(MemoryTool(self.memory))
 
+    async def _connect_mcp(self) -> None:
+        """Connect to configured MCP servers (lazy, one-time).
+
+        Called on first message. If connection fails, retries on next message.
+        """
+        if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
+            return
+        self._mcp_connecting = True
+        from nanobot.agent.tools.mcp import connect_mcp_servers
+
+        try:
+            self._mcp_stack = AsyncExitStack()
+            await self._mcp_stack.__aenter__()
+            await connect_mcp_servers(self._mcp_servers, self.tools, self._mcp_stack)
+            self._mcp_connected = True
+        except Exception as e:
+            logger.error("Failed to connect MCP servers (will retry next message): {}", e)
+            if self._mcp_stack:
+                try:
+                    await self._mcp_stack.aclose()
+                except Exception:
+                    pass
+                self._mcp_stack = None
+        finally:
+            self._mcp_connecting = False
+
+    async def close_mcp(self) -> None:
+        """Shut down MCP server connections."""
+        if self._mcp_stack:
+            try:
+                await self._mcp_stack.aclose()
+            except (RuntimeError, BaseExceptionGroup):
+                pass  # MCP SDK cancel scope cleanup is noisy but harmless
+            except Exception as e:
+                logger.warning("Error closing MCP connections: {}", e)
+            self._mcp_stack = None
+            self._mcp_connected = False
+
     def _resolve_author(self, sender_id: str, channel: str) -> str:
         """Resolve sender_id to author name using config, or return sender_id as-is."""
         if self.config:
@@ -159,11 +212,20 @@ class AgentLoop:
                 # Process it
                 try:
                     response = await self._process_message(msg)
-                    if response:
+                    if response is not None:
                         await self.bus.publish_outbound(response)
+                    elif msg.channel == "cli":
+                        # CLI needs an empty response to unblock the prompt
+                        await self.bus.publish_outbound(
+                            OutboundMessage(
+                                channel=msg.channel,
+                                chat_id=msg.chat_id,
+                                content="",
+                                metadata=msg.metadata or {},
+                            )
+                        )
                 except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    # Send error response
+                    logger.error("Error processing message: {}", e)
                     await self.bus.publish_outbound(
                         OutboundMessage(
                             channel=msg.channel,
@@ -194,22 +256,30 @@ class AgentLoop:
         # Parse origin (system messages encode origin in chat_id as "channel:chat_id")
         if is_system:
             if ":" in msg.chat_id:
-                origin_channel, origin_chat_id = msg.chat_id.split(":", 1)
+                origin_channel, origin_chat_id = parse_session_key(msg.chat_id)
             else:
                 origin_channel, origin_chat_id = "cli", msg.chat_id
             session_key = f"{origin_channel}:{origin_chat_id}"
-            logger.info(f"Processing system message from {msg.sender_id}")
+            logger.info("Processing system message from {}", msg.sender_id)
         else:
             origin_channel, origin_chat_id = msg.channel, msg.chat_id
             session_key = msg.session_key
-            preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-            logger.info(f"Processing message from {origin_channel}:{msg.sender_id}: {preview}")
+            logger.info(
+                "Processing message from {}:{}: {}",
+                origin_channel, msg.sender_id, truncate_string(msg.content, 80),
+            )
+
+        # Connect MCP servers lazily on first message
+        await self._connect_mcp()
 
         # Get or create session
         session = self.sessions.get_or_create(session_key)
 
-        # Update tool contexts
+        # Update tool contexts and reset per-turn tracking
         self._update_tool_contexts(origin_channel, origin_chat_id)
+        message_tool = self.tools.get("message")
+        if isinstance(message_tool, MessageTool):
+            message_tool.start_turn()
 
         # Semantic memory recall (if memory system available)
         semantic_memories = None
@@ -236,21 +306,38 @@ class AgentLoop:
             messages,
             window_size=self.memory_window,
             model=self.model,
+            session = session,
         )
 
-        # Agent loop
-        final_content = await self._run_agent_loop(messages)
-
-        if not final_content or not final_content.strip():
-            final_content = (
-                "Background task completed."
-                if is_system
-                else "I've completed processing but have no response to give."
+        # Progress callback: sends intermediate output to the user's channel
+        async def _send_progress(content: str) -> None:
+            await self.bus.publish_outbound(
+                OutboundMessage(
+                    channel=origin_channel,
+                    chat_id=origin_chat_id,
+                    content=content,
+                    metadata=msg.metadata or {},
+                )
             )
 
+        # Agent loop
+        final_content, tools_used = await self._run_agent_loop(
+            messages, on_progress=_send_progress
+        )
+
+        if not final_content or not final_content.strip():
+            if is_system:
+                final_content = "Background task completed."
+            elif final_content is None:
+                final_content = "I've completed processing but have no response to give."
+            else:
+                final_content = "I've completed processing but have no response to give."
+
         # Log response preview
-        preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
-        logger.info(f"Response to {origin_channel}:{msg.sender_id}: {preview}")
+        logger.info(
+            "Response to {}:{}: {}",
+            origin_channel, msg.sender_id, truncate_string(final_content, 120),
+        )
 
         # Save to session
         user_content = f"[System: {msg.sender_id}] {msg.content}" if is_system else msg.content
@@ -258,11 +345,18 @@ class AgentLoop:
         session.add_message("assistant", final_content)
         self.sessions.save(session)
 
+        # If the message tool already sent a reply this turn, don't send a duplicate
+        message_tool = self.tools.get("message")
+        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
+            return None
+
+        metadata = msg.metadata or {}
         return OutboundMessage(
             channel=origin_channel,
             chat_id=origin_chat_id,
             content=final_content,
-            metadata=msg.metadata or {},
+            reply_to=str(metadata["reply_to"]) if metadata.get("reply_to") else None,
+            metadata=metadata,
         )
 
     def _update_tool_contexts(self, channel: str, chat_id: str) -> None:
@@ -279,14 +373,42 @@ class AgentLoop:
         if isinstance(cron_tool, CronTool):
             cron_tool.set_context(channel, chat_id)
 
-    async def _run_agent_loop(self, messages: list[dict]) -> str | None:
+    @staticmethod
+    def _strip_think(text: str | None) -> str | None:
+        """Remove <think>...</think> blocks that some models embed in content."""
+        if not text:
+            return None
+        return re.sub(r"<think>[\s\S]*?</think>", "", text).strip() or None
+
+    @staticmethod
+    def _tool_hint(tool_calls: list) -> str:
+        """Format tool calls as concise hint, e.g. 'web_search("query")'."""
+
+        def _fmt(tc):
+            val = next(iter(tc.arguments.values()), None) if tc.arguments else None
+            if not isinstance(val, str):
+                return tc.name
+            return f'{tc.name}("{val[:40]}...")' if len(val) > 40 else f'{tc.name}("{val}")'
+
+        return ", ".join(_fmt(tc) for tc in tool_calls)
+
+    async def _run_agent_loop(
+        self,
+        messages: list[dict],
+        on_progress: Callable[[str], Awaitable[None]] | None = None,
+    ) -> tuple[str | None, list[str]]:
         """
         Run the agent loop: call LLM, execute tools, repeat until done.
 
+        Args:
+            messages: The conversation messages.
+            on_progress: Optional callback to push intermediate progress to the user.
+
         Returns:
-            The final response content, or None if max iterations reached.
+            Tuple of (final_content, tools_used).
         """
         iteration = 0
+        tools_used: list[str] = []
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -299,35 +421,36 @@ class AgentLoop:
             )
 
             if response.has_tool_calls:
-                # Add assistant message with tool calls
-                tool_call_dicts = [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
-                    }
-                    for tc in response.tool_calls
-                ]
+                # Send progress to user (thinking text or tool hint)
+                if on_progress:
+                    clean = self._strip_think(response.content)
+                    if clean:
+                        await on_progress(clean)
+                    await on_progress(self._tool_hint(response.tool_calls))
+
+                # TODO Add assistant message with tool calls
                 messages = self.context.add_assistant_message(
                     messages,
                     response.content,
-                    tool_call_dicts,
+                    build_tool_call_dicts(response.tool_calls),
                     reasoning_content=response.reasoning_content,
                 )
 
                 # Execute tools
                 for tool_call in response.tool_calls:
-                    args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
-                    logger.info(f"Tool call: {tool_call.name}({args_str[:200]})")
+                    tools_used.append(tool_call.name)
+                    args_str = safe_json_dumps(tool_call.arguments)
+                    logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
             else:
                 # No tool calls, we're done
-                return response.content
+                return self._strip_think(response.content), tools_used
 
-        return None
+        logger.warning("Max iterations reached ({})", self.max_iterations)
+        return None, tools_used
 
     async def process_direct(
         self,

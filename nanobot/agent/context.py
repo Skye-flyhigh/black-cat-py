@@ -7,6 +7,8 @@ import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from nanobot.session.manager import Session, SessionManager
+
 if TYPE_CHECKING:
     from nanobot.agent.memory_manager import Memory
     from nanobot.agent.summarizer import Summarizer
@@ -17,6 +19,7 @@ from loguru import logger
 
 from nanobot.agent.memory import Journal
 from nanobot.agent.skills import SkillsLoader
+from nanobot.utils.helpers import extract_system_message
 
 
 class ContextManager:
@@ -65,12 +68,14 @@ class ContextManager:
         workspace: Path,
         summarizer: "Summarizer | None" = None,
         memory: "Memory | None" = None,
-    ):
+        session_manager: SessionManager | None = None,):
+        
         self.workspace = workspace
         self.journal = Journal(workspace)
         self.skills = SkillsLoader(workspace)
         self.summarizer = summarizer
         self.memory = memory  # Semantic vector memory
+        self.sessions = session_manager or SessionManager(workspace)
 
     def load_toml(self, path: Path) -> dict:
         """Load TOML file and convert to dict."""
@@ -185,7 +190,9 @@ class ContextManager:
         """
         from datetime import datetime
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
+        now_dt = datetime.now().astimezone()
+        tz_name = now_dt.strftime("%Z") or "UTC"
+        now = now_dt.strftime(f"%Y-%m-%d %H:%M (%A) {tz_name}")
         workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
@@ -198,6 +205,7 @@ class ContextManager:
         trust_level = self.get_trust_level(author, identity_data)
         permissions = self.get_allowed_tools(author, identity_data, trust_level)
         trust_instructions = self._get_trust_instructions(trust_level)
+        personality = identity_data.get("personality", {})
 
         # Build prompt parts
         parts = list(identity_strings.values())
@@ -218,6 +226,12 @@ class ContextManager:
 
 ## Trust Protocol for This Session
 {trust_instructions}
+
+## Voice
+{identity_data["voice"]["tone"]}
+
+## Personality traits
+{personality}
 
 IMPORTANT: When responding to direct questions or conversations, reply directly with your text response.
 Only use the 'message' tool when you need to send a message to WhatsApp.
@@ -452,10 +466,12 @@ For normal conversation, just respond with text - do not call the message tool."
             percent_used = (used / max_tokens) * 100
             if percent_used > 95:
                 logger.warning(
-                    f"⚠️ Token budget critical: {used}/{max_tokens} ({percent_used:.1f}% used)"
+                    "Token budget critical: {}/{} ({:.1f}% used)", used, max_tokens, percent_used
                 )
             elif percent_used > 80:
-                logger.info(f"📊 Token budget: {used}/{max_tokens} ({percent_used:.1f}% used)")
+                logger.info(
+                    "Token budget: {}/{} ({:.1f}% used)", used, max_tokens, percent_used
+                )
 
         return messages
 
@@ -498,7 +514,11 @@ For normal conversation, just respond with text - do not call the message tool."
         reasoning_content: str | None = None,
     ) -> list[dict[str, Any]]:
         """Append assistant response to message list (with optional tool_calls and reasoning)."""
-        msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
+        msg: dict[str, Any] = {"role": "assistant"}
+
+        # Always include content — some providers (e.g. StepFun) reject
+        # assistant messages that omit the key entirely.
+        msg["content"] = content
 
         if tool_calls:
             msg["tool_calls"] = tool_calls
@@ -509,55 +529,6 @@ For normal conversation, just respond with text - do not call the message tool."
 
         messages.append(msg)
         return messages
-
-    # -------------------------------------------------------------------------
-    # Context Reduction
-    # -------------------------------------------------------------------------
-
-    def context_pruning(
-        self,
-        messages: list[dict[str, Any]],
-        max_tokens: int,
-        keep_recent: int = 10,
-        model: str = "gpt-4",
-    ) -> list[dict[str, Any]]:
-        """
-        Remove old messages to fit within token budget.
-
-        Keeps: system prompt + last `keep_recent` messages.
-        Use when budget is critical and summarization isn't available.
-        """
-        if not messages:
-            return messages
-
-        # Always keep system prompt (first message)
-        system_msg = messages[0] if messages[0]["role"] == "system" else None
-        conversation = messages[1:] if system_msg else messages
-
-        # Calculate current size
-        current_context = "".join(
-            m.get("content", "") if isinstance(m.get("content"), str) else str(m.get("content", ""))
-            for m in messages
-        )
-
-        remaining_budget = self.token_budget(max_tokens, current_context, model)
-
-        # If within budget, return as-is
-        if remaining_budget > 0:
-            return messages
-
-        # Prune oldest messages, keeping recent ones
-        pruned_conversation = (
-            conversation[-keep_recent:] if len(conversation) > keep_recent else conversation
-        )
-
-        # Rebuild message list
-        result = []
-        if system_msg:
-            result.append(system_msg)
-        result.extend(pruned_conversation)
-
-        return result
 
     # -------------------------------------------------------------------------
     # Sliding Window Compaction
@@ -632,9 +603,7 @@ For normal conversation, just respond with text - do not call the message tool."
         if not messages:
             return [], [], None
 
-        # Extract system prompt
-        system_msg = messages[0] if messages[0].get("role") == "system" else None
-        conversation = messages[1:] if system_msg else messages
+        system_msg, conversation = extract_system_message(messages)
 
         if len(conversation) <= keep_recent:
             return [], conversation, system_msg
@@ -680,6 +649,7 @@ For normal conversation, just respond with text - do not call the message tool."
     async def compact_if_needed(
         self,
         messages: list[dict[str, Any]],
+        session: Session,
         window_size: int = 10,
         max_tokens: int | None = None,
         model: str = "gpt-4",
@@ -715,7 +685,7 @@ For normal conversation, just respond with text - do not call the message tool."
         if not needs_compact:
             return messages, False
 
-        logger.info(f"Context compaction triggered: {reason}")
+        logger.info("Context compaction triggered: {}", reason)
 
         # Need summarizer for compaction
         if not self.summarizer:
@@ -736,9 +706,11 @@ For normal conversation, just respond with text - do not call the message tool."
             logger.info(
                 f"Compacted {len(old_messages)} messages into summary ({len(summary)} chars)"
             )
-            logger.debug(f"Summary content: {summary}")
+            session.add_message("system", summary)
+            logger.log("Summary content: {}", summary)
+
         except Exception as e:
-            logger.error(f"Compaction failed: {e}, keeping original messages")
+            logger.error("Compaction failed: {}, keeping original messages", e)
             return messages, False
 
         # Apply compaction
