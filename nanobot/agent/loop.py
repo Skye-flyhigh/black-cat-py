@@ -68,6 +68,7 @@ class AgentLoop:
         llm_timeout: int | None = 60,
         memory: "Memory | None" = None,
         mcp_servers: dict | None = None,
+        reasoning_effort: str | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig as ExecToolConfigRuntime
 
@@ -82,6 +83,7 @@ class AgentLoop:
         self.restrict_to_workspace = restrict_to_workspace
         self.config = config
         self.llm_timeout = llm_timeout
+        self.reasoning_effort = reasoning_effort
 
         # Summarizer for context compaction (created first, passed to ContextManager)
         summarizer_model = config.agents.defaults.summarizer_model if config else None
@@ -385,7 +387,10 @@ class AgentLoop:
         """Format tool calls as concise hint, e.g. 'web_search("query")'."""
 
         def _fmt(tc):
-            val = next(iter(tc.arguments.values()), None) if tc.arguments else None
+            args = tc.arguments
+            if isinstance(args, list) and args:
+                args = args[0]
+            val = next(iter(args.values()), None) if isinstance(args, dict) and args else None
             if not isinstance(val, str):
                 return tc.name
             return f'{tc.name}("{val[:40]}...")' if len(val) > 40 else f'{tc.name}("{val}")'
@@ -418,6 +423,7 @@ class AgentLoop:
                 tools=self.tools.get_definitions(),
                 model=self.model,
                 timeout=self.llm_timeout,
+                reasoning_effort=self.reasoning_effort,
             )
 
             if response.has_tool_calls:
@@ -434,6 +440,7 @@ class AgentLoop:
                     response.content,
                     build_tool_call_dicts(response.tool_calls),
                     reasoning_content=response.reasoning_content,
+                    thinking_blocks=response.thinking_blocks,
                 )
 
                 # Execute tools
@@ -446,8 +453,13 @@ class AgentLoop:
                         messages, tool_call.id, tool_call.name, result
                     )
             else:
-                # No tool calls, we're done
-                return self._strip_think(response.content), tools_used
+                clean = self._strip_think(response.content)
+                # Don't persist error responses to session history — they can
+                # poison the context and cause permanent 400 loops.
+                if response.finish_reason == "error":
+                    logger.error("LLM returned error: {}", (clean or "")[:200])
+                    return clean or "Sorry, I encountered an error calling the AI model.", tools_used
+                return clean, tools_used
 
         logger.warning("Max iterations reached ({})", self.max_iterations)
         return None, tools_used
