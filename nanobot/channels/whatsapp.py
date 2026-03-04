@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from collections import deque
 from typing import Any
 
 from loguru import logger
@@ -26,12 +27,14 @@ class WhatsAppChannel(BaseChannel):
     """
 
     name = "whatsapp"
+    _MAX_DEDUP_IDS = 2000
 
     def __init__(self, config: WhatsAppConfig, bus: MessageBus):
         super().__init__(config, bus)
         self.config: WhatsAppConfig = config
         self._ws = None
         self._connected = False
+        self._seen_ids: deque[str] = deque(maxlen=self._MAX_DEDUP_IDS)
 
     async def start(self) -> None:
         """Start the WhatsApp channel by connecting to the bridge."""
@@ -123,6 +126,14 @@ class WhatsAppChannel(BaseChannel):
 
     async def _handle_incoming_message(self, data: dict[str, Any]) -> None:
         """Handle an incoming WhatsApp message."""
+        # Dedup by message ID to prevent loops
+        message_id = data.get("id", "")
+        if message_id:
+            if message_id in self._seen_ids:
+                logger.debug("Duplicate message {}, skipping", message_id)
+                return
+            self._seen_ids.append(message_id)
+
         # Phone number (deprecated) or LID (new format)
         pn = data.get("pn", "")
         sender = data.get("sender", "")
@@ -158,7 +169,7 @@ class WhatsAppChannel(BaseChannel):
             chat_id=sender,  # Use full LID for replies
             content=final_content,
             metadata={
-                "message_id": data.get("id"),
+                "message_id": message_id,
                 "timestamp": data.get("timestamp"),
                 "is_group": data.get("isGroup", False),
             },
