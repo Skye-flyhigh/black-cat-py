@@ -107,10 +107,12 @@ class AgentDefaults(BaseModel):
 
     workspace: str = "~/.nanobot/workspace"
     model: str = "anthropic/claude-opus-4-5"
+    provider: str = "auto"  # Provider name (e.g. "anthropic", "openrouter") or "auto" for auto-detection
     summarizer_model: str | None = None  # Model for summarization (defaults to main model)
     embedding_model: str = "ollama/nomic-embed-text"  # Model for vector embeddings
     max_tokens: int = 8192
     temperature: float = 0.7
+    reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
     max_tool_iterations: int = 20
     llm_timeout: int = 60  # Timeout for LLM API calls in seconds
     memory_window: int = 50  # Max messages before triggering summarization
@@ -226,6 +228,12 @@ class Config(BaseSettings):
     def get_provider(self, model: str | None = None) -> ProviderConfig | None:
         """Get matched provider config (api_key, api_base, extra_headers). Falls back to first available."""
         from nanobot.providers.registry import PROVIDERS
+
+        # Explicit provider selection bypasses auto-detection
+        forced = self.agents.defaults.provider
+        if forced != "auto":
+            p = getattr(self.providers, forced, None)
+            return p if p else None
 
         model_lower = (model or self.agents.defaults.model).lower()
 

@@ -206,6 +206,7 @@ class ContextManager:
         permissions = self.get_allowed_tools(author, identity_data, trust_level)
         trust_instructions = self._get_trust_instructions(trust_level)
         personality = identity_data.get("personality", {})
+        voice_tone = identity_data.get("voice", {}).get("tone", "")
 
         # Build prompt parts
         parts = list(identity_strings.values())
@@ -228,7 +229,7 @@ class ContextManager:
 {trust_instructions}
 
 ## Voice
-{identity_data["voice"]["tone"]}
+{voice_tone}
 
 ## Personality traits
 {personality}
@@ -512,6 +513,7 @@ For normal conversation, just respond with text - do not call the message tool."
         content: str | None,
         tool_calls: list[dict[str, Any]] | None = None,
         reasoning_content: str | None = None,
+        thinking_blocks: list[dict] | None = None,
     ) -> list[dict[str, Any]]:
         """Append assistant response to message list (with optional tool_calls and reasoning)."""
         msg: dict[str, Any] = {"role": "assistant"}
@@ -526,9 +528,41 @@ For normal conversation, just respond with text - do not call the message tool."
         # Thinking models (DeepSeek-R1, Kimi, etc.) reject history without this
         if reasoning_content:
             msg["reasoning_content"] = reasoning_content
+        if thinking_blocks:
+            msg["thinking_blocks"] = thinking_blocks
 
         messages.append(msg)
         return messages
+
+    # -------------------------------------------------------------------------
+    # Token-based Context Pruning
+    # -------------------------------------------------------------------------
+
+    def context_pruning(
+        self,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+        keep_recent: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Prune messages to fit within a token budget.
+
+        Keeps the system message (if any) and the most recent *keep_recent*
+        non-system messages, dropping older ones until the total fits.
+        """
+        if not messages:
+            return messages
+
+        total = sum(self.count_tokens(m.get("content", "") or "") for m in messages)
+        if total <= max_tokens:
+            return messages
+
+        # Separate system message from the rest
+        sys_msg = messages[0] if messages and messages[0]["role"] == "system" else None
+        rest = messages[1:] if sys_msg else messages
+
+        # Keep only the most recent messages
+        kept = rest[-keep_recent:] if len(rest) > keep_recent else rest
+        return ([sys_msg] + kept) if sys_msg else kept
 
     # -------------------------------------------------------------------------
     # Sliding Window Compaction

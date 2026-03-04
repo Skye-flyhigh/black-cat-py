@@ -139,6 +139,24 @@ class LiteLLMProvider(LLMProvider):
             if "function" in last_tool:
                 last_tool["function"]["cache_control"] = cache_ctrl
 
+    @staticmethod
+    def _sanitize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Fix null/empty content that would crash providers."""
+        result: list[dict[str, Any]] = []
+        for msg in messages:
+            content = msg.get("content")
+            # None content on a plain assistant message (no tool_calls) causes
+            # "invalid message content type: <nil>" errors.
+            if content is None and msg.get("role") == "assistant" and not msg.get("tool_calls"):
+                msg = {**msg, "content": "(empty)"}
+            elif isinstance(content, str) and not content:
+                if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                    msg = {**msg, "content": None}
+                else:
+                    msg = {**msg, "content": "(empty)"}
+            result.append(msg)
+        return result
+
     async def chat(
         self,
         messages: list[dict[str, Any]],
@@ -147,6 +165,7 @@ class LiteLLMProvider(LLMProvider):
         max_tokens: int = 4096,
         temperature: float = 0.7,
         timeout: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> LLMResponse:
         """
         Send a chat completion request via LiteLLM.
@@ -166,6 +185,8 @@ class LiteLLMProvider(LLMProvider):
 
         # Clamp max_tokens to at least 1
         max_tokens = max(1, max_tokens)
+
+        messages = self._sanitize_messages(messages)
 
         kwargs: dict[str, Any] = {
             "model": model,
@@ -191,6 +212,10 @@ class LiteLLMProvider(LLMProvider):
         # Pass extra headers (e.g. APP-Code for AiHubMix)
         if self.extra_headers:
             kwargs["extra_headers"] = self.extra_headers
+
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
+            kwargs["drop_params"] = True  # let LiteLLM drop if provider doesn't support
 
         if tools:
             kwargs["tools"] = tools
@@ -243,7 +268,8 @@ class LiteLLMProvider(LLMProvider):
             }
 
         # Extract reasoning_content for thinking models (DeepSeek-R1, Kimi, etc.)
-        reasoning_content = getattr(message, "reasoning_content", None)
+        reasoning_content = getattr(message, "reasoning_content", None) or None
+        thinking_blocks = getattr(message, "thinking_blocks", None) or None
 
         return LLMResponse(
             content=message.content,
@@ -251,6 +277,7 @@ class LiteLLMProvider(LLMProvider):
             finish_reason=choice.finish_reason or "stop",
             usage=usage,
             reasoning_content=reasoning_content,
+            thinking_blocks=thinking_blocks,
         )
 
     def get_default_model(self) -> str:
