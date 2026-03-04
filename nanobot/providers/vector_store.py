@@ -181,10 +181,10 @@ class VectorStore:
             ),
         )
 
-        # Insert or replace vector
+        # Insert or replace vector (serialize list to bytes for sqlite-vec)
         self._conn.execute(
             "INSERT OR REPLACE INTO memory_vectors (id, embedding) VALUES (?, ?)",
-            (memory.id, embedding),
+            (memory.id, sqlite_vec.serialize_float32(embedding)),
         )
 
         self._conn.commit()
@@ -222,7 +222,7 @@ class VectorStore:
             WHERE v.embedding MATCH ?
               AND k = ?
         """
-        params: list[Any] = [query_embedding, limit * 2]  # Fetch extra for filtering
+        params: list[Any] = [sqlite_vec.serialize_float32(query_embedding), limit * 2]
 
         if project:
             query += " AND m.project = ?"

@@ -149,6 +149,16 @@ class DailySummaryService:
         if all_facts:
             await self._update_long_term_memory(all_facts)
 
+        # Run memory decay once per day
+        if self.memory:
+            try:
+                decay_results = self.memory.decay_all()
+                total_decayed = sum(decay_results.values())
+                if total_decayed > 0:
+                    logger.info(f"Daily memory decay: {decay_results}")
+            except Exception as e:
+                logger.error(f"Memory decay failed: {e}")
+
         logger.info(
             f"Daily summary complete: {len(all_summaries)} sessions, {len(all_facts)} fact extractions"
         )
