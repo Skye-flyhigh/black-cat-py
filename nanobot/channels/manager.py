@@ -62,6 +62,17 @@ class ChannelManager:
             except ImportError as e:
                 logger.warning("{} channel not available: {}", name.title(), e)
 
+        self._validate_allow_from()
+
+    def _validate_allow_from(self) -> None:
+        """Fail fast if any enabled channel has an empty allow_from (denies all)."""
+        for name, ch in self.channels.items():
+            if getattr(ch.config, "allow_from", None) == []:
+                raise SystemExit(
+                    f'Error: "{name}" has empty allowFrom (denies all). '
+                    f'Set ["*"] to allow everyone, or add specific user IDs.'
+                )
+
     def _extra_kwargs(self, name: str) -> dict[str, Any]:
         """Return extra constructor kwargs for channels that need them."""
         if name == "telegram":
