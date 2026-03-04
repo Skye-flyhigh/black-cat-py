@@ -148,8 +148,8 @@ def test_build_core_prompt(ctx):
     assert "Environment" in prompt
 
 
-def test_build_core_prompt_includes_memory(ctx):
-    ctx.memory.write_long_term("User likes coffee")
+def test_build_core_prompt_includes_journal(ctx):
+    ctx.journal.write_long_term("User likes coffee")
     prompt = ctx.build_core_prompt(author="skye")
     assert "coffee" in prompt
 
