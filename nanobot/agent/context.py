@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 from nanobot.session.manager import Session, SessionManager
 
 if TYPE_CHECKING:
-    from nanobot.agent.memory_manager import Memory
     from nanobot.agent.summarizer import Summarizer
 
 import tiktoken
@@ -34,7 +33,7 @@ class ContextManager:
         - Environment: time, runtime, workspace path
         - Session: channel, author, trust level, tool permissions
         - Skills: loaded on request
-        - Memory: from Journal (daily notes) + semantic Memory (vectors)
+        - Memory: from Journal (daily notes), semantic via MCP (mnemo)
 
     Trust system (get_trust_level, get_allowed_tools):
         - Evaluates author against IDENTITY.toml boundaries
@@ -67,14 +66,12 @@ class ContextManager:
         self,
         workspace: Path,
         summarizer: "Summarizer | None" = None,
-        memory: "Memory | None" = None,
-        session_manager: SessionManager | None = None,):
-        
+        session_manager: SessionManager | None = None,
+    ):
         self.workspace = workspace
         self.journal = Journal(workspace)
         self.skills = SkillsLoader(workspace)
         self.summarizer = summarizer
-        self.memory = memory  # Semantic vector memory
         self.sessions = session_manager or SessionManager(workspace)
 
     def load_toml(self, path: Path) -> dict:
@@ -145,27 +142,12 @@ class ContextManager:
 
         return identity
 
-    def _format_semantic_memories(self, memories: list) -> str:
-        """Format semantic memory search results for the prompt."""
-        if not memories:
-            return ""
-
-        lines = ["## Recalled Memories (semantic search)"]
-        for mem in memories:
-            # Format: content with metadata hint
-            tag = mem.metadata.tag
-            weight = f"{mem.metadata.weight:.1f}"
-            lines.append(f"- [{tag}, w={weight}] {mem.content}")
-
-        return "\n".join(lines)
-
     def build_core_prompt(
         self,
         author: str = "unknown",
         channel: str | None = None,
         chat_id: str | None = None,
         skill_names: list[str] | None = None,
-        semantic_memories: list | None = None,
     ) -> str:
         """
         Build the complete system prompt for an LLM call.
@@ -176,14 +158,12 @@ class ContextManager:
             3. Current Session (channel, author, trust, tool permissions)
             4. Active Skills (if skill_names provided)
             5. Journal context (daily notes + long-term facts)
-            6. Semantic memories (if provided via pre-search)
 
         Args:
             author: Message author for trust evaluation.
             channel: Source channel.
             chat_id: Chat identifier.
             skill_names: Skills to load into context.
-            semantic_memories: Pre-fetched semantic memory results (from Memory.search).
 
         Returns:
             Complete system prompt string, sections joined by "---".
@@ -248,12 +228,6 @@ For normal conversation, just respond with text - do not call the message tool."
         journal_context = self.journal.get_memory_context()
         if journal_context:
             parts.append(f"# Journal\n\n{journal_context}")
-
-        # Add semantic memories (if provided)
-        if semantic_memories:
-            memory_context = self._format_semantic_memories(semantic_memories)
-            if memory_context:
-                parts.append(f"# Memory\n\n{memory_context}")
 
         return "\n\n---\n\n".join(parts)
 
@@ -421,7 +395,6 @@ For normal conversation, just respond with text - do not call the message tool."
         skill_names: list[str] | None = None,
         max_tokens: int | None = None,
         model: str = "gpt-4",
-        semantic_memories: list | None = None,
     ) -> list[dict[str, Any]]:
         """
         Main entry point: build complete message list for LLM call.
@@ -438,14 +411,13 @@ For normal conversation, just respond with text - do not call the message tool."
             skill_names: Skills to load into context.
             max_tokens: Max context tokens (for budget warnings).
             model: Model name for tokenizer.
-            semantic_memories: Pre-fetched semantic memory search results.
 
         If max_tokens provided, logs warning when budget >80% or >95% used.
         Call context_pruning() or compact_history() after if budget critical.
         """
-        # System prompt (identity, session, skills, journal, semantic memories)
+        # System prompt (identity, session, skills, journal)
         system_prompt = self.build_core_prompt(
-            author, channel, chat_id, skill_names, semantic_memories
+            author, channel, chat_id, skill_names
         )
 
         # Assemble messages

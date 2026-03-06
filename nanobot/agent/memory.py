@@ -13,7 +13,7 @@ class Journal:
     Stores daily notes (memory/YYYY-MM-DD.md) and long-term facts (MEMORY.md).
     Human-readable markdown format for review and reflection.
 
-    For semantic memory with vector search, see Memory in memory_manager.py.
+    For semantic memory with vector search, see mnemo MCP server.
     """
 
     def __init__(self, workspace: Path):

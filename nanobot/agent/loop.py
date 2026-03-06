@@ -19,7 +19,6 @@ from nanobot.utils.helpers import (
 )
 
 if TYPE_CHECKING:
-    from nanobot.agent.memory_manager import Memory
     from nanobot.config.schema import Config, ExecToolConfig
     from nanobot.cron.service import CronService
 
@@ -28,7 +27,6 @@ from nanobot.agent.subagent import SubagentManager
 from nanobot.agent.summarizer import Summarizer
 from nanobot.agent.tools.cron import CronTool
 from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
-from nanobot.agent.tools.memory import MemoryTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.shell import ExecTool
@@ -66,7 +64,6 @@ class AgentLoop:
         session_manager: SessionManager | None = None,
         config: Config | None = None,
         llm_timeout: int | None = 60,
-        memory: "Memory | None" = None,
         mcp_servers: dict | None = None,
         reasoning_effort: str | None = None,
     ):
@@ -93,10 +90,7 @@ class AgentLoop:
             timeout=llm_timeout,
         )
 
-        # Semantic memory (optional, passed in or created externally)
-        self.memory = memory
-
-        self.context = ContextManager(workspace, summarizer=self.summarizer, memory=memory)
+        self.context = ContextManager(workspace, summarizer=self.summarizer)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -152,10 +146,6 @@ class AgentLoop:
         # Cron tool (for scheduling)
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
-
-        # Memory tool (for explicit memory operations)
-        if self.memory:
-            self.tools.register(MemoryTool(self.memory))
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (lazy, one-time).
@@ -283,14 +273,6 @@ class AgentLoop:
         if isinstance(message_tool, MessageTool):
             message_tool.start_turn()
 
-        # Semantic memory recall (if memory system available)
-        semantic_memories = None
-        if self.memory and msg.content:
-            try:
-                semantic_memories = await self.memory.search(msg.content, limit=3)
-            except Exception as e:
-                logger.warning(f"Semantic memory search failed: {e}")
-
         # Build initial messages
         author = self._resolve_author(msg.sender_id, msg.channel)
         messages = self.context.build_messages(
@@ -300,7 +282,6 @@ class AgentLoop:
             channel=origin_channel,
             chat_id=origin_chat_id,
             media=msg.media if msg.media and not is_system else None,
-            semantic_memories=semantic_memories,
         )
 
         # Compact context if needed
