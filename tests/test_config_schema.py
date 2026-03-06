@@ -6,7 +6,6 @@ from nanobot.config.schema import (
     ChannelsConfig,
     Config,
     DiscordConfig,
-    FeishuConfig,
     GatewayConfig,
     ProviderConfig,
     ProvidersConfig,
@@ -38,12 +37,6 @@ def test_discord_defaults():
     cfg = DiscordConfig()
     assert cfg.enabled is False
     assert cfg.intents == 37377
-
-
-def test_feishu_defaults():
-    cfg = FeishuConfig()
-    assert cfg.enabled is False
-    assert cfg.app_id == ""
 
 
 # ── Agent defaults ─────────────────────────────────────────────────
@@ -155,4 +148,3 @@ def test_channels_config():
     assert isinstance(ch.whatsapp, WhatsAppConfig)
     assert isinstance(ch.telegram, TelegramConfig)
     assert isinstance(ch.discord, DiscordConfig)
-    assert isinstance(ch.feishu, FeishuConfig)

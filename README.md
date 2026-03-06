@@ -43,7 +43,7 @@ Built on [nanobot](https://github.com/HKUDS/nanobot) (~4,000 lines), extended wi
 ├─────────────────────────────────────────────────────────────────┤
 │                       Message Bus                               │
 ├──────────┬──────────┬──────────┬──────────┬──────────┬─────────┤
-│ Telegram │ Discord  │ WhatsApp │  Feishu  │  Email   │   CLI   │
+│ Telegram │ Discord  │ WhatsApp │  Email   │   CLI   │         │
 └──────────┴──────────┴──────────┴──────────┴──────────┴─────────┘
 ```
 
@@ -220,7 +220,6 @@ modify_soul = true
 | **Telegram** | Token from @BotFather | `channels.telegram` |
 | **Discord** | Bot token + intents | `channels.discord` |
 | **WhatsApp** | QR scan via bridge | `channels.whatsapp` |
-| **Feishu** | App credentials (WebSocket) | `channels.feishu` |
 | **Slack** | App + Bot tokens (Socket Mode) | `channels.slack` |
 | **Email** | IMAP/SMTP credentials | `channels.email` |
 
@@ -329,7 +328,7 @@ nanobot/
 | System | Status | Notes |
 |--------|--------|-------|
 | Agent loop | ✅ Working | LLM ↔ tool execution cycle |
-| Multi-channel | ✅ Working | Telegram, Discord, WhatsApp, Feishu, Slack, Email |
+| Multi-channel | ✅ Working | Telegram, Discord, WhatsApp, Slack, Email |
 | Multi-provider | ✅ Working | LiteLLM (cloud) + Ollama (local) |
 | Trust system | ✅ Working | Author resolution, trust levels, behavioral enforcement |
 | Context manager | 🔶 Basic | Identity assembly, token management, trust instructions, compaction |

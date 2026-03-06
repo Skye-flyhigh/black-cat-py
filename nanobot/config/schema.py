@@ -27,17 +27,6 @@ class TelegramConfig(BaseModel):
     reply_to_message: bool = False  # If true, bot replies are threaded to the user's message
 
 
-class FeishuConfig(BaseModel):
-    """Feishu/Lark channel configuration using WebSocket long connection."""
-
-    enabled: bool = False
-    app_id: str = ""  # App ID from Feishu Open Platform
-    app_secret: str = ""  # App Secret from Feishu Open Platform
-    encrypt_key: str = ""  # Encrypt Key for event subscription (optional)
-    verification_token: str = ""  # Verification Token for event subscription (optional)
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user open_ids
-
-
 class DiscordConfig(BaseModel):
     """Discord channel configuration."""
 
@@ -98,7 +87,6 @@ class ChannelsConfig(BaseModel):
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     slack: SlackConfig = Field(default_factory=SlackConfig)
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
-    feishu: FeishuConfig = Field(default_factory=FeishuConfig)
     email: EmailConfig = Field(default_factory=EmailConfig)
 
 
@@ -204,7 +192,6 @@ class AuthorIdentity(BaseModel):
     whatsapp: str | None = None
     telegram: str | None = None
     discord: str | None = None
-    feishu: str | None = None
     cli: str | None = None
 
 
@@ -280,7 +267,7 @@ class Config(BaseSettings):
 
         Args:
             sender_id: The platform-specific sender identifier.
-            channel: The channel name (telegram, whatsapp, discord, feishu, cli).
+            channel: The channel name (telegram, whatsapp, discord, cli).
 
         Returns:
             Author name if found in config, otherwise "unknown".

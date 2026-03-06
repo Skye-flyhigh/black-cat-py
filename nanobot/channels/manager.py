@@ -41,7 +41,6 @@ class ChannelManager:
         ("telegram", "nanobot.channels.telegram", "TelegramChannel"),
         ("whatsapp", "nanobot.channels.whatsapp", "WhatsAppChannel"),
         ("discord", "nanobot.channels.discord", "DiscordChannel"),
-        ("feishu", "nanobot.channels.feishu", "FeishuChannel"),
         ("email", "nanobot.channels.email", "EmailChannel"),
     ]
 

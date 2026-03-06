@@ -1,0 +1,12 @@
+{
+  "include": ["nanobot"],
+  "exclude": ["**/__pycache__", "**/.pytest_cache", "tests"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingModuleSource": true,
+  "reportOptionalMemberAccess": true,
+  "reportAttributeAccessIssue": true
+}

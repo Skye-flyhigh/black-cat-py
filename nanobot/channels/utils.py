@@ -107,69 +107,6 @@ def markdown_to_telegram_html(text: str) -> str:
     return text
 
 
-# Regex to match markdown tables (header + separator + data rows)
-_TABLE_RE = re.compile(
-    r"((?:^[ \t]*\|.+\|[ \t]*\n)(?:^[ \t]*\|[-:\s|]+\|[ \t]*\n)(?:^[ \t]*\|.+\|[ \t]*\n?)+)",
-    re.MULTILINE,
-)
-
-
-def parse_markdown_table(table_text: str) -> dict | None:
-    """Parse a markdown table into a structured dict (for Feishu cards)."""
-    lines = [line.strip() for line in table_text.strip().split("\n") if line.strip()]
-    if len(lines) < 3:
-        return None
-
-    def split_row(line: str) -> list[str]:
-        return [cell.strip() for cell in line.strip("|").split("|")]
-
-    headers = split_row(lines[0])
-    rows = [split_row(line) for line in lines[2:]]
-
-    columns = [
-        {"tag": "column", "name": f"c{i}", "display_name": h, "width": "auto"}
-        for i, h in enumerate(headers)
-    ]
-
-    return {
-        "tag": "table",
-        "page_size": len(rows) + 1,
-        "columns": columns,
-        "rows": [
-            {f"c{i}": row[i] if i < len(row) else "" for i in range(len(headers))} for row in rows
-        ],
-    }
-
-
-def extract_markdown_tables(content: str) -> list[dict]:
-    """
-    Split content into markdown + table elements.
-
-    Returns a list of elements suitable for Feishu cards.
-    """
-    elements: list[dict] = []
-    last_end = 0
-
-    for m in _TABLE_RE.finditer(content):
-        before = content[last_end : m.start()].strip()
-        if before:
-            elements.append({"tag": "markdown", "content": before})
-
-        table = parse_markdown_table(m.group(1))
-        if table:
-            elements.append(table)
-        else:
-            elements.append({"tag": "markdown", "content": m.group(1)})
-
-        last_end = m.end()
-
-    remaining = content[last_end:].strip()
-    if remaining:
-        elements.append({"tag": "markdown", "content": remaining})
-
-    return elements or [{"tag": "markdown", "content": content}]
-
-
 # ============================================================================
 # File Extension Mapping
 # ============================================================================
