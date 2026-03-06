@@ -1,6 +1,5 @@
 """Tests for the ContextManager (prompt assembly, trust, token management)."""
 
-from pathlib import Path
 
 import pytest
 

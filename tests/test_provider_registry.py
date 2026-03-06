@@ -8,7 +8,6 @@ from nanobot.providers.registry import (
     find_gateway,
 )
 
-
 # ── find_by_model ──────────────────────────────────────────────────
 
 

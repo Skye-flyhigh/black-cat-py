@@ -15,7 +15,6 @@ from nanobot.config.schema import (
     WhatsAppConfig,
 )
 
-
 # ── Channel configs ────────────────────────────────────────────────
 
 

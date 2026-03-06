@@ -5,7 +5,6 @@ from typing import Any
 
 from nanobot.agent.loop import AgentLoop
 
-
 # ── _strip_think ──────────────────────────────────────────────────
 
 

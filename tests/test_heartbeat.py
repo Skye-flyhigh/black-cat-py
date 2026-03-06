@@ -1,6 +1,5 @@
 """Tests for the heartbeat service."""
 
-import asyncio
 
 import pytest
 
@@ -10,7 +9,6 @@ from nanobot.heartbeat.service import (
     HeartbeatService,
     _is_heartbeat_empty,
 )
-
 
 # ── _is_heartbeat_empty ───────────────────────────────────────────
 

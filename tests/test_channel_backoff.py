@@ -5,7 +5,6 @@ from nanobot.channels.utils import (
     RECONNECT_DELAY_MAX,
 )
 
-
 # ── Backoff constants ─────────────────────────────────────────────
 
 
@@ -52,6 +51,7 @@ def test_backoff_reaches_cap_in_reasonable_steps():
 def test_whatsapp_dedup_init():
     """WhatsApp channel should initialize with a dedup deque."""
     from unittest.mock import MagicMock
+
     from nanobot.channels.whatsapp import WhatsAppChannel
 
     config = MagicMock()
@@ -72,6 +72,7 @@ def test_whatsapp_dedup_init():
 def test_manager_validates_empty_allow_from():
     """ChannelManager should fail fast on empty allow_from."""
     from unittest.mock import MagicMock
+
     from nanobot.channels.manager import ChannelManager
 
     mgr = ChannelManager.__new__(ChannelManager)
@@ -90,6 +91,7 @@ def test_manager_validates_empty_allow_from():
 def test_manager_allows_populated_allow_from():
     """Non-empty allow_from should pass validation."""
     from unittest.mock import MagicMock
+
     from nanobot.channels.manager import ChannelManager
 
     mgr = ChannelManager.__new__(ChannelManager)

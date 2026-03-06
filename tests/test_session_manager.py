@@ -6,7 +6,6 @@ import pytest
 
 from nanobot.session.manager import Session, SessionManager
 
-
 # ── Session dataclass ──────────────────────────────────────────────
 
 

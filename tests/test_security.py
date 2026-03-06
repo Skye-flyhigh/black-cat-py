@@ -1,12 +1,10 @@
 """Tests for security fixes: deny-by-default, path traversal, message sanitization."""
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from nanobot.utils.helpers import resolve_path
-
 
 # ── Deny-by-default is_allowed ────────────────────────────────────
 

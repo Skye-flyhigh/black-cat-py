@@ -8,7 +8,7 @@ import pytest
 
 from nanobot.agent.tools.cron import CronTool
 from nanobot.cron.service import CronService, _compute_next_run
-from nanobot.cron.types import CronJob, CronSchedule, CronStore
+from nanobot.cron.types import CronSchedule
 from nanobot.utils.helpers import now_ms
 
 # ── Schedule computation ──────────────────────────────────────────

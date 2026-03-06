@@ -11,9 +11,6 @@ from loguru import logger
 # The telegram library logs full tracebacks for transient network errors
 # (DNS failures, timeouts, etc.) but retries automatically. Suppress the
 # noise — we log a clean one-liner via our own error handler instead.
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
-logging.getLogger("telegram.ext._utils.networkloop").setLevel(logging.CRITICAL)
 from telegram import BotCommand, Message, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -29,6 +26,11 @@ from nanobot.channels.utils import (
     split_message,
 )
 from nanobot.config.schema import TelegramConfig
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext._utils.networkloop").setLevel(logging.CRITICAL)
+
 
 if TYPE_CHECKING:
     from nanobot.session.manager import SessionManager

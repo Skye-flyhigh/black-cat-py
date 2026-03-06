@@ -12,7 +12,6 @@ from nanobot.agent.tools.filesystem import (
     _resolve_path,
 )
 
-
 # ── _resolve_path ──────────────────────────────────────────────────
 
 
