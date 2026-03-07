@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from collections import deque
 from typing import Any
 
 from loguru import logger
@@ -9,7 +10,11 @@ from loguru import logger
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
-from nanobot.channels.utils import RECONNECT_DELAY_SECONDS, format_reply_context
+from nanobot.channels.utils import (
+    RECONNECT_DELAY_INITIAL,
+    RECONNECT_DELAY_MAX,
+    format_reply_context,
+)
 from nanobot.config.schema import WhatsAppConfig
 
 
@@ -22,12 +27,14 @@ class WhatsAppChannel(BaseChannel):
     """
 
     name = "whatsapp"
+    _MAX_DEDUP_IDS = 2000
 
     def __init__(self, config: WhatsAppConfig, bus: MessageBus):
         super().__init__(config, bus)
         self.config: WhatsAppConfig = config
         self._ws = None
         self._connected = False
+        self._seen_ids: deque[str] = deque(maxlen=self._MAX_DEDUP_IDS)
 
     async def start(self) -> None:
         """Start the WhatsApp channel by connecting to the bridge."""
@@ -38,6 +45,7 @@ class WhatsAppChannel(BaseChannel):
         logger.info("Connecting to WhatsApp bridge at {}...", bridge_url)
 
         self._running = True
+        delay = RECONNECT_DELAY_INITIAL
 
         while self._running:
             try:
@@ -48,11 +56,13 @@ class WhatsAppChannel(BaseChannel):
                 async with websockets.connect(bridge_url, additional_headers=extra_headers) as ws:
                     self._ws = ws
                     self._connected = True
+                    delay = RECONNECT_DELAY_INITIAL  # reset on successful connection
                     logger.info("Connected to WhatsApp bridge")
 
                     async for message in ws:
                         try:
-                            await self._handle_bridge_message(message)
+                            raw = message if isinstance(message, str) else message.decode("utf-8")
+                            await self._handle_bridge_message(raw)
                         except Exception as e:
                             logger.error("Error handling bridge message: {}", e)
 
@@ -61,11 +71,12 @@ class WhatsAppChannel(BaseChannel):
             except Exception as e:
                 self._connected = False
                 self._ws = None
-                logger.warning("WhatsApp bridge connection error: {}", e)
-
-                if self._running:
-                    logger.info("Reconnecting in {} seconds...", RECONNECT_DELAY_SECONDS)
-                    await asyncio.sleep(RECONNECT_DELAY_SECONDS)
+                if not self._running:
+                    break
+                logger.warning("WhatsApp bridge connection lost: {}", e)
+                logger.info("Retrying in {}s...", delay)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, RECONNECT_DELAY_MAX)
 
     async def stop(self) -> None:
         """Stop the WhatsApp channel."""
@@ -115,6 +126,14 @@ class WhatsAppChannel(BaseChannel):
 
     async def _handle_incoming_message(self, data: dict[str, Any]) -> None:
         """Handle an incoming WhatsApp message."""
+        # Dedup by message ID to prevent loops
+        message_id = data.get("id", "")
+        if message_id:
+            if message_id in self._seen_ids:
+                logger.debug("Duplicate message {}, skipping", message_id)
+                return
+            self._seen_ids.append(message_id)
+
         # Phone number (deprecated) or LID (new format)
         pn = data.get("pn", "")
         sender = data.get("sender", "")
@@ -150,7 +169,7 @@ class WhatsAppChannel(BaseChannel):
             chat_id=sender,  # Use full LID for replies
             content=final_content,
             metadata={
-                "message_id": data.get("id"),
+                "message_id": message_id,
                 "timestamp": data.get("timestamp"),
                 "is_group": data.get("isGroup", False),
             },

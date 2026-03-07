@@ -4,10 +4,8 @@ from nanobot.channels.utils import (
     format_reply_context,
     get_file_extension,
     markdown_to_telegram_html,
-    parse_markdown_table,
     split_message,
 )
-
 
 # ── split_message ──────────────────────────────────────────────────
 
@@ -127,30 +125,6 @@ def test_markdown_to_html_code_preserves_special_chars():
     result = markdown_to_telegram_html("```\n<div>**bold**</div>\n```")
     assert "<b>" not in result  # Bold should NOT be applied inside code
     assert "&lt;div&gt;" in result
-
-
-# ── parse_markdown_table ───────────────────────────────────────────
-
-
-def test_parse_markdown_table_basic():
-    table = "| Name | Age |\n|------|-----|\n| Alice | 30 |\n| Bob | 25 |"
-    result = parse_markdown_table(table)
-    assert result is not None
-    assert result["tag"] == "table"
-    assert len(result["columns"]) == 2
-    assert len(result["rows"]) == 2
-    assert result["rows"][0]["c0"] == "Alice"
-
-
-def test_parse_markdown_table_too_short():
-    assert parse_markdown_table("| Header |") is None
-
-
-def test_parse_markdown_table_single_column():
-    table = "| Status |\n|--------|\n| OK |"
-    result = parse_markdown_table(table)
-    assert result is not None
-    assert len(result["columns"]) == 1
 
 
 # ── get_file_extension ─────────────────────────────────────────────

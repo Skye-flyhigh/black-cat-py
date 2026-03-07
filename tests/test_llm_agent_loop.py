@@ -60,6 +60,7 @@ async def test_run_agent_loop_simple_response(provider):
     agent.max_iterations = 3
     agent.tools = tools
     agent.llm_timeout = 60
+    agent.reasoning_effort = None
 
     # Bypass the full context manager — just raw messages
     from nanobot.agent.context import ContextManager
@@ -94,6 +95,7 @@ async def test_run_agent_loop_with_read_file(provider, tmp_path):
     agent.max_iterations = 5
     agent.tools = tools
     agent.llm_timeout = 60
+    agent.reasoning_effort = None
 
     from nanobot.agent.context import ContextManager
 
@@ -128,6 +130,7 @@ async def test_run_agent_loop_with_write_file(provider, tmp_path):
     agent.max_iterations = 5
     agent.tools = tools
     agent.llm_timeout = 60
+    agent.reasoning_effort = None
 
     from nanobot.agent.context import ContextManager
 

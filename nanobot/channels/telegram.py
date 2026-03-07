@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from loguru import logger
+
+# The telegram library logs full tracebacks for transient network errors
+# (DNS failures, timeouts, etc.) but retries automatically. Suppress the
+# noise — we log a clean one-liner via our own error handler instead.
 from telegram import BotCommand, Message, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -21,6 +26,11 @@ from nanobot.channels.utils import (
     split_message,
 )
 from nanobot.config.schema import TelegramConfig
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext._utils.networkloop").setLevel(logging.CRITICAL)
+
 
 if TYPE_CHECKING:
     from nanobot.session.manager import SessionManager
@@ -89,6 +99,9 @@ class TelegramChannel(BaseChannel):
                 self._on_message,
             )
         )
+
+        # Log network errors cleanly instead of dumping tracebacks
+        self._app.add_error_handler(self._on_error)
 
         logger.info("Starting Telegram bot (polling mode)...")
 
@@ -172,6 +185,25 @@ class TelegramChannel(BaseChannel):
         """Send typing indicator to Telegram."""
         if self._app:
             await self._app.bot.send_chat_action(chat_id=int(chat_id), action="typing")
+
+    # ========================================================================
+    # Error Handling
+    # ========================================================================
+
+    async def _on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle errors from the telegram library with clean logging."""
+        error = context.error
+        if error is None:
+            return
+
+        # Network errors: one-liner, the library retries automatically
+        error_name = type(error).__name__
+        from telegram.error import NetworkError, TimedOut
+
+        if isinstance(error, (NetworkError, TimedOut, OSError)):
+            logger.warning("Telegram connection lost: {}", error_name)
+        else:
+            logger.error("Telegram error: {} — {}", error_name, error)
 
     # ========================================================================
     # Command Handlers
@@ -264,8 +296,6 @@ class TelegramChannel(BaseChannel):
         await self._process_media(message, content_parts, media_paths)
 
         content = "\n".join(content_parts) if content_parts else "[empty message]"
-
-        logger.debug("Telegram message from {}: {}...", sender_id, content[:50])
 
         # Start typing indicator
         await self._start_typing(chat_id)

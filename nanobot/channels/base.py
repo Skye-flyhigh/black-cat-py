@@ -205,32 +205,17 @@ class BaseChannel(ABC):
     # ========================================================================
 
     def is_allowed(self, sender_id: str) -> bool:
-        """
-        Check if a sender is allowed to use this bot.
-
-        Args:
-            sender_id: The sender's identifier.
-
-        Returns:
-            True if allowed, False otherwise.
-        """
+        """Check if *sender_id* is permitted.  Empty list -> deny all; ``"*"`` -> allow all."""
         allow_list = getattr(self.config, "allow_from", [])
-
-        # If no allow list, allow everyone
         if not allow_list:
+            logger.warning("{}: allow_from is empty — all access denied", self.name)
+            return False
+        if "*" in allow_list:
             return True
-
         sender_str = str(sender_id)
-        if sender_str in allow_list:
-            return True
-
-        # Support compound IDs like "12345|username"
-        if "|" in sender_str:
-            for part in sender_str.split("|"):
-                if part and part in allow_list:
-                    return True
-
-        return False
+        return sender_str in allow_list or any(
+            p in allow_list for p in sender_str.split("|") if p
+        )
 
     # ========================================================================
     # Message Handling

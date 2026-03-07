@@ -45,8 +45,6 @@ class SlackChannel(BaseChannel):
             web_client=self._web_client,
         )
 
-        self._socket_client.socket_mode_request_listeners.append(self._on_socket_request)
-
         # Resolve bot user ID for mention handling
         try:
             auth = await self._web_client.auth_test()
@@ -108,9 +106,7 @@ class SlackChannel(BaseChannel):
             return
 
         # Acknowledge immediately
-        await client.send_socket_mode_response(
-            SocketModeResponse(envelope_id=req.envelope_id)
-        )
+        await client.send_socket_mode_response(SocketModeResponse(envelope_id=req.envelope_id))
 
         payload = req.payload or {}
         event = payload.get("event") or {}

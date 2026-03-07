@@ -1,5 +1,7 @@
 """Daily summary service - consolidates the day's conversations into memory."""
 
+from __future__ import annotations
+
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -7,7 +9,7 @@ from typing import Any
 
 from loguru import logger
 
-from nanobot.agent.memory import MemoryStore
+from nanobot.agent.memory import Journal
 from nanobot.agent.summarizer import Summarizer
 from nanobot.session.manager import SessionManager
 from nanobot.utils.helpers import today_date
@@ -41,7 +43,7 @@ class DailySummaryService:
         self.session_manager = session_manager
         self.summary_hour = summary_hour
         self.enabled = enabled
-        self.memory = MemoryStore(workspace)
+        self.journal = Journal(workspace)
         self._running = False
         self._task: asyncio.Task | None = None
         self._last_run_date: str | None = None
@@ -135,8 +137,8 @@ class DailySummaryService:
         # Write daily summary to memory notes
         if all_summaries:
             summary_content = "## Conversation Summaries\n\n" + "\n\n".join(all_summaries)
-            self.memory.append_today(summary_content)
-            logger.info("Appended {} session summaries to daily notes", len(all_summaries))
+            self.journal.append_today(summary_content)
+            logger.info(f"Appended {len(all_summaries)} session summaries to daily notes")
 
         # Update long-term memory with facts
         if all_facts:
@@ -147,8 +149,8 @@ class DailySummaryService:
         )
 
     async def _update_long_term_memory(self, facts_list: list[str]) -> None:
-        """Append extracted facts to long-term memory."""
-        existing = self.memory.read_long_term()
+        """Append extracted facts to long-term journal memory."""
+        existing = self.journal.read_long_term()
 
         # Combine all facts
         new_facts = "\n".join(facts_list)
@@ -156,8 +158,8 @@ class DailySummaryService:
 
         update = f"\n\n## Updates from {today}\n\n{new_facts}"
 
-        self.memory.write_long_term(existing + update)
-        logger.info("Updated long-term memory with facts from {}", today)
+        self.journal.write_long_term(existing + update)
+        logger.info("Updated journal long-term memory with facts from {}", today)
 
     async def run_now(self) -> dict[str, Any]:
         """Manually trigger the daily summary (for testing)."""

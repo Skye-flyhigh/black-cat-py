@@ -16,7 +16,7 @@ import tiktoken
 import tomli_w
 from loguru import logger
 
-from nanobot.agent.memory import MemoryStore
+from nanobot.agent.memory import Journal
 from nanobot.agent.skills import SkillsLoader
 from nanobot.utils.helpers import extract_system_message
 
@@ -33,7 +33,7 @@ class ContextManager:
         - Environment: time, runtime, workspace path
         - Session: channel, author, trust level, tool permissions
         - Skills: loaded on request
-        - Memory: from MemoryStore
+        - Memory: from Journal (daily notes), semantic via MCP (mnemo)
 
     Trust system (get_trust_level, get_allowed_tools):
         - Evaluates author against IDENTITY.toml boundaries
@@ -62,9 +62,14 @@ class ContextManager:
         "sovereignty": "sense of autonomous agency",
     }
 
-    def __init__(self, workspace: Path, summarizer: "Summarizer | None" = None, session_manager: SessionManager | None = None,):
+    def __init__(
+        self,
+        workspace: Path,
+        summarizer: "Summarizer | None" = None,
+        session_manager: SessionManager | None = None,
+    ):
         self.workspace = workspace
-        self.memory = MemoryStore(workspace)
+        self.journal = Journal(workspace)
         self.skills = SkillsLoader(workspace)
         self.summarizer = summarizer
         self.sessions = session_manager or SessionManager(workspace)
@@ -152,7 +157,13 @@ class ContextManager:
             2. Environment (time, runtime, workspace)
             3. Current Session (channel, author, trust, tool permissions)
             4. Active Skills (if skill_names provided)
-            5. Memory context (from MemoryStore)
+            5. Journal context (daily notes + long-term facts)
+
+        Args:
+            author: Message author for trust evaluation.
+            channel: Source channel.
+            chat_id: Chat identifier.
+            skill_names: Skills to load into context.
 
         Returns:
             Complete system prompt string, sections joined by "---".
@@ -175,6 +186,7 @@ class ContextManager:
         permissions = self.get_allowed_tools(author, identity_data, trust_level)
         trust_instructions = self._get_trust_instructions(trust_level)
         personality = identity_data.get("personality", {})
+        voice_tone = identity_data.get("voice", {}).get("tone", "")
 
         # Build prompt parts
         parts = list(identity_strings.values())
@@ -197,7 +209,7 @@ class ContextManager:
 {trust_instructions}
 
 ## Voice
-{identity_data["voice"]["tone"]}
+{voice_tone}
 
 ## Personality traits
 {personality}
@@ -212,10 +224,10 @@ For normal conversation, just respond with text - do not call the message tool."
             if skills_content:
                 parts.append(f"# Active Skills\n\n{skills_content}")
 
-        # Add memory context
-        memory = self.memory.get_memory_context()
-        if memory:
-            parts.append(f"# Memory\n\n{memory}")
+        # Add journal context (daily notes + long-term facts)
+        journal_context = self.journal.get_memory_context()
+        if journal_context:
+            parts.append(f"# Journal\n\n{journal_context}")
 
         return "\n\n---\n\n".join(parts)
 
@@ -389,11 +401,24 @@ For normal conversation, just respond with text - do not call the message tool."
 
         Returns: [system_prompt, ...history, current_message]
 
+        Args:
+            history: Previous messages in the conversation.
+            current_message: The new user message.
+            author: Message author for trust evaluation.
+            channel: Source channel.
+            chat_id: Chat identifier.
+            media: Optional media file paths.
+            skill_names: Skills to load into context.
+            max_tokens: Max context tokens (for budget warnings).
+            model: Model name for tokenizer.
+
         If max_tokens provided, logs warning when budget >80% or >95% used.
         Call context_pruning() or compact_history() after if budget critical.
         """
-        # System prompt (identity, session, skills, memory - all in one place)
-        system_prompt = self.build_core_prompt(author, channel, chat_id, skill_names)
+        # System prompt (identity, session, skills, journal)
+        system_prompt = self.build_core_prompt(
+            author, channel, chat_id, skill_names
+        )
 
         # Assemble messages
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -454,13 +479,13 @@ For normal conversation, just respond with text - do not call the message tool."
         )
         return messages
 
-# TODO: clean or keep but use it
     def add_assistant_message(
         self,
         messages: list[dict[str, Any]],
         content: str | None,
         tool_calls: list[dict[str, Any]] | None = None,
         reasoning_content: str | None = None,
+        thinking_blocks: list[dict] | None = None,
     ) -> list[dict[str, Any]]:
         """Append assistant response to message list (with optional tool_calls and reasoning)."""
         msg: dict[str, Any] = {"role": "assistant"}
@@ -475,56 +500,41 @@ For normal conversation, just respond with text - do not call the message tool."
         # Thinking models (DeepSeek-R1, Kimi, etc.) reject history without this
         if reasoning_content:
             msg["reasoning_content"] = reasoning_content
+        if thinking_blocks:
+            msg["thinking_blocks"] = thinking_blocks
 
         messages.append(msg)
         return messages
 
     # -------------------------------------------------------------------------
-    # Context Reduction
+    # Token-based Context Pruning
     # -------------------------------------------------------------------------
-# TODO: clean or keep but use it
-    # def context_pruning(
-    #     self,
-    #     messages: list[dict[str, Any]],
-    #     max_tokens: int,
-    #     keep_recent: int = 10,
-    #     model: str = "gpt-4",
-    # ) -> list[dict[str, Any]]:
-    #     """
-    #     Remove old messages to fit within token budget.
 
-    #     Keeps: system prompt + last `keep_recent` messages.
-    #     Use when budget is critical and summarization isn't available.
-    #     """
-    #     if not messages:
-    #         return messages
+    def context_pruning(
+        self,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+        keep_recent: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Prune messages to fit within a token budget.
 
-    #     system_msg, conversation = extract_system_message(messages)
+        Keeps the system message (if any) and the most recent *keep_recent*
+        non-system messages, dropping older ones until the total fits.
+        """
+        if not messages:
+            return messages
 
-    #     # Calculate current size
-    #     current_context = "".join(
-    #         m.get("content", "") if isinstance(m.get("content"), str) else str(m.get("content", ""))
-    #         for m in messages
-    #     )
+        total = sum(self.count_tokens(m.get("content", "") or "") for m in messages)
+        if total <= max_tokens:
+            return messages
 
-    #     remaining_budget = self.token_budget(max_tokens, current_context, model)
+        # Separate system message from the rest
+        sys_msg = messages[0] if messages and messages[0]["role"] == "system" else None
+        rest = messages[1:] if sys_msg else messages
 
-    #     # If within budget, return as-is
-    #     if remaining_budget > 0:
-    #         return messages
-
-    #     # Prune oldest messages, keeping recent ones
-    #     pruned_conversation = (
-    #         conversation[-keep_recent:] if len(conversation) > keep_recent else conversation
-    #     )
-
-    #     # Rebuild message list
-    #     result = []
-    #     if system_msg:
-    #         result.append(system_msg)
-    #     result.extend(pruned_conversation)
-
-    #     return result
+        # Keep only the most recent messages
+        kept = rest[-keep_recent:] if len(rest) > keep_recent else rest
+        return ([sys_msg] + kept) if sys_msg else kept
 
     # -------------------------------------------------------------------------
     # Sliding Window Compaction

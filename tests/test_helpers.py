@@ -1,6 +1,5 @@
 """Tests for utility helper functions."""
 
-from pathlib import Path
 
 from nanobot.utils.helpers import (
     ensure_dir,
@@ -8,7 +7,6 @@ from nanobot.utils.helpers import (
     safe_filename,
     truncate_string,
 )
-
 
 # ── ensure_dir ─────────────────────────────────────────────────────
 

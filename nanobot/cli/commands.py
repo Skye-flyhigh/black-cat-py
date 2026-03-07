@@ -505,16 +505,28 @@ def gateway(
         config=config,
         llm_timeout=config.agents.defaults.llm_timeout,
         mcp_servers=config.tools.mcp_servers or None,
+        reasoning_effort=config.agents.defaults.reasoning_effort,
     )
 
     # Set cron callback (needs agent)
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
-        response = await agent.process_direct(
-            job.payload.message,
-            channel=job.payload.channel or "cron",
-            chat_id=job.payload.to or job.id,
-        )
+        from nanobot.agent.tools.cron import CronTool
+
+        # Prevent the agent from scheduling new cron jobs during execution
+        cron_tool = agent.tools.get("cron")
+        cron_token = None
+        if isinstance(cron_tool, CronTool):
+            cron_token = cron_tool.set_cron_context(True)
+        try:
+            response = await agent.process_direct(
+                job.payload.message,
+                channel=job.payload.channel or "cron",
+                chat_id=job.payload.to or job.id,
+            )
+        finally:
+            if isinstance(cron_tool, CronTool) and cron_token is not None:
+                cron_tool.reset_cron_context(cron_token)
         if job.payload.deliver and job.payload.to:
             from nanobot.bus.events import OutboundMessage
 
@@ -682,6 +694,7 @@ def agent(
         config=config,
         llm_timeout=config.agents.defaults.llm_timeout,
         mcp_servers=config.tools.mcp_servers or None,
+        reasoning_effort=config.agents.defaults.reasoning_effort,
     )
 
     # Show spinner when logs are off (no output to miss); skip when logs are on
@@ -1048,6 +1061,7 @@ def cron_run(
         config=config,
         llm_timeout=config.agents.defaults.llm_timeout,
         mcp_servers=config.tools.mcp_servers or None,
+        reasoning_effort=config.agents.defaults.reasoning_effort,
     )
 
     service = CronService(store_path)
