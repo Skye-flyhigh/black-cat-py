@@ -48,7 +48,7 @@ def test_compute_next_run_cron_expr():
 
 
 def test_compute_next_run_unknown_kind():
-    schedule = CronSchedule(kind="unknown")
+    schedule = CronSchedule(kind="unknown") # type: ignore
     assert _compute_next_run(schedule, now_ms()) is None
 
 
@@ -183,7 +183,7 @@ def test_cron_tool_blocks_add_in_cron_context(tmp_path):
 
     token = tool.set_cron_context(True)
     try:
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             tool.execute(action="add", message="sneaky job", every_seconds=10)
         )
         assert "cannot schedule" in result.lower()
@@ -197,7 +197,7 @@ def test_cron_tool_allows_add_outside_context(tmp_path):
     tool = CronTool(service)
     tool.set_context("telegram", "123")
 
-    result = asyncio.get_event_loop().run_until_complete(
+    result = asyncio.run(
         tool.execute(action="add", message="normal job", every_seconds=10)
     )
     assert "created" in result.lower()
@@ -211,7 +211,7 @@ def test_cron_tool_list_works_in_cron_context(tmp_path):
 
     token = tool.set_cron_context(True)
     try:
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             tool.execute(action="list")
         )
         assert "no scheduled" in result.lower() or "scheduled" in result.lower()
@@ -231,7 +231,7 @@ def test_cron_tool_context_reset():
         token = tool.set_cron_context(True)
         tool.reset_cron_context(token)
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             tool.execute(action="add", message="after reset", every_seconds=5)
         )
         assert "created" in result.lower()

@@ -36,6 +36,7 @@ dependencies = [
     "python-socks[asyncio]>=2.4.0",
     "prompt-toolkit>=3.0.0",
     "mcp>=1.26.0,<2.0.0",
+    "tomli-w",
 ]
 
 [project.optional-dependencies]
