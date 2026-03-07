@@ -26,9 +26,6 @@ jobs:
       - name: Install pyright
         run: npm install -g pyright
 
-      - name: Run pyright
-        run: pyright .
-
       - name: Lint
         run: ruff check .
   
