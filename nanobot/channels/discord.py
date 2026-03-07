@@ -110,21 +110,25 @@ class DiscordChannel(BaseChannel):
     ) -> None:
         """Send a single Discord API request with retry on rate-limit."""
         for attempt in range(3):
-            try:
-                response = await self._http.post(url, headers=headers, json=payload)
-                if response.status_code == 429:
-                    data = response.json()
-                    retry_after = float(data.get("retry_after", 1.0))
-                    logger.warning("Discord rate limited, retrying in {}s", retry_after)
-                    await asyncio.sleep(retry_after)
-                    continue
-                response.raise_for_status()
+            if self._http is not None:
+                try:
+                    response = await self._http.post(url, headers=headers, json=payload)
+                    if response.status_code == 429:
+                        data = response.json()
+                        retry_after = float(data.get("retry_after", 1.0))
+                        logger.warning("Discord rate limited, retrying in {}s", retry_after)
+                        await asyncio.sleep(retry_after)
+                        continue
+                    response.raise_for_status()
+                    return
+                except Exception as e:
+                    if attempt == 2:
+                        logger.error("Error sending Discord message: {}", e)
+                    else:
+                        await asyncio.sleep(1)
+            else:
+                logger.warning("Discord isn't available")
                 return
-            except Exception as e:
-                if attempt == 2:
-                    logger.error("Error sending Discord message: {}", e)
-                else:
-                    await asyncio.sleep(1)
 
     async def _send_typing_indicator(self, chat_id: str) -> None:
         """Send typing indicator to Discord."""

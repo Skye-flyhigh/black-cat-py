@@ -45,8 +45,6 @@ class SlackChannel(BaseChannel):
             web_client=self._web_client,
         )
 
-        self._socket_client.socket_mode_request_listeners.append(self._on_socket_request)
-
         # Resolve bot user ID for mention handling
         try:
             auth = await self._web_client.auth_test()

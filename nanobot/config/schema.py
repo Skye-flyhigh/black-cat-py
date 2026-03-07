@@ -1,12 +1,19 @@
 """Configuration schema using Pydantic."""
 
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class WhatsAppConfig(BaseModel):
+class Base(BaseModel):
+    """Base model that accepts both camelCase and snake_case keys."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+class WhatsAppConfig(Base):
     """WhatsApp channel configuration."""
 
     enabled: bool = False
@@ -15,7 +22,7 @@ class WhatsAppConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
 
 
-class TelegramConfig(BaseModel):
+class TelegramConfig(Base):
     """Telegram channel configuration."""
 
     enabled: bool = False
@@ -27,7 +34,7 @@ class TelegramConfig(BaseModel):
     reply_to_message: bool = False  # If true, bot replies are threaded to the user's message
 
 
-class DiscordConfig(BaseModel):
+class DiscordConfig(Base):
     """Discord channel configuration."""
 
     enabled: bool = False
@@ -35,18 +42,33 @@ class DiscordConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs
     gateway_url: str = "wss://gateway.discord.gg/?v=10&encoding=json"
     intents: int = 37377  # GUILDS + GUILD_MESSAGES + DIRECT_MESSAGES + MESSAGE_CONTENT
+    group_policy: Literal["mention", "open"] = "mention"
+
+class SlackDMConfig(Base):
+    """Slack DM policy configuration."""
+
+    enabled: bool = True
+    policy: str = "open"  # "open" or "allowlist"
+    allow_from: list[str] = Field(default_factory=list)  # Allowed Slack user IDs
 
 
-class SlackConfig(BaseModel):
+class SlackConfig(Base):
     """Slack channel configuration (Socket Mode)."""
 
     enabled: bool = False
-    app_token: str = ""  # xapp-... token for Socket Mode
-    bot_token: str = ""  # xoxb-... token for API calls
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs
+    mode: str = "socket"  # "socket" supported
+    webhook_path: str = "/slack/events"
+    bot_token: str = ""  # xoxb-...
+    app_token: str = ""  # xapp-...
+    user_token_read_only: bool = True
+    reply_in_thread: bool = True
+    react_emoji: str = "eyes"
+    allow_from: list[str] = Field(default_factory=list)  # Allowed Slack user IDs (sender-level)
+    group_policy: str = "mention"  # "mention", "open", "allowlist"
+    group_allow_from: list[str] = Field(default_factory=list)  # Allowed channel IDs if allowlist
+    dm: SlackDMConfig = Field(default_factory=SlackDMConfig)
 
-
-class EmailConfig(BaseModel):
+class EmailConfig(Base):
     """Email channel configuration (IMAP inbound + SMTP outbound)."""
 
     enabled: bool = False
@@ -80,7 +102,7 @@ class EmailConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)  # Allowed sender email addresses
 
 
-class ChannelsConfig(BaseModel):
+class ChannelsConfig(Base):
     """Configuration for chat channels."""
 
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
@@ -90,7 +112,7 @@ class ChannelsConfig(BaseModel):
     email: EmailConfig = Field(default_factory=EmailConfig)
 
 
-class AgentDefaults(BaseModel):
+class AgentDefaults(Base):
     """Default agent configuration."""
 
     workspace: str = "~/.nanobot/workspace"
@@ -107,13 +129,13 @@ class AgentDefaults(BaseModel):
     daily_summary_hour: int = 3  # Hour to run daily summary (0-23, default 3am)
 
 
-class AgentsConfig(BaseModel):
+class AgentsConfig(Base):
     """Agent configuration."""
 
     defaults: AgentDefaults = Field(default_factory=AgentDefaults)
 
 
-class ProviderConfig(BaseModel):
+class ProviderConfig(Base):
     """LLM provider configuration."""
 
     api_key: str = ""
@@ -121,7 +143,7 @@ class ProviderConfig(BaseModel):
     extra_headers: dict[str, str] | None = None  # Custom headers (e.g. APP-Code for AiHubMix)
 
 
-class ProvidersConfig(BaseModel):
+class ProvidersConfig(Base):
     """Configuration for LLM providers."""
 
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
@@ -137,33 +159,33 @@ class ProvidersConfig(BaseModel):
     aihubmix: ProviderConfig = Field(default_factory=ProviderConfig)  # AiHubMix API gateway
 
 
-class GatewayConfig(BaseModel):
+class GatewayConfig(Base):
     """Gateway/server configuration."""
 
     host: str = "0.0.0.0"
     port: int = 18790
 
 
-class WebSearchConfig(BaseModel):
+class WebSearchConfig(Base):
     """Web search tool configuration."""
 
     api_key: str = ""  # Brave Search API key
     max_results: int = 5
 
 
-class WebToolsConfig(BaseModel):
+class WebToolsConfig(Base):
     """Web tools configuration."""
 
     search: WebSearchConfig = Field(default_factory=WebSearchConfig)
 
 
-class ExecToolConfig(BaseModel):
+class ExecToolConfig(Base):
     """Shell exec tool configuration."""
 
     timeout: int = 60
 
 
-class MCPServerConfig(BaseModel):
+class MCPServerConfig(Base):
     """MCP server connection configuration (stdio or HTTP).
 
     Stdio mode: set ``command`` (and optionally ``args``, ``env``).
@@ -177,7 +199,7 @@ class MCPServerConfig(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
 
 
-class ToolsConfig(BaseModel):
+class ToolsConfig(Base):
     """Tools configuration."""
 
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
@@ -186,7 +208,7 @@ class ToolsConfig(BaseModel):
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
-class AuthorIdentity(BaseModel):
+class AuthorIdentity(Base):
     """Platform identities for an author (like API keys, keep private)."""
 
     whatsapp: str | None = None
