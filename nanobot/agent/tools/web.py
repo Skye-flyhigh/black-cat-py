@@ -18,7 +18,7 @@ MAX_REDIRECTS = 5  # Limit redirects to prevent DoS attacks
 
 def _strip_tags(text: str) -> str:
     """Remove HTML tags and decode entities."""
-    text = re.sub(r"<script[\s\S]*?</script>", "", text, flags=re.I)
+    text = re.sub(r"(?is)<script\b[\s\S]*?</script\b[^>]*>", "", text)
     text = re.sub(r"<style[\s\S]*?</style>", "", text, flags=re.I)
     text = re.sub(r"<[^>]+>", "", text)
     return html.unescape(text).strip()
