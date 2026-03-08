@@ -17,6 +17,10 @@ Built on [blackcat](https://github.com/HKUDS/blackcat) (~4,000 lines), extended 
 >
 > **Memory is cognitive**: Memories decay, get recalled, bump in weight, and shape behavior.
 
+MCPs used for the blackcat:
+- [**mnemo-mcp**](https://github.com/Skye-flyhigh/mnemo-mcp) — Persistent memory with semantic recall, decay, and weight-based relevance
+- [**telos-mcp**](https://github.com/Skye-flyhigh/telos-mcp) — Task planning and tracking system for managing work
+
 ---
 
 ## Architecture
@@ -334,10 +338,11 @@ blackcat/
 | Context manager | 🔶 Basic | Identity assembly, token management, trust instructions, compaction |
 | Summariser | 🔶 Basic | Provides summary for compaction |
 | Skills | ✅ Working | Pluggable SKILL.md files |
-| Memory | 🔶 Basic | Markdown files, no vectors yet |
+| Memory | 🔶 Basic | MCP-based (mnemo-mcp), semantic recall with decay |
 | Memory decay | ❌ Not yet | Weight-based decay with tag tiers |
 | Contextual state | ❌ Not yet | Dynamic trait modulation |
 | Reflection | ❌ Not yet | Self-reflection, decision memory |
+| Telos | 🔶 Basic | Task planning via telos-mcp |
 
 ---
 
