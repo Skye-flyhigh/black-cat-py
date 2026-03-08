@@ -1,6 +1,6 @@
 # Nanobot Email Assistant: End-to-End Guide
 
-This guide explains how to run nanobot as a real email assistant with explicit user permission and optional automatic replies.
+This guide explains how to run blackcat as a real email assistant with explicit user permission and optional automatic replies.
 
 ## 1. What This Feature Does
 
@@ -14,8 +14,8 @@ This guide explains how to run nanobot as a real email assistant with explicit u
 
 `channels.email.consentGranted` is the hard permission gate.
 
-- `false`: nanobot must not access mailbox content and must not send email.
-- `true`: nanobot may read/send based on other settings.
+- `false`: blackcat must not access mailbox content and must not send email.
+- `true`: blackcat may read/send based on other settings.
 
 Only set `consentGranted: true` after the mailbox owner explicitly agrees.
 
@@ -40,7 +40,7 @@ Recommended servers:
 
 ## 5. Config Example
 
-Edit `~/.nanobot/config.json`:
+Edit `~/.blackcat/config.json`:
 
 ```json
 {
@@ -51,13 +51,13 @@ Edit `~/.nanobot/config.json`:
       "imapHost": "imap.gmail.com",
       "imapPort": 993,
       "imapUsername": "you@gmail.com",
-      "imapPassword": "${NANOBOT_EMAIL_IMAP_PASSWORD}",
+      "imapPassword": "${BLACKCAT_EMAIL_IMAP_PASSWORD}",
       "imapMailbox": "INBOX",
       "imapUseSsl": true,
       "smtpHost": "smtp.gmail.com",
       "smtpPort": 587,
       "smtpUsername": "you@gmail.com",
-      "smtpPassword": "${NANOBOT_EMAIL_SMTP_PASSWORD}",
+      "smtpPassword": "${BLACKCAT_EMAIL_SMTP_PASSWORD}",
       "smtpUseTls": true,
       "smtpUseSsl": false,
       "fromAddress": "you@gmail.com",
@@ -75,12 +75,12 @@ Edit `~/.nanobot/config.json`:
 In the same shell before starting gateway:
 
 ```bash
-read -s "NANOBOT_EMAIL_IMAP_PASSWORD?IMAP app password: "
+read -s "BLACKCAT_EMAIL_IMAP_PASSWORD?IMAP app password: "
 echo
-read -s "NANOBOT_EMAIL_SMTP_PASSWORD?SMTP app password: "
+read -s "BLACKCAT_EMAIL_SMTP_PASSWORD?SMTP app password: "
 echo
-export NANOBOT_EMAIL_IMAP_PASSWORD
-export NANOBOT_EMAIL_SMTP_PASSWORD
+export BLACKCAT_EMAIL_IMAP_PASSWORD
+export BLACKCAT_EMAIL_SMTP_PASSWORD
 ```
 
 If you use one app password for both, enter the same value twice.
@@ -90,14 +90,14 @@ If you use one app password for both, enter the same value twice.
 Start:
 
 ```bash
-cd /Users/kaijimima1234/Desktop/nanobot
-PYTHONPATH=/Users/kaijimima1234/Desktop/nanobot .venv/bin/nanobot gateway
+cd /Users/kaijimima1234/Desktop/blackcat
+PYTHONPATH=/Users/kaijimima1234/Desktop/blackcat .venv/bin/blackcat gateway
 ```
 
 Check channel status:
 
 ```bash
-PYTHONPATH=/Users/kaijimima1234/Desktop/nanobot .venv/bin/nanobot channels status
+PYTHONPATH=/Users/kaijimima1234/Desktop/blackcat .venv/bin/blackcat channels status
 ```
 
 Expected behavior:
@@ -141,12 +141,12 @@ Notes:
 ## 9. End-to-End Test Plan
 
 1. Send a test email from an allowed sender to your mailbox.
-2. Confirm nanobot receives and processes it.
+2. Confirm blackcat receives and processes it.
 3. If `autoReplyEnabled=true`, confirm a reply is delivered.
 4. Set `autoReplyEnabled=false`, send another test email.
 5. Confirm no auto-reply is sent.
 6. Set `consentGranted=false`, send another test email.
-7. Confirm nanobot does not read/send.
+7. Confirm blackcat does not read/send.
 
 ## 10. Security Notes
 

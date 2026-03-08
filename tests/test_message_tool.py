@@ -2,8 +2,8 @@
 
 import pytest
 
-from nanobot.agent.tools.message import MessageTool
-from nanobot.bus.events import OutboundMessage
+from blackcat.agent.tools.message import MessageTool
+from blackcat.bus.events import OutboundMessage
 
 
 @pytest.fixture

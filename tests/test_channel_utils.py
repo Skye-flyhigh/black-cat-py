@@ -1,6 +1,6 @@
 """Tests for channel utilities (split_message, markdown conversion, etc.)."""
 
-from nanobot.channels.utils import (
+from blackcat.channels.utils import (
     format_reply_context,
     get_file_extension,
     markdown_to_telegram_html,

@@ -4,8 +4,8 @@ from datetime import datetime
 
 import pytest
 
-from nanobot.agent.memory import MemoryStore
-from nanobot.utils.helpers import today_date
+from blackcat.agent.memory import MemoryStore
+from blackcat.utils.helpers import today_date
 
 
 @pytest.fixture

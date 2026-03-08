@@ -13,7 +13,7 @@ import re
 
 import pytest
 
-from nanobot.agent.tools.shell import ExecTool
+from blackcat.agent.tools.shell import ExecTool
 
 # --- Guard regression: "format" in URLs must not be blocked ---
 

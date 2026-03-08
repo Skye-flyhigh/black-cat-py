@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from nanobot.session.manager import Session, SessionManager
+from blackcat.session.manager import Session, SessionManager
 
 # ── Session dataclass ──────────────────────────────────────────────
 

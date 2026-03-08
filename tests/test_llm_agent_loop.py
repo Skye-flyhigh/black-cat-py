@@ -10,12 +10,12 @@ Run explicitly:
 
 import pytest
 
-from nanobot.agent.loop import AgentLoop
-from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool
-from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.bus.events import InboundMessage
-from nanobot.bus.queue import MessageBus
-from nanobot.providers.litellm_provider import LiteLLMProvider
+from blackcat.agent.loop import AgentLoop
+from blackcat.agent.tools.filesystem import ReadFileTool, WriteFileTool
+from blackcat.agent.tools.registry import ToolRegistry
+from blackcat.bus.events import InboundMessage
+from blackcat.bus.queue import MessageBus
+from blackcat.providers.litellm_provider import LiteLLMProvider
 from tests.conftest import LLM_TEST_MODEL
 
 
@@ -63,7 +63,7 @@ async def test_run_agent_loop_simple_response(provider):
     agent.reasoning_effort = None
 
     # Bypass the full context manager — just raw messages
-    from nanobot.agent.context import ContextManager
+    from blackcat.agent.context import ContextManager
 
     agent.context = ContextManager.__new__(ContextManager)
 
@@ -97,7 +97,7 @@ async def test_run_agent_loop_with_read_file(provider, tmp_path):
     agent.llm_timeout = 60
     agent.reasoning_effort = None
 
-    from nanobot.agent.context import ContextManager
+    from blackcat.agent.context import ContextManager
 
     agent.context = ContextManager.__new__(ContextManager)
 
@@ -132,7 +132,7 @@ async def test_run_agent_loop_with_write_file(provider, tmp_path):
     agent.llm_timeout = 60
     agent.reasoning_effort = None
 
-    from nanobot.agent.context import ContextManager
+    from blackcat.agent.context import ContextManager
 
     agent.context = ContextManager.__new__(ContextManager)
 
@@ -233,7 +233,7 @@ def test_strip_think_multiple():
 
 
 def test_tool_hint():
-    from nanobot.providers.base import ToolCallRequest
+    from blackcat.providers.base import ToolCallRequest
 
     calls = [ToolCallRequest(id="1", name="web_search", arguments={"query": "test"})]
     hint = AgentLoop._tool_hint(calls)
@@ -241,7 +241,7 @@ def test_tool_hint():
 
 
 def test_tool_hint_truncates():
-    from nanobot.providers.base import ToolCallRequest
+    from blackcat.providers.base import ToolCallRequest
 
     long_query = "a" * 100
     calls = [ToolCallRequest(id="1", name="search", arguments={"query": long_query})]
@@ -250,7 +250,7 @@ def test_tool_hint_truncates():
 
 
 def test_tool_hint_no_args():
-    from nanobot.providers.base import ToolCallRequest
+    from blackcat.providers.base import ToolCallRequest
 
     calls = [ToolCallRequest(id="1", name="list_dir", arguments={})]
     hint = AgentLoop._tool_hint(calls)

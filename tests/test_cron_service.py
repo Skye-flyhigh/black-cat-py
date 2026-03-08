@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from nanobot.agent.tools.cron import CronTool
-from nanobot.cron.service import CronService, _compute_next_run
-from nanobot.cron.types import CronSchedule
-from nanobot.utils.helpers import now_ms
+from blackcat.agent.tools.cron import CronTool
+from blackcat.cron.service import CronService, _compute_next_run
+from blackcat.cron.types import CronSchedule
+from blackcat.utils.helpers import now_ms
 
 # ── Schedule computation ──────────────────────────────────────────
 

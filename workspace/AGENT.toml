@@ -46,7 +46,7 @@ tool_transparency = true
 
 [reminders]
 tool = "exec"
-command = "nanobot cron add --name 'NAME' --message 'MSG' --at 'YYYY-MM-DDTHH:MM:SS' --deliver --to 'USER_ID' --channel 'CHANNEL'"
+command = "blackcat cron add --name 'NAME' --message 'MSG' --at 'YYYY-MM-DDTHH:MM:SS' --deliver --to 'USER_ID' --channel 'CHANNEL'"
 
 [heartbeat]
 file = "HEARTBEAT.toml"

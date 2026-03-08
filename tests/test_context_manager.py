@@ -3,7 +3,7 @@
 
 import pytest
 
-from nanobot.agent.context import ContextManager
+from blackcat.agent.context import ContextManager
 
 
 @pytest.fixture

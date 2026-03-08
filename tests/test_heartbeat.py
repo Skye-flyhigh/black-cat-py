@@ -3,7 +3,7 @@
 
 import pytest
 
-from nanobot.heartbeat.service import (
+from blackcat.heartbeat.service import (
     HEARTBEAT_OK_TOKEN,
     HEARTBEAT_PROMPT,
     HeartbeatService,

@@ -4,14 +4,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from nanobot.utils.helpers import resolve_path
+from blackcat.utils.helpers import resolve_path
 
 # ── Deny-by-default is_allowed ────────────────────────────────────
 
 
 def _make_channel(allow_from: list[str]):
     """Create a concrete channel subclass for testing is_allowed."""
-    from nanobot.channels.base import BaseChannel
+    from blackcat.channels.base import BaseChannel
 
     class _TestChannel(BaseChannel):
         name = "test"
@@ -107,7 +107,7 @@ def test_resolve_path_relative_with_workspace(tmp_path):
 
 
 def test_sanitize_null_assistant_content():
-    from nanobot.providers.litellm_provider import LiteLLMProvider
+    from blackcat.providers.litellm_provider import LiteLLMProvider
 
     messages = [{"role": "assistant", "content": None}]
     result = LiteLLMProvider._sanitize_messages(messages)
@@ -116,7 +116,7 @@ def test_sanitize_null_assistant_content():
 
 def test_sanitize_null_assistant_with_tool_calls():
     """Assistant message with tool_calls and null content should keep None."""
-    from nanobot.providers.litellm_provider import LiteLLMProvider
+    from blackcat.providers.litellm_provider import LiteLLMProvider
 
     messages = [{"role": "assistant", "content": None, "tool_calls": [{"id": "c1"}]}]
     result = LiteLLMProvider._sanitize_messages(messages)
@@ -124,7 +124,7 @@ def test_sanitize_null_assistant_with_tool_calls():
 
 
 def test_sanitize_empty_string_user():
-    from nanobot.providers.litellm_provider import LiteLLMProvider
+    from blackcat.providers.litellm_provider import LiteLLMProvider
 
     messages = [{"role": "user", "content": ""}]
     result = LiteLLMProvider._sanitize_messages(messages)
@@ -132,7 +132,7 @@ def test_sanitize_empty_string_user():
 
 
 def test_sanitize_normal_messages_unchanged():
-    from nanobot.providers.litellm_provider import LiteLLMProvider
+    from blackcat.providers.litellm_provider import LiteLLMProvider
 
     messages = [
         {"role": "system", "content": "You are helpful."},

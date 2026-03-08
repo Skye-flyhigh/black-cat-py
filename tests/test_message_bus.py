@@ -5,8 +5,8 @@ from datetime import datetime
 
 import pytest
 
-from nanobot.bus.events import InboundMessage, OutboundMessage
-from nanobot.bus.queue import MessageBus
+from blackcat.bus.events import InboundMessage, OutboundMessage
+from blackcat.bus.queue import MessageBus
 
 # ── InboundMessage ─────────────────────────────────────────────────
 

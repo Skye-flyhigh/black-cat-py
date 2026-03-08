@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from prompt_toolkit.formatted_text import HTML
 
-from nanobot.cli import commands
+from blackcat.cli import commands
 
 
 @pytest.fixture
@@ -11,7 +11,7 @@ def mock_prompt_session():
     """Mock the global prompt session."""
     mock_session = MagicMock()
     mock_session.prompt_async = AsyncMock()
-    with patch("nanobot.cli.commands._PROMPT_SESSION", mock_session):
+    with patch("blackcat.cli.commands._PROMPT_SESSION", mock_session):
         yield mock_session
 
 
@@ -43,8 +43,8 @@ def test_init_prompt_session_creates_session():
     commands._PROMPT_SESSION = None
 
     with (
-        patch("nanobot.cli.commands.PromptSession") as mock_session,
-        patch("nanobot.cli.commands.FileHistory"),
+        patch("blackcat.cli.commands.PromptSession") as mock_session,
+        patch("blackcat.cli.commands.FileHistory"),
         patch("pathlib.Path.home") as mock_home,
     ):
         mock_home.return_value = MagicMock()

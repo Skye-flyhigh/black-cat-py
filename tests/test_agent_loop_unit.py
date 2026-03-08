@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from nanobot.agent.loop import AgentLoop
+from blackcat.agent.loop import AgentLoop
 
 # ── _strip_think ──────────────────────────────────────────────────
 

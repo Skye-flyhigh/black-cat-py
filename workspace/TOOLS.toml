@@ -1,4 +1,4 @@
-# TOOLS.toml — Available tools for nanobot
+# TOOLS.toml — Available tools for blackcat
 # Auto-generated from tool definitions. Do not edit manually.
 
 [file.read_file]
@@ -46,10 +46,10 @@ note = "Use for complex or time-consuming tasks"
 [cron]
 description = "Scheduled tasks via CLI"
 examples = [
-    "nanobot cron add --name 'morning' --message 'GM' --cron '0 9 * * *'",
-    "nanobot cron add --name 'water' --message 'Drink!' --every 7200",
-    "nanobot cron list",
-    "nanobot cron remove <job_id>",
+    "blackcat cron add --name 'morning' --message 'GM' --cron '0 9 * * *'",
+    "blackcat cron add --name 'water' --message 'Drink!' --every 7200",
+    "blackcat cron list",
+    "blackcat cron remove <job_id>",
 ]
 
 [heartbeat]

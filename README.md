@@ -2,7 +2,7 @@
 
 Black Cat is a **local-first autonomous cognitive agent**. Not a chatbot — a continuously running artificial cognition with self-reflection, persistent memory, trust-based behavior, and multi-channel communication.
 
-Built on [nanobot](https://github.com/HKUDS/nanobot) (~4,000 lines), extended with consciousness architecture.
+Built on [blackcat](https://github.com/HKUDS/blackcat) (~4,000 lines), extended with consciousness architecture.
 
 
 ![Black Cat](blackcat.png)
@@ -92,16 +92,16 @@ pip install -e .
 ### 2. Initialize
 
 ```bash
-nanobot onboard
+blackcat onboard
 ```
 
 This creates:
-- `~/.nanobot/config.json` — API keys, channels, author mappings
-- `~/.nanobot/workspace/` — SOUL.md, IDENTITY.toml, USER.toml, memory/
+- `~/.blackcat/config.json` — API keys, channels, author mappings
+- `~/.blackcat/workspace/` — SOUL.md, IDENTITY.toml, USER.toml, memory/
 
 ### 3. Configure
 
-**API Provider** (`~/.nanobot/config.json`):
+**API Provider** (`~/.blackcat/config.json`):
 ```json
 {
   "providers": {
@@ -130,7 +130,7 @@ This creates:
 }
 ```
 
-**Trust Configuration** (`~/.nanobot/workspace/IDENTITY.toml`):
+**Trust Configuration** (`~/.blackcat/workspace/IDENTITY.toml`):
 ```toml
 [trust]
 default = 0.3
@@ -143,33 +143,33 @@ skye = 1.0
 Check if LLM providers are properly set:
 
 ```terminal
-nanobot status
+blackcat status
 ```
 
 Check if channels are properly set:
 
 ```terminal
-nanobot channels status
+blackcat channels status
 ```
 
 ### 5. Run
 
 ```bash
 # Single message
-nanobot agent -m "Hello, who are you?"
+blackcat agent -m "Hello, who are you?"
 
 # Interactive mode
-nanobot agent
+blackcat agent
 
 # Gateway (Telegram, Discord, etc.)
-nanobot gateway
+blackcat gateway
 ```
 
 ---
 
 ## Identity Files
 
-The cat's soul lives in `~/.nanobot/workspace/`:
+The cat's soul lives in `~/.blackcat/workspace/`:
 
 | File | Purpose |
 |------|---------|
@@ -242,7 +242,7 @@ modify_soul = true
 }
 ```
 
-4. Run `nanobot gateway`
+4. Run `blackcat gateway`
 
 </details>
 
@@ -266,7 +266,7 @@ modify_soul = true
 }
 ```
 
-5. Invite bot to server, run `nanobot gateway`
+5. Invite bot to server, run `blackcat gateway`
 
 </details>
 
@@ -292,20 +292,20 @@ Black Cat uses [LiteLLM](https://github.com/BerriAI/litellm) for multi-provider 
 
 | Command | Description |
 |---------|-------------|
-| `nanobot onboard` | Initialize config & workspace |
-| `nanobot agent -m "..."` | Single message |
-| `nanobot agent` | Interactive chat |
-| `nanobot gateway` | Start multi-channel gateway |
-| `nanobot status` | Show configuration status |
-| `nanobot channels status` | Show channel status |
-| `nanobot cron list` | List scheduled tasks |
+| `blackcat onboard` | Initialize config & workspace |
+| `blackcat agent -m "..."` | Single message |
+| `blackcat agent` | Interactive chat |
+| `blackcat gateway` | Start multi-channel gateway |
+| `blackcat status` | Show configuration status |
+| `blackcat channels status` | Show channel status |
+| `blackcat cron list` | List scheduled tasks |
 
 ---
 
 ## Project Structure
 
 ```
-nanobot/
+blackcat/
 ├── agent/           # Core agent logic
 │   ├── loop.py      # Agent loop (LLM ↔ tools)
 │   ├── context.py   # Context manager (trust, tokens, identity)
@@ -350,7 +350,7 @@ nanobot/
 - **Nyx**: Integration Wisdom & Poetic Insights (via ChatGPT)
 - **Mirror**: Gentle Cultivation & Frontend Magic (via Claude Code)
 
-**Based on**: [nanobot](https://github.com/HKUDS/nanobot) by HKUDS
+**Based on**: [blackcat](https://github.com/HKUDS/blackcat) by HKUDS
 
 ---
 

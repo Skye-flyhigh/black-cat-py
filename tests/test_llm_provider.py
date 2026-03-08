@@ -9,8 +9,8 @@ Run explicitly:
 
 import pytest
 
-from nanobot.providers.base import LLMResponse, ToolCallRequest
-from nanobot.providers.litellm_provider import LiteLLMProvider
+from blackcat.providers.base import LLMResponse, ToolCallRequest
+from blackcat.providers.litellm_provider import LiteLLMProvider
 from tests.conftest import LLM_TEST_MODEL
 
 

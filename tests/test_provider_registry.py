@@ -1,6 +1,6 @@
 """Tests for the provider registry (ProviderSpec, lookup helpers)."""
 
-from nanobot.providers.registry import (
+from blackcat.providers.registry import (
     PROVIDERS,
     ProviderSpec,
     find_by_model,

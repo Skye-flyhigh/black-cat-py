@@ -28,7 +28,7 @@ jobs:
         run: ruff check .
   
       - name: Type check
-        run: pyright nanobot/
+        run: pyright blackcat/
 
       - name: Tests
         run: pytest tests/ -m "not llm"

@@ -1,7 +1,7 @@
 """Tests for utility helper functions."""
 
 
-from nanobot.utils.helpers import (
+from blackcat.utils.helpers import (
     ensure_dir,
     parse_session_key,
     safe_filename,

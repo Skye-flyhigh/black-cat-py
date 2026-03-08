@@ -5,19 +5,19 @@
     "version": "0.2.0",
     "configurations": [
       {
-        "name": "nanobot agent",
+        "name": "blackcat agent",
         "type": "debugpy",
         "request": "launch",
-        "module": "nanobot",
+        "module": "blackcat",
         "args": ["agent", "-m", "hello"],
         "console": "integratedTerminal",
         "justMyCode": false
       },
       {
-        "name": "nanobot gateway",
+        "name": "blackcat gateway",
         "type": "debugpy",
         "request": "launch",
-        "module": "nanobot",
+        "module": "blackcat",
         "args": ["gateway"],
         "console": "integratedTerminal",
         "justMyCode": false

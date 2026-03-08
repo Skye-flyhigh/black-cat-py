@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nanobot.agent.tools.filesystem import (
+from blackcat.agent.tools.filesystem import (
     EditFileTool,
     ListDirTool,
     ReadFileTool,

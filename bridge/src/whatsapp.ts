@@ -5,15 +5,15 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import makeWASocket, {
-  DisconnectReason,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
+    DisconnectReason,
+    fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore,
+    useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
 
 import { Boom } from '@hapi/boom';
-import qrcode from 'qrcode-terminal';
 import pino from 'pino';
+import qrcode from 'qrcode-terminal';
 
 const VERSION = '0.1.0';
 
@@ -58,7 +58,7 @@ export class WhatsAppClient {
       version,
       logger,
       printQRInTerminal: false,
-      browser: ['nanobot', 'cli', VERSION],
+      browser: ['blackcat', 'cli', VERSION],
       syncFullHistory: false,
       markOnlineOnConnect: false,
     });

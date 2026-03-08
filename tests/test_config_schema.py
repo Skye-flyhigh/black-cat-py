@@ -1,6 +1,6 @@
 """Tests for the configuration schema."""
 
-from nanobot.config.schema import (
+from blackcat.config.schema import (
     AgentDefaults,
     AgentsConfig,
     ChannelsConfig,
@@ -44,7 +44,7 @@ def test_discord_defaults():
 
 def test_agent_defaults():
     d = AgentDefaults()
-    assert d.workspace == "~/.nanobot/workspace"
+    assert d.workspace == "~/.blackcat/workspace"
     assert "claude" in d.model.lower() or "anthropic" in d.model.lower()
     assert d.max_tokens > 0
     assert 0.0 <= d.temperature <= 2.0

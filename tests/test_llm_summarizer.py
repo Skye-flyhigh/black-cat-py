@@ -9,8 +9,8 @@ Run explicitly:
 
 import pytest
 
-from nanobot.agent.summarizer import Summarizer
-from nanobot.providers.litellm_provider import LiteLLMProvider
+from blackcat.agent.summarizer import Summarizer
+from blackcat.providers.litellm_provider import LiteLLMProvider
 from tests.conftest import LLM_TEST_MODEL
 
 
@@ -155,7 +155,7 @@ async def test_summarize_session(summarizer):
     messages = [
         {"role": "user", "content": "I need help with my Python project."},
         {"role": "assistant", "content": "Sure! What's the project?"},
-        {"role": "user", "content": "It's called nanobot. I want to add vector memory search."},
+        {"role": "user", "content": "It's called blackcat. I want to add vector memory search."},
         {"role": "assistant", "content": "We could use sqlite-vec for that."},
         {"role": "user", "content": "Good idea. Let's use ollama/nomic-embed-text for embeddings."},
     ]
