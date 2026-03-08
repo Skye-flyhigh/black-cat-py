@@ -117,10 +117,6 @@ class DailySummaryService:
             if len(messages) < 2:
                 continue
 
-            # Filter to messages from yesterday (if we can determine timestamps)
-            # For now, summarize all - session manager doesn't track timestamps yet
-            # TODO: Add timestamp filtering when session format supports it
-
             try:
                 result = await self.summarizer.summarize_session(messages, session_key)
 

@@ -1,5 +1,6 @@
 """Summarizer utility for context compaction and memory consolidation."""
 
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from loguru import logger
@@ -165,8 +166,16 @@ Format as bullet points."""
         """
         logger.info("Summarizing session {} ({} messages)", session_key, len(messages))
 
-        summary = await self.summarize_messages(messages)
-        facts = await self.extract_facts(messages)
+        yesterday = date.today() - timedelta(days=1)
+        filtered_messages = [
+            m for m in messages
+            if datetime.fromisoformat(m["timestamp"]).date() == yesterday
+            ]
+        if not filtered_messages:
+            return {"summary": "No message to summarize"}
+
+        summary = await self.summarize_messages(filtered_messages)
+        facts = await self.extract_facts(filtered_messages)
 
         return {
             "summary": summary,
@@ -181,6 +190,7 @@ Format as bullet points."""
         lines = []
 
         for msg in messages:
+            author = msg.get("author", "")
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
 
@@ -193,7 +203,9 @@ Format as bullet points."""
                 continue
 
             # Format based on role
-            if role == "user":
+            if author:
+                lines.append(f"{author}: {content}")
+            elif role == "user":
                 lines.append(f"User: {content}")
             elif role == "assistant":
                 lines.append(f"Assistant: {content}")
