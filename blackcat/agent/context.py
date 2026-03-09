@@ -713,7 +713,7 @@ For normal conversation, just respond with text - do not call the message tool."
                 f"Compacted {len(old_messages)} messages into summary ({len(summary)} chars)"
             )
             session.add_message("system", summary)
-            logger.debug("Summary content: {}", summary)
+            logger.info("Summary content: {}", summary)
 
         except Exception as e:
             logger.error("Compaction failed: {}, keeping original messages", e)
