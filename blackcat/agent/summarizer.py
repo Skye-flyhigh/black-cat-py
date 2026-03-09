@@ -166,11 +166,25 @@ Format as bullet points."""
         """
         logger.info("Summarizing session {} ({} messages)", session_key, len(messages))
 
-        yesterday = date.today() - timedelta(days=1)
-        filtered_messages = [
-            m for m in messages
-            if datetime.fromisoformat(m["timestamp"]).date() == yesterday
-            ]
+        yesterday = date.today() - timedelta(hours=24)
+        filtered_messages = []
+
+        for m in messages:
+            ts_raw = m.get("timestamp")
+            if not ts_raw:
+                continue
+            try:
+                ts_clean = ts_raw.replace("Z", "+00:00")
+                ts_dt = datetime.fromisoformat(ts_clean)
+
+                msg_date = ts_dt.date()
+
+                if msg_date == yesterday:
+                    filtered_messages.append(m)
+            except (ValueError, TypeError):
+                logger.warning("Invalide timestamp format: %s in message %s", ts_raw, m.get("id", "unknown"))
+                continue
+
         if not filtered_messages:
             return {"summary": "No message to summarize"}
 
