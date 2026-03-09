@@ -55,6 +55,7 @@ class AgentLoop:
         bus: MessageBus,
         provider: LLMProvider,
         workspace: Path,
+        context: ContextManager | None = None,
         model: str | None = None,
         max_iterations: int = 20,
         brave_api_key: str | None = None,
@@ -104,7 +105,7 @@ class AgentLoop:
             llm_timeout=llm_timeout,
         )
 
-        self.memory_window = config.agents.defaults.memory_window if config else 50
+        self.memory_window = config.agents.defaults.memory_window if config else 51
         self._running = False
 
         # MCP server lifecycle
@@ -285,7 +286,7 @@ class AgentLoop:
         )
 
         # Compact context if needed
-        messages, _ = await self.context.compact_if_needed(
+        messages, _ = await self.context.sliding_window(
             messages,
             window_size=self.memory_window,
             model=self.model,
@@ -324,8 +325,12 @@ class AgentLoop:
 
         # Save to session
         user_content = f"[System: {msg.sender_id}] {msg.content}" if is_system else msg.content
-        session.add_message("user", user_content)
-        session.add_message("assistant", final_content)
+        session.add_message("user", user_content, author=author)
+        agent = self.context.get_identity()
+        agent_name = agent.get("identity", {}).get("name") if isinstance(agent, dict) else None
+        agent_name = agent_name or "blackcat"
+
+        session.add_message("assistant", final_content, author=agent_name)
         self.sessions.save(session)
 
         # If the message tool already sent a reply this turn, don't send a duplicate

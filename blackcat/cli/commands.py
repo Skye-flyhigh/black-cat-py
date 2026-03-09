@@ -621,7 +621,7 @@ def gateway(
                             "system", f"[Summary of earlier conversation]\n{summary}"
                         )
                     for msg in recent_msgs:
-                        session.add_message(msg["role"], msg.get("content", ""))
+                        session.add_message(msg["role"], msg.get("content", ""), author=msg.get("author"))
                     session_manager.save(session)
                     compacted += 1
 

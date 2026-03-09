@@ -181,7 +181,7 @@ class ContextManager:
         identity_strings = self.load_identity()
 
         # Get trust context for this author (raw TOML data)
-        identity_data = self._get_identity()
+        identity_data = self.get_identity()
         trust_level = self.get_trust_level(author, identity_data)
         permissions = self.get_allowed_tools(author, identity_data, trust_level)
         trust_instructions = self._get_trust_instructions(trust_level)
@@ -231,7 +231,7 @@ For normal conversation, just respond with text - do not call the message tool."
 
         return "\n\n---\n\n".join(parts)
 
-    def _get_identity(self) -> dict:
+    def get_identity(self) -> dict:
         """Load full IDENTITY.toml. Returns empty dict if not found."""
         identity_path = self.workspace / "IDENTITY.toml"
         if not identity_path.exists():
@@ -284,7 +284,7 @@ For normal conversation, just respond with text - do not call the message tool."
         Returns: "trusted" | "high" | "moderate" | "low" | "unknown"
         """
         if identity is None:
-            identity = self._get_identity()
+            identity = self.get_identity()
 
         trust = identity.get("trust", {})
         if not trust:
@@ -333,7 +333,7 @@ For normal conversation, just respond with text - do not call the message tool."
             Trusted authors get all tools autonomous, others follow config.
         """
         if identity is None:
-            identity = self._get_identity()
+            identity = self.get_identity()
 
         autonomy = identity.get("autonomy", {})
         free_actions = autonomy.get("free", {})
@@ -652,7 +652,7 @@ For normal conversation, just respond with text - do not call the message tool."
         result.extend(recent_messages)
         return result
 
-    async def compact_if_needed(
+    async def sliding_window(
         self,
         messages: list[dict[str, Any]],
         session: Session,
@@ -713,7 +713,7 @@ For normal conversation, just respond with text - do not call the message tool."
                 f"Compacted {len(old_messages)} messages into summary ({len(summary)} chars)"
             )
             session.add_message("system", summary)
-            logger.log("Summary content: {}", summary)
+            logger.debug("Summary content: {}", summary)
 
         except Exception as e:
             logger.error("Compaction failed: {}, keeping original messages", e)

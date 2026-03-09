@@ -17,7 +17,7 @@ def workspace(tmp_path):
     identity = tmp_path / "IDENTITY.toml"
     identity.write_text(
         """
-[core]
+[identity]
 name = "TestBot"
 
 [traits]
