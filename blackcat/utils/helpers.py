@@ -2,7 +2,7 @@
 
 import json
 import time
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +56,9 @@ def today_date() -> str:
     """Get today's date in YYYY-MM-DD format."""
     return datetime.now().strftime("%Y-%m-%d")
 
+def last_24h(date:datetime) -> date:
+    """Get the date and time prior 24h of entry date"""
+    return (date - timedelta(hours= 24)).date()
 
 def timestamp() -> str:
     """Get current timestamp in ISO format."""
