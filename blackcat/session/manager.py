@@ -61,7 +61,11 @@ class Session:
 
         out: list[dict[str, Any]] = []
         for m in recent:
-            entry: dict[str, Any] = {"role": m["role"], "content": m.get("content", "")}
+            if "author" in m:
+                entry: dict[str, Any] = {"role": m["role"], "content": m.get("content", ""), "author": m["author"],}
+            else:
+                entry: dict[str, Any] = {"role": m["role"], "content": m.get("content", "")}
+
             # Preserve tool call metadata for LLM context continuity
             for k in ("tool_calls", "tool_call_id", "name"):
                 if k in m:

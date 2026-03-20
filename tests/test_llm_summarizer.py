@@ -7,6 +7,9 @@ Run explicitly:
     pytest tests/test_llm_summarizer.py -v
 """
 
+import re
+from datetime import date, datetime, timedelta
+
 import pytest
 
 from blackcat.agent.summarizer import Summarizer
@@ -152,12 +155,21 @@ async def test_extract_facts_trivial_conversation(summarizer):
 @pytest.mark.asyncio
 async def test_summarize_session(summarizer):
     """Full session summarization should return both summary and facts."""
+    yesterday = date.today() - timedelta(days=1)
+    day_before = yesterday - timedelta(days=1)
+
+    # Convert dates to ISO timestamp strings
+    yesterday_ts = datetime.combine(yesterday, datetime.min.time()).isoformat()
+    day_before_ts = datetime.combine(day_before, datetime.min.time()).isoformat()
+
     messages = [
-        {"role": "user", "content": "I need help with my Python project."},
-        {"role": "assistant", "content": "Sure! What's the project?"},
-        {"role": "user", "content": "It's called blackcat. I want to add vector memory search."},
-        {"role": "assistant", "content": "We could use sqlite-vec for that."},
-        {"role": "user", "content": "Good idea. Let's use ollama/nomic-embed-text for embeddings."},
+        {"role": "user", "content": "Today I am so happy, it was a great day, I graduated from the most pretigious university of the world.", "timestamp": day_before_ts },
+        {"role": "assistant", "content": "Wow congratulations, you are so awesome. I knew you were going to be graduated. We worked so hard together", "timestamp": day_before_ts},
+        {"role": "user", "content": "I need help with my Python project.", "timestamp": yesterday_ts },
+        {"role": "assistant", "content": "Sure! What's the project?", "timestamp": yesterday_ts},
+        {"role": "user", "content": "It's called blackcat. I want to add vector memory search.", "timestamp": yesterday_ts},
+        {"role": "assistant", "content": "We could use sqlite-vec for that.", "timestamp": yesterday_ts},
+        {"role": "user", "content": "Good idea. Let's use ollama/nomic-embed-text for embeddings.", "timestamp": yesterday_ts},
     ]
 
     result = await summarizer.summarize_session(messages, "test:session")
@@ -166,6 +178,11 @@ async def test_summarize_session(summarizer):
     assert isinstance(result["summary"], str)
     assert isinstance(result["facts"], str)
     assert len(result["summary"]) > 0
+
+    # Verify only yesterday's content is summarized (date filtering works)
+    summary_lower = result["summary"].lower()
+    assert re.search(r"python|blackcat|sqlite", summary_lower), "Summary should mention Python project content from yesterday"
+    assert not re.search(r"university|graduated|congratulations", summary_lower), "Summary should NOT mention university content from day before"
 
 
 # ── Format messages ───────────────────────────────────────────────

@@ -1,10 +1,12 @@
 """Summarizer utility for context compaction and memory consolidation."""
 
+from datetime import datetime
 from typing import Any
 
 from loguru import logger
 
 from blackcat.providers.base import LLMProvider
+from blackcat.utils.helpers import last_24h
 
 
 class Summarizer:
@@ -121,6 +123,7 @@ Format as bullet points."""
         formatted = self._format_messages_for_summary(messages)
 
         if not formatted.strip():
+            logger.debug("No formatted content for fact extraction ({} messages)", len(messages))
             return ""
 
         try:
@@ -165,8 +168,30 @@ Format as bullet points."""
         """
         logger.info("Summarizing session {} ({} messages)", session_key, len(messages))
 
-        summary = await self.summarize_messages(messages)
-        facts = await self.extract_facts(messages)
+        yesterday = last_24h(datetime.now())
+        filtered_messages = []
+
+        for m in messages:
+            ts_raw = m.get("timestamp")
+            if not ts_raw:
+                continue
+            try:
+                ts_clean: str = ts_raw.replace("Z", "+00:00")
+                ts_dt = datetime.fromisoformat(ts_clean)
+
+                msg_date = ts_dt.date()
+
+                if msg_date == yesterday:
+                    filtered_messages.append(m)
+            except (ValueError, TypeError):
+                logger.warning("Invalide timestamp format: %s in message %s", ts_raw, m.get("id", "unknown"))
+                continue
+
+        if not filtered_messages:
+            return {"summary": "No message to summarize", "facts": ""}
+
+        summary = await self.summarize_messages(filtered_messages)
+        facts = await self.extract_facts(filtered_messages)
 
         return {
             "summary": summary,
@@ -179,25 +204,31 @@ Format as bullet points."""
     ) -> str:
         """Format messages into readable text for summarization."""
         lines = []
+        try:
+            for msg in messages:
+                author = msg.get("author", "")
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
 
-        for msg in messages:
-            role = msg.get("role", "unknown")
-            content = msg.get("content", "")
+                # Skip system messages and tool calls for summarization
+                if role == "system":
+                    continue
+                if role == "tool":
+                    continue
+                if not content:
+                    continue
 
-            # Skip system messages and tool calls for summarization
-            if role == "system":
-                continue
-            if role == "tool":
-                continue
-            if not content:
-                continue
-
-            # Format based on role
-            if role == "user":
-                lines.append(f"User: {content}")
-            elif role == "assistant":
-                lines.append(f"Assistant: {content}")
-            else:
-                lines.append(f"{role}: {content}")
+                # Format based on role
+                if author:
+                    lines.append(f"{author}: {content}")
+                elif role == "user":
+                    lines.append(f"User: {content}")
+                elif role == "assistant":
+                    lines.append(f"Assistant: {content}")
+                else:
+                    lines.append(f"{role}: {content}")
+        except Exception as e:
+            logger.error("Failed to format messages for summarization: {}", e)
+            return ""
 
         return "\n\n".join(lines)
