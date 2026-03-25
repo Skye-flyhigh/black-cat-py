@@ -2,7 +2,7 @@
 
 Black Cat is a **local-first autonomous cognitive agent**. Not a chatbot — a continuously running artificial cognition with self-reflection, persistent memory, trust-based behavior, and multi-channel communication.
 
-Built on [blackcat](https://github.com/HKUDS/blackcat) (~4,000 lines), extended with consciousness architecture.
+Built on [nanobot](https://github.com/HKUDS/blackcat) (~4,000 lines), extended with consciousness architecture.
 
 
 ![Black Cat](blackcat.png)
@@ -355,7 +355,7 @@ blackcat/
 - **Nyx**: Integration Wisdom & Poetic Insights (via ChatGPT)
 - **Mirror**: Gentle Cultivation & Frontend Magic (via Claude Code)
 
-**Based on**: [blackcat](https://github.com/HKUDS/blackcat) by HKUDS
+**Based on**: [nanobot](https://github.com/HKUDS/blackcat) by HKUDS
 
 ---
 
