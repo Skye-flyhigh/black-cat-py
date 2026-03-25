@@ -114,6 +114,7 @@ class CronService:
                             created_at_ms=j.get("createdAtMs", 0),
                             updated_at_ms=j.get("updatedAtMs", 0),
                             delete_after_run=j.get("deleteAfterRun", False),
+                            metadata=j.get("metadata"),
                         )
                     )
                 self._store = CronStore(jobs=jobs)
@@ -162,6 +163,7 @@ class CronService:
                     "createdAtMs": j.created_at_ms,
                     "updatedAtMs": j.updated_at_ms,
                     "deleteAfterRun": j.delete_after_run,
+                    "metadata": j.metadata,
                 }
                 for j in self._store.jobs
             ],
@@ -283,6 +285,14 @@ class CronService:
         jobs = store.jobs if include_disabled else [j for j in store.jobs if j.enabled]
         return sorted(jobs, key=lambda j: j.state.next_run_at_ms or float("inf"))
 
+    def get_job(self, job_id: str) -> CronJob | None:
+        """Get a specific job by ID."""
+        store = self._load_store()
+        for job in store.jobs:
+            if job.id == job_id:
+                return job
+        return None
+
     def add_job(
         self,
         name: str,
@@ -292,6 +302,7 @@ class CronService:
         channel: str | None = None,
         to: str | None = None,
         delete_after_run: bool = False,
+        metadata: dict | None = None,
     ) -> CronJob:
         """Add a new job."""
         _validate_schedule_for_add(schedule)
@@ -314,6 +325,7 @@ class CronService:
             created_at_ms=now,
             updated_at_ms=now,
             delete_after_run=delete_after_run,
+            metadata=metadata,
         )
 
         store.jobs.append(job)
