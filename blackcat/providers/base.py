@@ -74,7 +74,7 @@ class LLMProvider(ABC):
     Implementations should handle the specifics of each provider's API
     while maintaining a consistent interface.
     """
-    
+
     _CHAT_RETRY_DELAYS = (1, 2, 4)
     _TRANSIENT_ERROR_MARKERS = (
         "429",
@@ -97,12 +97,19 @@ class LLMProvider(ABC):
         self.api_key = api_key
         self.api_base = api_base
         self.generation: GenerationSettings = GenerationSettings()
-        
+
     def _sanitize_empty_content(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Sanitize message content: fix empty blocks, strip internal _meta fields."""
         result: list[dict[str, Any]] = []
         for msg in messages:
             content = msg.get("content")
+
+            # Handle None content
+            if content is None:
+                clean = dict(msg)
+                clean["content"] = None if (msg.get("role") == "assistant" and msg.get("tool_calls")) else "(empty)"
+                result.append(clean)
+                continue
 
             if isinstance(content, str) and not content:
                 clean = dict(msg)
@@ -189,7 +196,7 @@ class LLMProvider(ABC):
             LLMResponse with content and/or tool calls.
         """
         pass
-    
+
     @classmethod
     def _is_transient_error(cls, content: str | None) -> bool:
         err = (content or "").lower()

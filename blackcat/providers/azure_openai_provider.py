@@ -19,7 +19,7 @@ _AZURE_MSG_KEYS = frozenset({"role", "content", "tool_calls", "tool_call_id", "n
 class AzureOpenAIProvider(LLMProvider):
     """
     Azure OpenAI provider with API version 2024-10-21 compliance.
-    
+
     Features:
     - Hardcoded API version 2024-10-21
     - Uses model field as Azure deployment name in URL path
@@ -37,13 +37,13 @@ class AzureOpenAIProvider(LLMProvider):
         super().__init__(api_key, api_base)
         self.default_model = default_model
         self.api_version = "2024-10-21"
-        
+
         # Validate required parameters
         if not api_key:
             raise ValueError("Azure OpenAI api_key is required")
         if not api_base:
             raise ValueError("Azure OpenAI api_base is required")
-        
+
         # Ensure api_base ends with /
         if not api_base.endswith('/'):
             api_base += '/'
@@ -56,15 +56,17 @@ class AzureOpenAIProvider(LLMProvider):
         base_url = self.api_base
         if not base_url.endswith('/'):
             base_url += '/'
-        
+
         url = urljoin(
-            base_url, 
+            base_url,
             f"openai/deployments/{deployment_name}/chat/completions"
         )
         return f"{url}?api-version={self.api_version}"
 
     def _build_headers(self) -> dict[str, str]:
         """Build headers for Azure OpenAI API with api-key header."""
+        # Constructor validates api_key is non-empty
+        assert self.api_key is not None
         return {
             "Content-Type": "application/json",
             "api-key": self.api_key,  # Azure OpenAI uses api-key header, not Authorization
@@ -153,7 +155,7 @@ class AzureOpenAIProvider(LLMProvider):
                         content=f"Azure OpenAI API Error {response.status_code}: {response.text}",
                         finish_reason="error",
                     )
-                
+
                 response_data = response.json()
                 return self._parse_response(response_data)
 
@@ -176,6 +178,8 @@ class AzureOpenAIProvider(LLMProvider):
                     args = tc["function"]["arguments"]
                     if isinstance(args, str):
                         args = json_repair.loads(args)
+                    if not isinstance(args, dict):
+                        args = {}
 
                     tool_calls.append(
                         ToolCallRequest(
@@ -290,13 +294,17 @@ class AzureOpenAIProvider(LLMProvider):
                 if fn.get("arguments"):
                     buf["arguments"] += fn["arguments"]
 
-        tool_calls = [
-            ToolCallRequest(
-                id=buf["id"], name=buf["name"],
-                arguments=json_repair.loads(buf["arguments"]) if buf["arguments"] else {},
-            )
-            for buf in tool_call_buffers.values()
-        ]
+        tool_calls = []
+        for buf in tool_call_buffers.values():
+            args_raw = buf.get("arguments", "")
+            args = json_repair.loads(args_raw) if args_raw else {}
+            if not isinstance(args, dict):
+                args = {}
+            tool_calls.append(ToolCallRequest(
+                id=buf["id"],
+                name=buf["name"],
+                arguments=args,
+            ))
 
         return LLMResponse(
             content="".join(content_parts) or None,

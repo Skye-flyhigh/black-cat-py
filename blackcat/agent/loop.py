@@ -33,7 +33,6 @@ from blackcat.utils.helpers import (
 if TYPE_CHECKING:
     from blackcat.config.schema import Config, ExecToolConfig
     from blackcat.cron.service import CronService
-    from blackcat.lens import LensClient
 
 from blackcat.agent.context import ContextManager
 from blackcat.agent.subagent import SubagentManager

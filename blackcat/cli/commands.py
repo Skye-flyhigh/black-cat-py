@@ -468,6 +468,8 @@ def _make_provider(config: Config):
         provider = OpenAICodexProvider(default_model=model)
     elif backend == "azure_openai":
         from blackcat.providers.azure_openai_provider import AzureOpenAIProvider
+        # Validation at line 451-456 ensures p, p.api_key, p.api_base are non-None
+        assert p is not None and p.api_key is not None and p.api_base is not None
         provider = AzureOpenAIProvider(
             api_key=p.api_key,
             api_base=p.api_base,

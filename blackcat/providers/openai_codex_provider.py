@@ -10,7 +10,7 @@ from typing import Any, AsyncGenerator
 
 import httpx
 from loguru import logger
-from oauth_cli_kit import get_token as get_codex_token
+from oauth_cli_kit import get_token as get_codex_token  # type: ignore[import]
 
 from blackcat.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
@@ -35,10 +35,14 @@ class OpenAICodexProvider(LLMProvider):
         on_content_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         """Shared request logic for both chat() and chat_stream()."""
+        if get_codex_token is None:
+            raise RuntimeError("oauth_cli_kit not installed - cannot use Codex provider")
         model = model or self.default_model
         system_prompt, input_items = _convert_messages(messages)
 
         token = await asyncio.to_thread(get_codex_token)
+        if not token.account_id or not token.access:
+            raise RuntimeError("Codex OAuth token missing account_id or access token")
         headers = _build_headers(token.account_id, token.access)
 
         body: dict[str, Any] = {
@@ -229,7 +233,7 @@ async def _iter_sse(response: httpx.Response) -> AsyncGenerator[dict[str, Any], 
     async for line in response.aiter_lines():
         if line == "":
             if buffer:
-                data_lines = [l[5:].strip() for l in buffer if l.startswith("data:")]
+                data_lines = [li[5:].strip() for li in buffer if li.startswith("data:")]
                 buffer = []
                 if not data_lines:
                     continue
@@ -294,7 +298,7 @@ async def _consume_sse(
                 tool_calls.append(
                     ToolCallRequest(
                         id=f"{call_id}|{buf.get('id') or item.get('id') or 'fc_0'}",
-                        name=buf.get("name") or item.get("name"),
+                        name=buf.get("name") or item.get("name") or "unknown",
                         arguments=args,
                     )
                 )

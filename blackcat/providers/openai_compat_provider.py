@@ -418,6 +418,8 @@ class OpenAICompatProvider(LLMProvider):
             args = tc.function.arguments
             if isinstance(args, str):
                 args = json_repair.loads(args)
+            if not isinstance(args, dict):
+                args = {}
             ec, prov, fn_prov = _extract_tc_extras(tc)
             tool_calls.append(ToolCallRequest(
                 id=_short_tool_id(),
@@ -509,19 +511,23 @@ class OpenAICompatProvider(LLMProvider):
             for tc in (delta.tool_calls or []) if delta else []:
                 _accum_tc(tc, getattr(tc, "index", 0))
 
+        tool_calls = []
+        for b in tc_bufs.values():
+            args_raw = b.get("arguments", "")
+            args = json_repair.loads(args_raw) if args_raw else {}
+            if not isinstance(args, dict):
+                args = {}
+            tool_calls.append(ToolCallRequest(
+                id=b["id"] or _short_tool_id(),
+                name=b["name"],
+                arguments=args,
+                extra_content=b.get("extra_content"),
+                provider_specific_fields=b.get("prov"),
+                function_provider_specific_fields=b.get("fn_prov"),
+            ))
         return LLMResponse(
             content="".join(content_parts) or None,
-            tool_calls=[
-                ToolCallRequest(
-                    id=b["id"] or _short_tool_id(),
-                    name=b["name"],
-                    arguments=json_repair.loads(b["arguments"]) if b["arguments"] else {},
-                    extra_content=b.get("extra_content"),
-                    provider_specific_fields=b.get("prov"),
-                    function_provider_specific_fields=b.get("fn_prov"),
-                )
-                for b in tc_bufs.values()
-            ],
+            tool_calls=tool_calls,
             finish_reason=finish_reason,
             usage=usage,
         )
@@ -545,11 +551,14 @@ class OpenAICompatProvider(LLMProvider):
         temperature: float = 0.7,
         reasoning_effort: str | None = None,
         tool_choice: str | dict[str, Any] | None = None,
+        timeout: int | None = None,
     ) -> LLMResponse:
         kwargs = self._build_kwargs(
             messages, tools, model, max_tokens, temperature,
             reasoning_effort, tool_choice,
         )
+        if timeout is not None:
+            kwargs["timeout"] = timeout
         try:
             return self._parse(await self._client.chat.completions.create(**kwargs))
         except Exception as e:
@@ -565,6 +574,7 @@ class OpenAICompatProvider(LLMProvider):
         reasoning_effort: str | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         on_content_delta: Callable[[str], Awaitable[None]] | None = None,
+        timeout: int | None = None,
     ) -> LLMResponse:
         kwargs = self._build_kwargs(
             messages, tools, model, max_tokens, temperature,
@@ -572,6 +582,8 @@ class OpenAICompatProvider(LLMProvider):
         )
         kwargs["stream"] = True
         kwargs["stream_options"] = {"include_usage": True}
+        if timeout is not None:
+            kwargs["timeout"] = timeout
         try:
             stream = await self._client.chat.completions.create(**kwargs)
             chunks: list[Any] = []
