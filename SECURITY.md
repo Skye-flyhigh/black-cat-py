@@ -120,7 +120,7 @@ npm audit fix
 ```
 
 **Important Notes:**
-- Keep `litellm` updated to the latest version for security fixes
+- Remove entirely  `litellm`, especially compromised versions v1.82.6 and v1.82.7 
 - We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
 - Run `pip-audit` or `npm audit` regularly
 - Subscribe to security advisories for blackcat and its dependencies
