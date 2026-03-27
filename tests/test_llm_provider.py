@@ -1,4 +1,4 @@
-"""Integration tests for LiteLLMProvider against a live Ollama instance.
+"""Integration tests for OpenAICompatProvider against a live Ollama instance.
 
 These tests require Ollama running at localhost:11434 with ministral-3:8b.
 They are skipped automatically if Ollama is not reachable.
@@ -10,20 +10,12 @@ Run explicitly:
 import pytest
 
 from blackcat.providers.base import LLMResponse, ToolCallRequest
-from blackcat.providers.litellm_provider import LiteLLMProvider
-from tests.conftest import LLM_TEST_MODEL
 
 
 @pytest.fixture
-def provider(ollama_available):
-    """LiteLLMProvider connected to local Ollama.
-
-    No api_base needed — LiteLLM handles ollama/ prefix natively.
-    """
-    return LiteLLMProvider(
-        api_key="ollama",
-        default_model=LLM_TEST_MODEL,
-    )
+def provider(ollama_available, llm_provider):
+    """OpenAICompatProvider connected to local Ollama."""
+    return llm_provider
 
 
 # ── Basic completion ──────────────────────────────────────────────
@@ -231,59 +223,7 @@ async def test_no_weather_tool_for_math(provider):
     if response.has_tool_calls:
         assert all(tc.name != "get_weather" for tc in response.tool_calls)
 
-
-# ── Model resolution ──────────────────────────────────────────────
-
-
-def test_resolve_model_ollama(ollama_available):
-    """Ollama models should resolve without triggering cloud providers."""
-    provider = LiteLLMProvider(
-        api_key="ollama",
-        default_model=LLM_TEST_MODEL,
-    )
-    resolved = provider._resolve_model(LLM_TEST_MODEL)
-    # Should keep the ollama prefix, not get rerouted to a cloud provider
-    assert "dashscope" not in resolved.lower()
-
-
-def test_resolve_model_ollama_qwen_no_dashscope(ollama_available):
-    """ollama/qwen3 must not trigger DashScope routing."""
-    provider = LiteLLMProvider(
-        api_key="ollama",
-        default_model="ollama/qwen3-vl:8b",
-    )
-    resolved = provider._resolve_model("ollama/qwen3-vl:8b")
-    assert "dashscope" not in resolved.lower()
-
-
-def test_resolve_model_standard():
-    """Standard models should resolve correctly (no network needed)."""
-    provider = LiteLLMProvider(
-        api_key="sk-test",
-        default_model="anthropic/claude-sonnet-4-5",
-    )
-    resolved = provider._resolve_model("deepseek-chat")
-    assert resolved == "deepseek/deepseek-chat"
-
-
-def test_resolve_model_gateway():
-    """Gateway models should get gateway prefix."""
-    provider = LiteLLMProvider(
-        api_key="sk-or-test",
-        default_model="claude-sonnet-4-5",
-    )
-    assert provider.is_openrouter is True
-    resolved = provider._resolve_model("claude-sonnet-4-5")
-    assert resolved == "openrouter/claude-sonnet-4-5"
-
-
-def test_resolve_model_aihubmix_strips_prefix():
-    """AiHubMix should strip provider prefix and re-prefix as openai/."""
-    provider = LiteLLMProvider(
-        api_key="sk-test",
-        api_base="https://aihubmix.com/v1",
-        default_model="anthropic/claude-sonnet-4-5",
-    )
-    assert provider.is_aihubmix is True
-    resolved = provider._resolve_model("anthropic/claude-sonnet-4-5")
-    assert resolved == "openai/claude-sonnet-4-5"
+# ── Model resolution tests removed ─────────────────────────────────
+# LiteLLM-specific model prefixing (is_openrouter, is_aihubmix, _resolve_model)
+# has been removed. The new architecture uses ProviderSpec from the registry
+# for provider matching and configuration.

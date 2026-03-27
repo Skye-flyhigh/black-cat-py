@@ -3,6 +3,8 @@
 import httpx
 import pytest
 
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "llm: tests that require a running LLM (Ollama)")
@@ -24,6 +26,15 @@ def ollama_available():
         pytest.skip("Ollama not running at localhost:11434")
 
 
+@pytest.fixture(scope="session")
+def llm_provider():
+    """Default LLM provider for tests (Ollama via OpenAI-compatible API)."""
+    return OpenAICompatProvider(
+        api_key="ollama",
+        api_base="http://localhost:11434/v1",
+        default_model=LLM_TEST_MODEL,
+    )
+
+
 # Default test model — ministral-3 is small, fast, and supports native tool calling.
-# LiteLLM handles the "ollama/" prefix natively (no api_base needed).
-LLM_TEST_MODEL = "ollama/ministral-3:8b"
+LLM_TEST_MODEL = "ministral-3:8b"
