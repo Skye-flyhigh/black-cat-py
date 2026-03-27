@@ -11,6 +11,7 @@ from blackcat.session.manager import Session, SessionManager
 
 if TYPE_CHECKING:
     from blackcat.agent.summarizer import Summarizer
+    from blackcat.lens import LensClient
 
 import tiktoken
 import tomli_w
@@ -73,6 +74,11 @@ class ContextManager:
         self.skills = SkillsLoader(workspace)
         self.summarizer = summarizer
         self.sessions = session_manager or SessionManager(workspace)
+        self.lens_client: "LensClient | None" = None
+
+    def set_lens_client(self, client: "LensClient | None") -> None:
+        """Set the lens LSP client for code intelligence."""
+        self.lens_client = client
 
     def load_toml(self, path: Path) -> dict:
         """Load TOML file and convert to dict."""
@@ -142,7 +148,7 @@ class ContextManager:
 
         return identity
 
-    def build_core_prompt(
+    async def build_core_prompt(
         self,
         author: str = "unknown",
         channel: str | None = None,
@@ -384,7 +390,7 @@ For normal conversation, just respond with text - do not call the message tool."
     # Message Assembly (Main Entry Point)
     # -------------------------------------------------------------------------
 
-    def build_messages(
+    async def build_messages(
         self,
         history: list[dict[str, Any]],
         current_message: str,
@@ -415,8 +421,8 @@ For normal conversation, just respond with text - do not call the message tool."
         If max_tokens provided, logs warning when budget >80% or >95% used.
         Call context_pruning() or compact_history() after if budget critical.
         """
-        # System prompt (identity, session, skills, journal)
-        system_prompt = self.build_core_prompt(
+        # System prompt (identity, session, skills, journal, + code diagnostics)
+        system_prompt = await self.build_core_prompt(
             author, channel, chat_id, skill_names
         )
 
@@ -426,6 +432,16 @@ For normal conversation, just respond with text - do not call the message tool."
         messages.append(
             {"role": "user", "content": self._build_user_content(current_message, media)}
         )
+
+        # Inject code diagnostics if lens is available
+        if self.lens_client:
+            try:
+                diagnostics_prompt = await self._get_code_diagnostics(history)
+                if diagnostics_prompt:
+                    # Insert diagnostics after system prompt
+                    messages.insert(1, {"role": "system", "content": diagnostics_prompt})
+            except Exception:
+                pass  # Silently skip if lens fails
 
         # Check token budget if max_tokens provided
         if max_tokens:
@@ -465,6 +481,65 @@ For normal conversation, just respond with text - do not call the message tool."
         if not images:
             return text
         return images + [{"type": "text", "text": text}]
+
+    async def _get_code_diagnostics(self, history: list[dict[str, Any]]) -> str | None:
+        """Get code diagnostics for recently mentioned files."""
+        if not self.lens_client:
+            return None
+
+        from blackcat.lens import format_diagnostics
+
+        # Get recently touched files from current session
+        recent_files: list[str] = []
+        try:
+            # Try to get from session manager if available
+            if self.sessions and hasattr(self.sessions, '_cache') and self.sessions._cache:
+                # Get the most recent session
+                for session in self.sessions._cache.values():
+                    recent_files = session.get_recently_touched_files(limit=3)
+                    if recent_files:
+                        break
+        except Exception:
+            pass
+
+        # Fallback: extract from history if session method didn't work
+        if not recent_files:
+            recent_files_set: set[str] = set()
+            import re
+            for msg in history[-20:]:
+                content = msg.get("content", "")
+                if not isinstance(content, str):
+                    continue
+                matches = re.findall(r'[\w\-/]+\.(?:py|ts|js|tsx|jsx|json|toml|md)', content)
+                for match in matches:
+                    for possible_path in [match, str(self.workspace / match)]:
+                        p = Path(possible_path)
+                        if p.exists() and p.is_file():
+                            recent_files_set.add(str(p))
+                            break
+            recent_files = list(recent_files_set)[:3]
+
+        if not recent_files:
+            return None
+
+        # Get diagnostics for up to 3 most recently mentioned files
+        diagnostics_parts = []
+        for file_path in list(recent_files)[:3]:
+            try:
+                diags = await self.lens_client.get_diagnostics(file_path)
+                if diags:
+                    try:
+                        rel_path = str(Path(file_path).relative_to(self.workspace))
+                    except ValueError:
+                        rel_path = Path(file_path).name
+                    formatted = format_diagnostics(diags, max_items=5)
+                    diagnostics_parts.append(f"### {rel_path}\n{formatted}")
+            except Exception:
+                continue  # Skip files that fail
+
+        if diagnostics_parts:
+            return f"## Code Health\n\n{chr(10).join(diagnostics_parts)}"
+        return None
 
     # -------------------------------------------------------------------------
     # Message Helpers (for agent loop)

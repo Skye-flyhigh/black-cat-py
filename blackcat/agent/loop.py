@@ -11,6 +11,18 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from blackcat.agent.tools.lens import (
+    LensCodeActionTool,
+    LensCompletionTool,
+    LensDefinitionTool,
+    LensDocumentSymbolTool,
+    LensFormatTool,
+    LensHoverTool,
+    LensReferencesTool,
+    LensRenameTool,
+    LensSignatureHelpTool,
+    LensWorkspaceSymbolTool,
+)
 from blackcat.utils.helpers import (
     build_tool_call_dicts,
     parse_session_key,
@@ -21,6 +33,7 @@ from blackcat.utils.helpers import (
 if TYPE_CHECKING:
     from blackcat.config.schema import Config, ExecToolConfig
     from blackcat.cron.service import CronService
+    from blackcat.lens import LensClient
 
 from blackcat.agent.context import ContextManager
 from blackcat.agent.subagent import SubagentManager
@@ -91,9 +104,22 @@ class AgentLoop:
             timeout=llm_timeout,
         )
 
-        self.context = ContextManager(workspace, summarizer=self.summarizer)
+        self.context = context or ContextManager(workspace, summarizer=self.summarizer)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
+
+        if config and config.tools.lens.enabled:
+            from blackcat.lens import LensClient
+            self.lens_client = LensClient(config.tools.lens)
+            self.context.set_lens_client(self.lens_client)
+            logger.info("Lens LSP client initialized with {} workspaces", len(config.tools.lens.workspaces))
+        else:
+            self.lens_client = None
+            if config:
+                logger.debug("Lens disabled: config.tools.lens.enabled = {}", config.tools.lens.enabled)
+            else:
+                logger.debug("Lens disabled: no config provided")
+
         self.subagents = SubagentManager(
             provider=provider,
             workspace=workspace,
@@ -147,6 +173,22 @@ class AgentLoop:
         # Cron tool (for scheduling)
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
+
+        # lens tools (for code intelligence)
+        if self.lens_client and self.config and self.config.tools.lens.enabled:
+            logger.info("Registering {} lens LSP tools", 10)
+            self.tools.register(LensDefinitionTool(self.lens_client))
+            self.tools.register(LensReferencesTool(self.lens_client))
+            self.tools.register(LensHoverTool(self.lens_client))
+            self.tools.register(LensWorkspaceSymbolTool(self.lens_client))
+            self.tools.register(LensDocumentSymbolTool(self.lens_client))
+            self.tools.register(LensCompletionTool(self.lens_client))
+            self.tools.register(LensRenameTool(self.lens_client))
+            self.tools.register(LensCodeActionTool(self.lens_client))
+            self.tools.register(LensFormatTool(self.lens_client))
+            self.tools.register(LensSignatureHelpTool(self.lens_client))
+
+        self.tools.export_md(self.workspace / "TOOLS.md")
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (lazy, one-time).
@@ -276,7 +318,7 @@ class AgentLoop:
 
         # Build initial messages
         author = self._resolve_author(msg.sender_id, msg.channel)
-        messages = self.context.build_messages(
+        messages = await self.context.build_messages(
             history=session.get_history(max_messages=self.memory_window),
             current_message=msg.content,
             author=author,

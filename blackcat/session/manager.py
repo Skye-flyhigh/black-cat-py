@@ -78,6 +78,57 @@ class Session:
         self.messages = []
         self.updated_at = datetime.now()
 
+    def get_recently_touched_files(self, limit: int = 5) -> list[str]:
+        """Extract file paths from recent tool calls/operations.
+
+        Scans message history for file paths mentioned in tool results
+        or user messages. Returns unique paths ordered by recency.
+
+        Args:
+            limit: Maximum number of file paths to return.
+
+        Returns:
+            List of absolute file paths that were recently accessed.
+        """
+        import re
+
+        file_paths: list[str] = []
+        seen: set[str] = set()
+
+        # Scan from most recent to oldest
+        for msg in reversed(self.messages):
+            content = msg.get("content", "")
+            if not isinstance(content, str):
+                continue
+
+            # Match file paths with common code extensions
+            pattern = r"[\w\-/\\]+\.(?:py|ts|js|tsx|jsx|json|toml|md|rs|go|java|cpp|c|h|hpp)"
+            matches = re.findall(pattern, content)
+
+            for match in matches:
+                # Try as absolute first, then relative
+                p = Path(match)
+                if p.is_absolute() and p.exists():
+                    path_str = str(p)
+                else:
+                    # Try relative to common directories
+                    for base in [Path.cwd(), Path.home()]:
+                        full = base / match
+                        if full.exists():
+                            path_str = str(full)
+                            break
+                    else:
+                        continue
+
+                if path_str not in seen:
+                    seen.add(path_str)
+                    file_paths.append(path_str)
+
+                    if len(file_paths) >= limit:
+                        return file_paths
+
+        return file_paths
+
 
 class SessionManager:
     """

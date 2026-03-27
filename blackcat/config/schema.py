@@ -199,11 +199,19 @@ class MCPServerConfig(Base):
     headers: dict[str, str] = Field(default_factory=dict)
 
 
+class LensConfig(Base):
+    """Lens LSP bridge configuration."""
+
+    enabled: bool = False
+    workspaces: dict[str, str] = Field(default_factory=dict)  # name -> absolute path
+
+
 class ToolsConfig(Base):
     """Tools configuration."""
 
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    lens: LensConfig = Field(default_factory=LensConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
