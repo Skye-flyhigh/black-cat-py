@@ -13,18 +13,14 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from blackcat.agent.summarizer import Summarizer
-from blackcat.providers.litellm_provider import LiteLLMProvider
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 from tests.conftest import LLM_TEST_MODEL
 
 
 @pytest.fixture
-def summarizer(ollama_available):
+def summarizer(ollama_available, llm_provider):
     """Summarizer backed by local Ollama."""
-    provider = LiteLLMProvider(
-        api_key="ollama",
-        default_model=LLM_TEST_MODEL,
-    )
-    return Summarizer(provider=provider, model=LLM_TEST_MODEL, timeout=60)
+    return Summarizer(provider=llm_provider, model=LLM_TEST_MODEL, timeout=60)
 
 
 # ── Summarize messages ─────────────────────────────────────────────
@@ -55,7 +51,7 @@ async def test_summarize_conversation(summarizer):
 @pytest.mark.asyncio
 async def test_summarize_empty():
     """Empty messages should return empty string (no LLM call needed)."""
-    provider = LiteLLMProvider(api_key="ollama")
+    provider = OpenAICompatProvider(api_key="ollama", api_base="http://localhost:11434/v1")
     s = Summarizer(provider=provider)
     result = await s.summarize_messages([])
     assert result == ""
@@ -127,7 +123,7 @@ async def test_extract_facts(summarizer):
 @pytest.mark.asyncio
 async def test_extract_facts_empty():
     """Empty messages should return empty string."""
-    provider = LiteLLMProvider(api_key="ollama")
+    provider = OpenAICompatProvider(api_key="ollama", api_base="http://localhost:11434/v1")
     s = Summarizer(provider=provider)
     result = await s.extract_facts([])
     assert result == ""
@@ -190,7 +186,7 @@ async def test_summarize_session(summarizer):
 
 def test_format_messages_filters_system_and_tool():
     """_format_messages_for_summary should skip system and tool messages."""
-    provider = LiteLLMProvider(api_key="test")
+    provider = OpenAICompatProvider(api_key="test")
     s = Summarizer(provider=provider)
 
     messages = [
@@ -208,6 +204,6 @@ def test_format_messages_filters_system_and_tool():
 
 
 def test_format_messages_empty():
-    provider = LiteLLMProvider(api_key="test")
+    provider = OpenAICompatProvider(api_key="test")
     s = Summarizer(provider=provider)
     assert s._format_messages_for_summary([]) == ""
