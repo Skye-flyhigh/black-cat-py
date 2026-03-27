@@ -235,37 +235,87 @@ class Config(BaseSettings):
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     authors: dict[str, AuthorIdentity] = Field(
         default_factory=dict
-    )  # Map author name → platform IDs
+    )
 
     @property
     def workspace_path(self) -> Path:
         """Get expanded workspace path."""
         return Path(self.agents.defaults.workspace).expanduser()
 
-    def get_provider(self, model: str | None = None) -> ProviderConfig | None:
-        """Get matched provider config (api_key, api_base, extra_headers). Falls back to first available."""
-        from blackcat.providers.registry import PROVIDERS
+    def _match_provider(
+        self, model: str | None = None
+    ) -> tuple["ProviderConfig | None", str | None]:
+        """Match provider config and its registry name. Returns (config, spec_name)."""
+        from blackcat.providers.registry import PROVIDERS, find_by_name
 
-        # Explicit provider selection bypasses auto-detection
         forced = self.agents.defaults.provider
         if forced != "auto":
-            p = getattr(self.providers, forced, None)
-            return p if p else None
+            spec = find_by_name(forced)
+            if spec:
+                p = getattr(self.providers, spec.name, None)
+                return (p, spec.name) if p else (None, None)
+            return None, None
 
         model_lower = (model or self.agents.defaults.model).lower()
+        model_normalized = model_lower.replace("-", "_")
+        model_prefix = model_lower.split("/", 1)[0] if "/" in model_lower else ""
+        normalized_prefix = model_prefix.replace("-", "_")
+
+        def _kw_matches(kw: str) -> bool:
+            kw = kw.lower()
+            return kw in model_lower or kw.replace("-", "_") in model_normalized
+
+        # Explicit provider prefix wins — prevents `github-copilot/...codex` matching openai_codex.
+        for spec in PROVIDERS:
+            p = getattr(self.providers, spec.name, None)
+            if p and model_prefix and normalized_prefix == spec.name:
+                if spec.is_oauth or spec.is_local or p.api_key:
+                    return p, spec.name
 
         # Match by keyword (order follows PROVIDERS registry)
         for spec in PROVIDERS:
             p = getattr(self.providers, spec.name, None)
-            if p and any(kw in model_lower for kw in spec.keywords) and p.api_key:
-                return p
+            if p and any(_kw_matches(kw) for kw in spec.keywords):
+                if spec.is_oauth or spec.is_local or p.api_key:
+                    return p, spec.name
+
+        # Fallback: configured local providers can route models without
+        # provider-specific keywords (for example plain "llama3.2" on Ollama).
+        # Prefer providers whose detect_by_base_keyword matches the configured api_base
+        # (e.g. Ollama's "11434" in "http://localhost:11434") over plain registry order.
+        local_fallback: tuple[ProviderConfig, str] | None = None
+        for spec in PROVIDERS:
+            if not spec.is_local:
+                continue
+            p = getattr(self.providers, spec.name, None)
+            if not (p and p.api_base):
+                continue
+            if spec.detect_by_base_keyword and spec.detect_by_base_keyword in p.api_base:
+                return p, spec.name
+            if local_fallback is None:
+                local_fallback = (p, spec.name)
+        if local_fallback:
+            return local_fallback
 
         # Fallback: gateways first, then others (follows registry order)
+        # OAuth providers are NOT valid fallbacks — they require explicit model selection
         for spec in PROVIDERS:
+            if spec.is_oauth:
+                continue
             p = getattr(self.providers, spec.name, None)
             if p and p.api_key:
-                return p
-        return None
+                return p, spec.name
+        return None, None
+
+    def get_provider(self, model: str | None = None) -> ProviderConfig | None:
+        """Get matched provider config (api_key, api_base, extra_headers). Falls back to first available."""
+        p, _ = self._match_provider(model)
+        return p
+
+    def get_provider_name(self, model: str | None = None) -> str | None:
+        """Get the registry name of the matched provider (e.g. "deepseek", "openrouter")."""
+        _, name = self._match_provider(model)
+        return name
 
     def get_api_key(self, model: str | None = None) -> str | None:
         """Get API key for the given model. Falls back to first available key."""
@@ -274,20 +324,16 @@ class Config(BaseSettings):
 
     def get_api_base(self, model: str | None = None) -> str | None:
         """Get API base URL for the given model. Applies default URLs for known gateways."""
-        from blackcat.providers.registry import PROVIDERS
+        from blackcat.providers.registry import find_by_name
 
-        p = self.get_provider(model)
+        p, name = self._match_provider(model)
         if p and p.api_base:
             return p.api_base
-        # Only gateways get a default URL here. Standard providers (like Moonshot)
-        # handle their base URL via env vars in _setup_env, NOT via api_base —
-        # otherwise find_gateway() would misdetect them as local/vLLM.
-        for spec in PROVIDERS:
-            if (
-                spec.is_gateway
-                and spec.default_api_base
-                and p == getattr(self.providers, spec.name, None)
-            ):
+        # Only gateways get a default api_base here. Standard providers
+        # resolve their base URL from the registry in the provider constructor.
+        if name:
+            spec = find_by_name(name)
+            if spec and (spec.is_gateway or spec.is_local) and spec.default_api_base:
                 return spec.default_api_base
         return None
 
