@@ -139,25 +139,25 @@ def test_format_trust(ctx):
 # ── System prompt building ─────────────────────────────────────────
 
 
-def test_build_core_prompt(ctx):
-    prompt = ctx.build_core_prompt(author="skye", channel="telegram")
+async def test_build_core_prompt(ctx):
+    prompt = await ctx.build_core_prompt(author="skye", channel="telegram")
     assert "Soul" in prompt or "helpful assistant" in prompt
     assert "trusted" in prompt.lower()
     assert "telegram" in prompt.lower()
     assert "Environment" in prompt
 
 
-def test_build_core_prompt_includes_journal(ctx):
+async def test_build_core_prompt_includes_journal(ctx):
     ctx.journal.write_long_term("User likes coffee")
-    prompt = ctx.build_core_prompt(author="skye")
+    prompt = await ctx.build_core_prompt(author="skye")
     assert "coffee" in prompt
 
 
 # ── Message assembly ──────────────────────────────────────────────
 
 
-def test_build_messages_structure(ctx):
-    messages = ctx.build_messages(
+async def test_build_messages_structure(ctx):
+    messages = await ctx.build_messages(
         history=[{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}],
         current_message="how are you?",
         author="skye",
@@ -169,8 +169,8 @@ def test_build_messages_structure(ctx):
     assert messages[3]["content"] == "how are you?"
 
 
-def test_build_messages_empty_history(ctx):
-    messages = ctx.build_messages(history=[], current_message="hello")
+async def test_build_messages_empty_history(ctx):
+    messages = await ctx.build_messages(history=[], current_message="hello")
     assert len(messages) == 2  # system + user
     assert messages[0]["role"] == "system"
     assert messages[1]["content"] == "hello"

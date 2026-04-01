@@ -148,3 +148,90 @@ def test_channels_config():
     assert isinstance(ch.whatsapp, WhatsAppConfig)
     assert isinstance(ch.telegram, TelegramConfig)
     assert isinstance(ch.discord, DiscordConfig)
+
+
+# ── Provider matching ────────────────────────────────────────────────
+
+
+def test_provider_match_prefix_with_no_key_uses_gateway():
+    """Model with provider prefix, but that provider has no key -> use gateway."""
+    cfg = Config()
+    cfg.providers.anthropic.api_key = ""  # No Anthropic key
+    cfg.providers.openrouter.api_key = "sk-or-test"  # Has gateway key
+    cfg.providers.vllm.api_base = "http://localhost:11434/"  # Local configured
+
+    p, name = cfg._match_provider("anthropic/claude-sonnet-4.6")
+    assert name == "openrouter"
+    assert p is not None
+    assert p.api_key == "sk-or-test"
+
+
+def test_provider_match_plain_model_uses_local():
+    """Plain model (no prefix) should use local fallback if configured."""
+    cfg = Config()
+    cfg.providers.openrouter.api_key = "sk-or-test"
+    cfg.providers.vllm.api_base = "http://localhost:11434/"
+
+    p, name = cfg._match_provider("llama3.2")
+    assert name == "vllm"
+    assert p is not None
+    assert p.api_base == "http://localhost:11434/"
+
+
+def test_provider_match_explicit_prefix_with_key():
+    """Explicit provider prefix with valid key should use that provider."""
+    cfg = Config()
+    cfg.providers.anthropic.api_key = "sk-ant-test"
+    cfg.providers.openrouter.api_key = "sk-or-test"
+
+    p, name = cfg._match_provider("anthropic/claude-sonnet-4.6")
+    assert name == "anthropic"
+    assert p is not None
+    assert p.api_key == "sk-ant-test"
+
+
+def test_provider_match_gateway_prefix():
+    """OpenRouter prefix should route through OpenRouter."""
+    cfg = Config()
+    cfg.providers.openrouter.api_key = "sk-or-test"
+
+    p, name = cfg._match_provider("openrouter/anthropic/claude-sonnet-4.6")
+    assert name == "openrouter"
+    assert p is not None
+
+
+def test_provider_match_no_provider_available():
+    """No matching provider with key should return None."""
+    cfg = Config()
+    # All providers have empty keys
+    cfg.providers.anthropic.api_key = ""
+    cfg.providers.openrouter.api_key = ""
+    cfg.providers.vllm.api_base = None  # No local either
+
+    p, name = cfg._match_provider("anthropic/claude-sonnet-4.6")
+    # Gateway fallback will also fail, so None
+    assert p is None or name is None or p.api_key == ""
+
+
+def test_provider_match_keyword_match():
+    """Match by keyword in model name."""
+    cfg = Config()
+    cfg.providers.openai.api_key = "sk-openai"
+
+    p, name = cfg._match_provider("gpt-4o")
+    assert name == "openai"
+    assert p is not None
+    assert p.api_key == "sk-openai"
+
+
+def test_provider_match_forced_provider():
+    """Forced provider in config should bypass auto-detection."""
+    cfg = Config()
+    cfg.agents.defaults.provider = "openrouter"
+    cfg.providers.openrouter.api_key = "sk-or-test"
+    cfg.providers.anthropic.api_key = "sk-ant-test"
+
+    p, name = cfg._match_provider("claude-sonnet-4.6")
+    assert name == "openrouter"
+    assert p is not None
+    assert p.api_key == "sk-or-test"

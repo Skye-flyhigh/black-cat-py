@@ -15,20 +15,18 @@ from blackcat.agent.tools.filesystem import ReadFileTool, WriteFileTool
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.bus.events import InboundMessage
 from blackcat.bus.queue import MessageBus
-from blackcat.providers.litellm_provider import LiteLLMProvider
 from tests.conftest import LLM_TEST_MODEL
 
 
 @pytest.fixture
-def provider(ollama_available):
-    return LiteLLMProvider(api_key="ollama", default_model=LLM_TEST_MODEL)
+def provider(ollama_available, llm_provider):
+    return llm_provider
 
 
 @pytest.fixture
-def agent(ollama_available, tmp_path):
+def agent(ollama_available, llm_provider, tmp_path):
     """Full AgentLoop backed by local Ollama."""
     bus = MessageBus()
-    prov = LiteLLMProvider(api_key="ollama", default_model=LLM_TEST_MODEL)
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "SOUL.md").write_text("You are a test assistant. Be very brief.\n")
@@ -36,7 +34,7 @@ def agent(ollama_available, tmp_path):
 
     loop = AgentLoop(
         bus=bus,
-        provider=prov,
+        provider=llm_provider,
         workspace=workspace,
         model=LLM_TEST_MODEL,
         max_iterations=5,
