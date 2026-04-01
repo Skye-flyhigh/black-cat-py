@@ -234,8 +234,11 @@ class OpenAICompatProvider(LLMProvider):
         model_name = model or self.default_model
         spec = self._spec
 
+        # Only apply cache_control for Claude models on OpenRouter
+        # OpenRouter's prompt caching is Claude-specific
         if spec and spec.supports_prompt_caching:
-            messages, tools = self._apply_cache_control(messages, tools)
+            if any(model_name.lower().startswith(k) for k in ("anthropic/", "claude")):
+                messages, tools = self._apply_cache_control(messages, tools)
 
         if spec and spec.strip_model_prefix:
             model_name = model_name.split("/")[-1]
