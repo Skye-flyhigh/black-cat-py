@@ -572,9 +572,10 @@ For normal conversation, just respond with text - do not call the message tool."
         if tool_calls:
             msg["tool_calls"] = tool_calls
 
-        # Thinking models (DeepSeek-R1, Kimi, etc.) reject history without this
-        if reasoning_content:
-            msg["reasoning_content"] = reasoning_content
+        # Thinking models (DeepSeek-R1, Kimi, etc.) require reasoning_content
+        # when thinking_blocks is present, even if reasoning_content is empty.
+        if reasoning_content is not None or thinking_blocks:
+            msg["reasoning_content"] = reasoning_content if reasoning_content is not None else ""
         if thinking_blocks:
             msg["thinking_blocks"] = thinking_blocks
 
