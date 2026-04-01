@@ -122,18 +122,25 @@ class ExecTool(Tool):
 
             cwd_path = Path(cwd).resolve()
 
-            win_paths = re.findall(r"[A-Za-z]:\\[^\\\"']+", cmd)
-            # Only match absolute paths — avoid false positives on relative
-            # paths like ".venv/bin/python" where "/bin/python" would be
-            # incorrectly extracted by the old pattern.
-            posix_paths = re.findall(r"(?:^|[\s|>])(/[^\s\"'>]+)", cmd)
-
-            for raw in win_paths + posix_paths:
+            for raw in self._extract_absolute_paths(cmd):
                 try:
-                    p = Path(raw.strip()).resolve()
+                    expanded = os.path.expandvars(raw.strip())
+                    p = Path(expanded).expanduser().resolve()
                 except Exception:
                     continue
                 if p.is_absolute() and cwd_path not in p.parents and p != cwd_path:
                     return "Error: Command blocked by safety guard (path outside working dir)"
 
         return None
+
+    @staticmethod
+    def _extract_absolute_paths(command: str) -> list[str]:
+        """Extract absolute paths from command for workspace guard."""
+        # Windows: match drive-root paths like `C:\` as well as `C:\path\to\file`
+        # NOTE: `*` is required so `C:\` (nothing after the slash) is still extracted.
+        win_paths = re.findall(r"[A-Za-z]:\\[^\s\"'|><;]*", command)
+        # POSIX: /absolute only - avoid false positives on relative paths
+        posix_paths = re.findall(r"(?:^|[\s|>'\"])(/[^\s\"'>;|<]+)", command)
+        # Home shortcut: ~
+        home_paths = re.findall(r"(?:^|[\s|>'\"])(~[^\s\"'>;|<]*)", command)
+        return win_paths + posix_paths + home_paths
