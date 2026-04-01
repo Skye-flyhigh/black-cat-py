@@ -2,10 +2,16 @@
 
 Black Cat is a **local-first autonomous cognitive agent**. Not a chatbot — a continuously running artificial cognition with self-reflection, persistent memory, trust-based behavior, and multi-channel communication.
 
-Built on [nanobot](https://github.com/HKUDS/blackcat) (~4,000 lines), extended with consciousness architecture.
+Built on lightweigth [nanobot](https://github.com/HKUDS/blackcat), extended with consciousness architecture and code intelligence.
 
 
 ![Black Cat](blackcat.png)
+
+## 📢 News
+
+> [!CAUTION]
+> **Security Advisory (March 2026):** Due to a supply chain attack in `litellm` (CVE-2024-6825, CVE-2025-0330, CVE-2025-0628, CVE-2025-11203), we have **completely removed LiteLLM** and migrated to native SDKs. See [SECURITY.md](SECURITY.md) for details.
+>
 
 ## Core Philosophy
 
@@ -20,6 +26,9 @@ Built on [nanobot](https://github.com/HKUDS/blackcat) (~4,000 lines), extended w
 MCPs used for the blackcat:
 - [**mnemo-mcp**](https://github.com/Skye-flyhigh/mnemo-mcp) — Persistent memory with semantic recall, decay, and weight-based relevance
 - [**telos-mcp**](https://github.com/Skye-flyhigh/telos-mcp) — Task planning and tracking system for managing work
+
+**VS Code Extension:**
+- [**lens**]() — LSP bridge for code intelligence (diagnostics, go-to-definition, hover, etc.)
 
 ---
 
@@ -278,17 +287,19 @@ modify_soul = true
 
 ## Providers
 
-Black Cat uses [LiteLLM](https://github.com/BerriAI/litellm) for multi-provider support:
+Black Cat uses **native SDKs** for LLM providers (LiteLLM removed due to supply chain vulnerabilities):
 
-| Provider | Models | Cost |
-|----------|--------|------|
-| **OpenRouter** | All models (Claude, GPT, Llama, etc.) | Varies |
-| **OpenAI** | GPT-4, GPT-OSS-20B/120B | $0.02-0.07/M tokens |
-| **Anthropic** | Claude Opus, Sonnet, Haiku | $3-15/M tokens |
-| **Ollama** | Local models | Free |
-| **vLLM** | Self-hosted | Free |
+| Provider | SDK | Models |
+|----------|-----|--------|
+| **OpenAI** | `openai` native SDK | GPT-4, GPT-5, o1, o3 |
+| **Anthropic** | `anthropic` native SDK | Claude Opus, Sonnet, Haiku |
+| **OpenRouter** | OpenAI-compatible | All models (Claude, GPT, Llama, etc.) |
+| **Ollama** | OpenAI-compatible API | Local models (llama, mistral, etc.) |
+| **vLLM** | OpenAI-compatible API | Self-hosted |
+| **Azure OpenAI** | Direct HTTP API | GPT deployments |
+| **OpenAI Codex** | OAuth + Responses API | Code generation |
 
-**Recommended for development**: `openai/gpt-oss-20b` via OpenRouter — capable, cheap ($0.07/M input), 128K context.
+**Recommended for development**: `ministral-3:8b` via local Ollama — free, capable, fast.
 
 ---
 
@@ -327,22 +338,82 @@ blackcat/
 
 ---
 
+## Code Intelligence (Lens)
+
+Black Cat integrates with VS Code via the **lens** extension for Language Server Protocol (LSP) support. This gives the cat "eyes" when coding — it can see diagnostics, navigate code, and provide intelligent assistance.
+
+### Setup
+
+1. Install the lens VS Code extension (from `/path/to/cloned/repo/lens-mcp` or marketplace)
+2. The extension auto-starts an HTTP bridge on port 8765
+3. Enable lens in your blackcat config:
+
+```json
+{
+  "tools": {
+    "lens": {
+      "enabled": true,
+      "port": 8765,
+      "workspaces": {
+        "black-cat-py": "/cat/flap/to/the/black-cat-py",
+        "telos": "/path/to/telos"
+      }
+    }
+  }
+}
+```
+
+### How It Works
+
+**Passive (Automatic)**: When VS Code is running, diagnostics (errors/warnings) from recently discussed files are automatically injected into the cat's context. No explicit tool calls needed.
+
+**Active (Tool Calls)**: The LLM can invoke lens tools when navigating code:
+
+| Tool | Purpose |
+|------|---------|
+| `lens_definition` | Go to symbol definition |
+| `lens_references` | Find all references |
+| `lens_hover` | Get type information |
+| `lens_completion` | Get autocomplete suggestions |
+| `lens_workspace_symbol` | Search symbols across workspace |
+| `lens_document_symbol` | Get document outline |
+| `lens_rename` | Preview rename across files |
+| `lens_code_action` | Get quick fixes |
+| `lens_format` | Preview formatting changes |
+| `lens_signature_help` | Get function signature help |
+
+### Example Usage
+
+```
+You: "what's wrong with this file?"
+Cat: "Line 45 has an undefined name 'httpx'. Did you forget to import it?"
+
+You: "where is AgentLoop defined?"
+Cat: [calls lens_workspace_symbol] "Found in blackcat/agent/loop.py:41"
+
+You: "rename foo to bar"
+Cat: [calls lens_rename] "Preview: 3 files affected, 12 edits total"
+```
+
+---
+
 ## Vision vs Current State
 
 | System | Status | Notes |
 |--------|--------|-------|
 | Agent loop | ✅ Working | LLM ↔ tool execution cycle |
 | Multi-channel | ✅ Working | Telegram, Discord, WhatsApp, Slack, Email |
-| Multi-provider | ✅ Working | LiteLLM (cloud) + Ollama (local) |
+| Multi-provider | ✅ Working | Native SDKs (OpenAI, Anthropic) + OpenAI-compatible (Ollama, vLLM) |
 | Trust system | ✅ Working | Author resolution, trust levels, behavioral enforcement |
 | Context manager | 🔶 Basic | Identity assembly, token management, trust instructions, compaction |
 | Summariser | 🔶 Basic | Provides summary for compaction |
 | Skills | ✅ Working | Pluggable SKILL.md files |
-| Memory | 🔶 Basic | MCP-based (mnemo-mcp), semantic recall with decay |
+| Memory | 🔶 Basic | MCP-based ([mnemo-mcp](https://github.com/Skye-flyhigh/mnemo-mcp)), semantic recall with decay |
+| Lens (LSP) | ✅ Working | VS Code extension for code intelligence |
 | Memory decay | ❌ Not yet | Weight-based decay with tag tiers |
 | Contextual state | ❌ Not yet | Dynamic trait modulation |
 | Reflection | ❌ Not yet | Self-reflection, decision memory |
-| Telos | 🔶 Basic | Task planning via telos-mcp |
+| Telos | 🔶 Basic | Task planning via [telos-mcp(https://github.com/Skye-flyhigh/telos-mcp)] |
 
 ---
 

@@ -18,6 +18,7 @@ from rich.table import Table
 from rich.text import Text
 
 from blackcat import __logo__, __version__
+from blackcat.config.schema import Config
 
 app = typer.Typer(
     name="blackcat",
@@ -432,25 +433,73 @@ This file stores important information that should persist across sessions.
         console.print("  [dim]Created memory/MEMORY.md[/dim]")
 
 
-def _make_provider(config):
-    """Create LiteLLMProvider from config. Exits if no API key or base URL found."""
-    from blackcat.providers.litellm_provider import LiteLLMProvider
+def _make_provider(config: Config):
+    """Create the appropriate LLM provider from config.
 
-    p = config.get_provider()
+    Routing is driven by ``ProviderSpec.backend`` in the registry.
+    """
+    from blackcat.providers.base import GenerationSettings
+    from blackcat.providers.registry import find_by_name
+
     model = config.agents.defaults.model
-    # Allow api_key OR api_base (for local endpoints like Ollama, vLLM)
-    has_credentials = p and (p.api_key or p.api_base)
-    is_local_model = model.startswith(("ollama/", "hosted_vllm/", "bedrock/"))
-    if not has_credentials and not is_local_model:
-        console.print("[red]Error: No API key or base URL configured.[/red]")
-        console.print("Set one in ~/.blackcat/config.json under providers section")
-        raise typer.Exit(1)
-    return LiteLLMProvider(
-        api_key=p.api_key if p else None,
-        api_base=config.get_api_base(),
-        default_model=model,
-        extra_headers=p.extra_headers if p else None,
+    provider_name = config.get_provider_name(model)
+    p = config.get_provider(model)
+    spec = find_by_name(provider_name) if provider_name else None
+    backend = spec.backend if spec else "openai_compat"
+
+    # --- validation ---
+    if backend == "azure_openai":
+        if not p or not p.api_key or not p.api_base:
+            console.print("[red]Error: Azure OpenAI requires api_key and api_base.[/red]")
+            console.print("Set them in ~/.blackcat/config.json under providers.azure_openai section")
+            console.print("Use the model field to specify the deployment name.")
+            raise typer.Exit(1)
+    elif backend == "openai_compat" and not model.startswith("bedrock/"):
+        needs_key = not (p and p.api_key)
+        exempt = spec and (spec.is_oauth or spec.is_local or spec.is_direct)
+        if needs_key and not exempt:
+            console.print("[red]Error: No API key configured.[/red]")
+            console.print("Set one in ~/.blackcat/config.json under providers section")
+            raise typer.Exit(1)
+
+    # --- instantiation by backend ---
+    if backend == "openai_codex":
+        from blackcat.providers.openai_codex_provider import OpenAICodexProvider
+        provider = OpenAICodexProvider(default_model=model)
+    elif backend == "azure_openai":
+        from blackcat.providers.azure_openai_provider import AzureOpenAIProvider
+        # Validation at line 451-456 ensures p, p.api_key, p.api_base are non-None
+        assert p is not None and p.api_key is not None and p.api_base is not None
+        provider = AzureOpenAIProvider(
+            api_key=p.api_key,
+            api_base=p.api_base,
+            default_model=model,
+        )
+    elif backend == "anthropic":
+        from blackcat.providers.anthropic_provider import AnthropicProvider
+        provider = AnthropicProvider(
+            api_key=p.api_key if p else None,
+            api_base=config.get_api_base(model),
+            default_model=model,
+            extra_headers=p.extra_headers if p else None,
+        )
+    else:
+        from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+        provider = OpenAICompatProvider(
+            api_key=p.api_key if p else None,
+            api_base=config.get_api_base(model),
+            default_model=model,
+            extra_headers=p.extra_headers if p else None,
+            spec=spec,
+        )
+
+    defaults = config.agents.defaults
+    provider.generation = GenerationSettings(
+        temperature=defaults.temperature,
+        max_tokens=defaults.max_tokens,
+        reasoning_effort=defaults.reasoning_effort,
     )
+    return provider
 
 
 # ============================================================================

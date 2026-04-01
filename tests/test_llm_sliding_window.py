@@ -6,7 +6,7 @@ import pytest
 
 from blackcat.agent.context import ContextManager
 from blackcat.agent.summarizer import Summarizer
-from blackcat.providers.litellm_provider import LiteLLMProvider
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 from tests.conftest import LLM_TEST_MODEL
 
 
@@ -92,7 +92,7 @@ def sample_messages():
 @pytest.fixture
 def summarizer(ollama_available):
     """Summarizer backed by local Ollama."""
-    provider = LiteLLMProvider(
+    provider = OpenAICompatProvider(
         api_key="ollama",
         default_model=LLM_TEST_MODEL,
     )
@@ -179,14 +179,10 @@ class TestSlidingWindow:
 
 @pytest.mark.llm
 @pytest.mark.asyncio
-async def test_real_compaction_with_ollama(ctx, sample_messages, mock_session, ollama_available):
+async def test_real_compaction_with_ollama(ctx, sample_messages, mock_session, ollama_available, llm_provider):
     """Integration test with real Ollama summarizer."""
     engine = ctx
-    provider = LiteLLMProvider(
-        api_key="ollama",
-        default_model=LLM_TEST_MODEL,
-    )
-    engine.summarizer = Summarizer(provider=provider, model=LLM_TEST_MODEL)
+    engine.summarizer = Summarizer(provider=llm_provider, model=LLM_TEST_MODEL)
 
     result, was_compacted = await engine.sliding_window(
         sample_messages,

@@ -107,37 +107,37 @@ def test_resolve_path_relative_with_workspace(tmp_path):
 
 
 def test_sanitize_null_assistant_content():
-    from blackcat.providers.litellm_provider import LiteLLMProvider
+    from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
     messages = [{"role": "assistant", "content": None}]
-    result = LiteLLMProvider._sanitize_messages(messages)
+    result = OpenAICompatProvider(api_key="test")._sanitize_empty_content(messages)
     assert result[0]["content"] == "(empty)"
 
 
 def test_sanitize_null_assistant_with_tool_calls():
     """Assistant message with tool_calls and null content should keep None."""
-    from blackcat.providers.litellm_provider import LiteLLMProvider
+    from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
     messages = [{"role": "assistant", "content": None, "tool_calls": [{"id": "c1"}]}]
-    result = LiteLLMProvider._sanitize_messages(messages)
+    result = OpenAICompatProvider(api_key="test")._sanitize_empty_content(messages)
     assert result[0]["content"] is None  # tool_calls present, None is ok
 
 
 def test_sanitize_empty_string_user():
-    from blackcat.providers.litellm_provider import LiteLLMProvider
+    from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
     messages = [{"role": "user", "content": ""}]
-    result = LiteLLMProvider._sanitize_messages(messages)
+    result = OpenAICompatProvider(api_key="test")._sanitize_empty_content(messages)
     assert result[0]["content"] == "(empty)"
 
 
 def test_sanitize_normal_messages_unchanged():
-    from blackcat.providers.litellm_provider import LiteLLMProvider
+    from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
     messages = [
         {"role": "system", "content": "You are helpful."},
         {"role": "user", "content": "hello"},
         {"role": "assistant", "content": "hi there"},
     ]
-    result = LiteLLMProvider._sanitize_messages(messages)
+    result = OpenAICompatProvider(api_key="test")._sanitize_empty_content(messages)
     assert result == messages
