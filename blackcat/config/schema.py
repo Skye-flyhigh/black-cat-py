@@ -279,25 +279,24 @@ class Config(BaseSettings):
                 if spec.is_oauth or spec.is_local or p.api_key:
                     return p, spec.name
 
-        # Fallback: configured local providers can route models without
-        # provider-specific keywords (for example plain "llama3.2" on Ollama).
-        # Prefer providers whose detect_by_base_keyword matches the configured api_base
-        # (e.g. Ollama's "11434" in "http://localhost:11434") over plain registry order.
-        local_fallback: tuple[ProviderConfig, str] | None = None
-        for spec in PROVIDERS:
-            if not spec.is_local:
-                continue
-            p = getattr(self.providers, spec.name, None)
-            if not (p and p.api_base):
-                continue
-            if spec.detect_by_base_keyword and spec.detect_by_base_keyword in p.api_base:
-                return p, spec.name
-            if local_fallback is None:
-                local_fallback = (p, spec.name)
-        if local_fallback:
-            return local_fallback
+        # Local fallback: only for models WITHOUT provider prefix (e.g., plain "llama3.2")
+        # Models like "anthropic/claude-..." should fall through to gateway fallback.
+        if not model_prefix:
+            local_fallback: tuple[ProviderConfig, str] | None = None
+            for spec in PROVIDERS:
+                if not spec.is_local:
+                    continue
+                p = getattr(self.providers, spec.name, None)
+                if not (p and p.api_base):
+                    continue
+                if spec.detect_by_base_keyword and spec.detect_by_base_keyword in p.api_base:
+                    return p, spec.name
+                if local_fallback is None:
+                    local_fallback = (p, spec.name)
+            if local_fallback:
+                return local_fallback
 
-        # Fallback: gateways first, then others (follows registry order)
+        # Final fallback: gateways first, then others (follows registry order)
         # OAuth providers are NOT valid fallbacks — they require explicit model selection
         for spec in PROVIDERS:
             if spec.is_oauth:
