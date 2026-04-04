@@ -96,9 +96,10 @@ class MessageHandler:
             message_tool.start_turn()
 
         # Build context messages
+        # Note: Don't limit get_history here - let sliding_window handle compaction
         author = self._resolve_author(msg.sender_id, msg.channel)
         messages = await loop.context.build_messages(
-            history=session.get_history(max_messages=loop.memory_window),
+            history=session.get_history(),
             current_message=msg.content,
             author=author,
             channel=origin_channel,
@@ -111,6 +112,7 @@ class MessageHandler:
         messages, _ = await loop.context.sliding_window(
             messages,
             window_size=loop.memory_window,
+            max_tokens=loop.context_window_tokens,
             model=loop.model,
             session=session,
         )
