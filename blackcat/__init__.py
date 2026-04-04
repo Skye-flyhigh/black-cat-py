@@ -10,3 +10,8 @@ except PackageNotFoundError:
     __version__ = "0.1.0"
 
 __logo__ = "🐈‍⬛"
+
+
+from blackcat.blackcat import Blackcat, RunResult
+
+__all__ = ["Blackcat", "RunResult"]

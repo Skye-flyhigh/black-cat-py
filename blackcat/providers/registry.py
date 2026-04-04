@@ -31,7 +31,7 @@ class ProviderSpec:
     name: str  # config field name, e.g. "dashscope"
     keywords: tuple[str, ...]  # model-name keywords for matching (lowercase)
     env_key: str  # env var for API key, e.g. "DASHSCOPE_API_KEY"
-    display_name: str = ""  # shown in `nanobot status`
+    display_name: str = ""  # shown in `blackcat status`
 
     # which provider implementation to use
     # "openai_compat" | "anthropic" | "azure_openai" | "openai_codex"
@@ -306,7 +306,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         backend="openai_compat",
         is_local=True,
     ),
-    # Ollama (local, OpenAI-compatible)
+    # FIXME: Ollama (local & Cloud, OpenAI-compatible)
     ProviderSpec(
         name="ollama",
         keywords=("ollama", "nemotron"),

@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 from loguru import logger
-
-# The telegram library logs full tracebacks for transient network errors
-# (DNS failures, timeouts, etc.) but retries automatically. Suppress the
-# noise — we log a clean one-liner via our own error handler instead.
+from pydantic import Field
 from telegram import BotCommand, Message, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -25,7 +22,7 @@ from blackcat.channels.utils import (
     markdown_to_telegram_html,
     split_message,
 )
-from blackcat.config.schema import TelegramConfig
+from blackcat.config.schema import Base
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -35,6 +32,30 @@ logging.getLogger("telegram.ext._utils.networkloop").setLevel(logging.CRITICAL)
 if TYPE_CHECKING:
     from blackcat.session.manager import SessionManager
 
+_STREAM_EDIT_INTERVAL = 0.6  # min seconds between edit_message_text calls
+
+
+class _StreamBuf:
+    """Per-chat streaming accumulator for progressive message editing."""
+    text: str = ""
+    message_id: int | None = None
+    last_edit: float = 0.0
+    stream_id: str | None = None
+
+
+class TelegramConfig(Base):
+    """Telegram channel configuration."""
+
+    enabled: bool = False
+    token: str = ""
+    allow_from: list[str] = Field(default_factory=list)
+    proxy: str | None = None
+    reply_to_message: bool = False
+    react_emoji: str = "👀"
+    group_policy: Literal["open", "mention"] = "mention"
+    connection_pool_size: int = 32
+    pool_timeout: float = 5.0
+    streaming: bool = True
 
 class TelegramChannel(BaseChannel):
     """
@@ -51,15 +72,23 @@ class TelegramChannel(BaseChannel):
         BotCommand("start", "Start the bot"),
         BotCommand("reset", "Reset conversation history"),
         BotCommand("help", "Show available commands"),
+        BotCommand("restart", "Restart the bot"),
+        BotCommand("status", "Show bot status"),
     ]
+
+    @classmethod
+    def default_config(cls) -> dict[str, Any]:
+        return TelegramConfig().model_dump(by_alias=True)
 
     def __init__(
         self,
-        config: TelegramConfig,
+        config: Any,
         bus: MessageBus,
         groq_api_key: str = "",
         session_manager: SessionManager | None = None,
     ):
+        if isinstance(config, dict):
+            config = TelegramConfig.model_validate(config)
         super().__init__(config, bus)
         self.config: TelegramConfig = config
         self.groq_api_key = groq_api_key
@@ -273,6 +302,14 @@ class TelegramChannel(BaseChannel):
         sender_id = str(user.id)
         if user.username:
             sender_id = f"{sender_id}|{user.username}"
+
+        # Debug: log incoming message
+        logger.debug(
+            "Telegram message: user={} chat={} text={}",
+            sender_id,
+            chat_id,
+            (message.text or message.caption or "")[:80] if message.text or message.caption else "[media]",
+        )
 
         # Collect content and media
         content_parts: list[str] = []

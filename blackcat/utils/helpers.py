@@ -2,7 +2,6 @@
 
 import json
 import time
-from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -51,20 +50,6 @@ def get_skills_path(workspace: Path | None = None) -> Path:
     ws = workspace or get_workspace_path()
     return ensure_dir(ws / "skills")
 
-
-def today_date() -> str:
-    """Get today's date in YYYY-MM-DD format."""
-    return datetime.now().strftime("%Y-%m-%d")
-
-def last_24h(date:datetime) -> date:
-    """Get the date and time prior 24h of entry date"""
-    return (date - timedelta(hours= 24)).date()
-
-def timestamp() -> str:
-    """Get current timestamp in ISO format."""
-    return datetime.now().isoformat()
-
-
 def truncate_string(s: str, max_len: int = 100, suffix: str = "...") -> str:
     """Truncate a string to max length, adding suffix if truncated."""
     if len(s) <= max_len:
@@ -96,12 +81,6 @@ def parse_session_key(key: str) -> tuple[str, str]:
         raise ValueError(f"Invalid session key: {key}")
     return parts[0], parts[1]
 
-
-def now_ms() -> int:
-    """Current time as milliseconds since epoch."""
-    return int(time.time() * 1000)
-
-
 def safe_json_dumps(obj: Any) -> str:
     """JSON-encode with ensure_ascii=False for clean Unicode output."""
     return json.dumps(obj, ensure_ascii=False)
@@ -120,7 +99,6 @@ def build_tool_call_dicts(tool_calls: list) -> list[dict[str, Any]]:
         }
         for tc in tool_calls
     ]
-
 
 def extract_system_message(
     messages: list[dict[str, Any]],
@@ -150,39 +128,97 @@ def resolve_path(
             raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
     return resolved
 
+def build_status_content(
+    *,
+    version: str,
+    model: str,
+    start_time: float,
+    last_usage: dict[str, int],
+    context_window_tokens: int,
+    session_msg_count: int,
+    context_tokens_estimate: int,
+) -> str:
+    """Build a human-readable runtime status snapshot."""
+    uptime_s = int(time.time() - start_time)
+    uptime = (
+        f"{uptime_s // 3600}h {(uptime_s % 3600) // 60}m"
+        if uptime_s >= 3600
+        else f"{uptime_s // 60}m {uptime_s % 60}s"
+    )
+    last_in = last_usage.get("prompt_tokens", 0)
+    last_out = last_usage.get("completion_tokens", 0)
+    cached = last_usage.get("cached_tokens", 0)
+    ctx_total = max(context_window_tokens, 0)
+    ctx_pct = int((context_tokens_estimate / ctx_total) * 100) if ctx_total > 0 else 0
+    ctx_used_str = f"{context_tokens_estimate // 1000}k" if context_tokens_estimate >= 1000 else str(context_tokens_estimate)
+    ctx_total_str = f"{ctx_total // 1024}k" if ctx_total > 0 else "n/a"
+    token_line = f"\U0001f4ca Tokens: {last_in} in / {last_out} out"
+    if cached and last_in:
+        token_line += f" ({cached * 100 // last_in}% cached)"
+    return "\n".join([
+        f"\U0001f408 blackcat v{version}",
+        f"\U0001f9e0 Model: {model}",
+        token_line,
+        f"\U0001f4da Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}%)",
+        f"\U0001f4ac Session: {session_msg_count} messages",
+        f"\u23f1 Uptime: {uptime}",
+    ])
 
-# ── Case conversion (camelCase ↔ snake_case) ──────────────────────────
+
+def find_legal_message_start(messages: list[dict[str, Any]]) -> int:
+    """Find the first index whose tool results have matching assistant calls."""
+    declared: set[str] = set()
+    start = 0
+    for i, msg in enumerate(messages):
+        role = msg.get("role")
+        if role == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                if isinstance(tc, dict) and tc.get("id"):
+                    declared.add(str(tc["id"]))
+        elif role == "tool":
+            tid = msg.get("tool_call_id")
+            if tid and str(tid) not in declared:
+                start = i + 1
+                declared.clear()
+                for prev in messages[start : i + 1]:
+                    if prev.get("role") == "assistant":
+                        for tc in prev.get("tool_calls") or []:
+                            if isinstance(tc, dict) and tc.get("id"):
+                                declared.add(str(tc["id"]))
+    return start
 
 
-def camel_to_snake(name: str) -> str:
-    """Convert camelCase to snake_case."""
-    result = []
-    for i, char in enumerate(name):
-        if char.isupper() and i > 0:
-            result.append("_")
-        result.append(char.lower())
-    return "".join(result)
+def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]:
+    """Sync bundled templates to workspace. Only creates missing files."""
+    from importlib.resources import files as pkg_files
 
+    try:
+        tpl = pkg_files("blackcat") / "templates"
+    except Exception:
+        return []
 
-def snake_to_camel(name: str) -> str:
-    """Convert snake_case to camelCase."""
-    components = name.split("_")
-    return components[0] + "".join(x.title() for x in components[1:])
+    if not tpl.is_dir():
+        return []
 
+    added: list[str] = []
 
-def convert_keys(data: Any) -> Any:
-    """Convert camelCase keys to snake_case recursively."""
-    if isinstance(data, dict):
-        return {camel_to_snake(k): convert_keys(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [convert_keys(item) for item in data]
-    return data
+    def _write(src, dest: Path):
+        if dest.exists():
+            return
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(src.read_text(encoding="utf-8") if src else "", encoding="utf-8")
+        added.append(str(dest.relative_to(workspace)))
 
+    for item in tpl.iterdir():
+        if item.name.endswith(".md") and not item.name.startswith("."):
+            _write(item, workspace / item.name)
+    _write(tpl / "memory" / "MEMORY.md", workspace / "memory" / "MEMORY.md")
+    _write(None, workspace / "memory" / "HISTORY.md")
+    (workspace / "skills").mkdir(exist_ok=True)
 
-def convert_to_camel(data: Any) -> Any:
-    """Convert snake_case keys to camelCase recursively."""
-    if isinstance(data, dict):
-        return {snake_to_camel(k): convert_to_camel(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [convert_to_camel(item) for item in data]
-    return data
+    if added and not silent:
+        from rich.console import Console
+
+        for name in added:
+            Console().print(f"  [dim]Created {name}[/dim]")
+    return added

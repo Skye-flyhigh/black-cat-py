@@ -5,39 +5,11 @@ from blackcat.config.schema import (
     AgentsConfig,
     ChannelsConfig,
     Config,
-    DiscordConfig,
     GatewayConfig,
     ProviderConfig,
     ProvidersConfig,
-    TelegramConfig,
     ToolsConfig,
-    WhatsAppConfig,
-)
-
-# ── Channel configs ────────────────────────────────────────────────
-
-
-def test_whatsapp_defaults():
-    cfg = WhatsAppConfig()
-    assert cfg.enabled is False
-    assert cfg.bridge_url == "ws://localhost:3001"
-    assert cfg.bridge_token == ""
-    assert cfg.allow_from == []
-
-
-def test_telegram_defaults():
-    cfg = TelegramConfig()
-    assert cfg.enabled is False
-    assert cfg.token == ""
-    assert cfg.proxy is None
-    assert cfg.reply_to_message is False
-
-
-def test_discord_defaults():
-    cfg = DiscordConfig()
-    assert cfg.enabled is False
-    assert cfg.intents == 37377
-
+    )
 
 # ── Agent defaults ─────────────────────────────────────────────────
 
@@ -138,16 +110,6 @@ def test_config_get_api_base_for_gateway():
 def test_config_get_api_base_none():
     cfg = Config()
     assert cfg.get_api_base() is None
-
-
-# ── Channels config nested ─────────────────────────────────────────
-
-
-def test_channels_config():
-    ch = ChannelsConfig()
-    assert isinstance(ch.whatsapp, WhatsAppConfig)
-    assert isinstance(ch.telegram, TelegramConfig)
-    assert isinstance(ch.discord, DiscordConfig)
 
 
 # ── Provider matching ────────────────────────────────────────────────

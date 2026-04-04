@@ -108,3 +108,65 @@ class ToolRegistry:
                 lines.append("")
 
         path.write_text("\n".join(lines), encoding="utf-8")
+
+    def export_mcp_md(self, path: Path) -> None:
+        """
+        Export MCP tools to MCP.md file for human reading.
+
+        Only includes tools from MCP servers (those with server_name property).
+
+        Args:
+            path: Path to write MCP.md (typically workspace/MCP.md)
+        """
+        # Group MCP tools by server
+        mcp_tools: dict[str, list[Tool]] = {}
+        for tool in self._tools.values():
+            server = getattr(tool, "server_name", None)
+            if server:
+                if server not in mcp_tools:
+                    mcp_tools[server] = []
+                mcp_tools[server].append(tool)
+
+        if not mcp_tools:
+            return
+
+        lines = [
+            "# MCP Tools",
+            "",
+            "This document lists all tools from MCP servers.",
+            "Auto-generated from connected MCP servers.",
+            "",
+        ]
+
+        for server, tools in sorted(mcp_tools.items()):
+            lines.append(f"## Server: `{server}`")
+            lines.append("")
+            lines.append(f"_{len(tools)} tool(s) available_")
+            lines.append("")
+
+            for tool in sorted(tools, key=lambda t: t.name):
+                original_name = getattr(tool, "original_name", tool.name)
+                lines.append(f"### {original_name}")
+                lines.append("")
+                lines.append(f"**Full name:** `{tool.name}`")
+                lines.append("")
+                lines.append(tool.description)
+                lines.append("")
+
+                # Parameters
+                props = tool.parameters.get("properties", {})
+                required = set(tool.parameters.get("required", []))
+
+                if props:
+                    lines.append("**Parameters:**")
+                    for name, prop in props.items():
+                        prop_type = prop.get("type", "any")
+                        desc = prop.get("description", "")
+                        req = "(required)" if name in required else "(optional)"
+                        lines.append(f"- `{name}` ({prop_type}) {req}: {desc}")
+                    lines.append("")
+
+            lines.append("---")
+            lines.append("")
+
+        path.write_text("\n".join(lines), encoding="utf-8")

@@ -13,104 +13,19 @@ class Base(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-class WhatsAppConfig(Base):
-    """WhatsApp channel configuration."""
-
-    enabled: bool = False
-    bridge_url: str = "ws://localhost:3001"
-    bridge_token: str = ""  # Optional auth token for the bridge WebSocket
-    allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
-
-
-class TelegramConfig(Base):
-    """Telegram channel configuration."""
-
-    enabled: bool = False
-    token: str = ""  # Bot token from @BotFather
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs or usernames
-    proxy: str | None = (
-        None  # HTTP/SOCKS5 proxy URL, e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
-    )
-    reply_to_message: bool = False  # If true, bot replies are threaded to the user's message
-
-
-class DiscordConfig(Base):
-    """Discord channel configuration."""
-
-    enabled: bool = False
-    token: str = ""  # Bot token from Discord Developer Portal
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs
-    gateway_url: str = "wss://gateway.discord.gg/?v=10&encoding=json"
-    intents: int = 37377  # GUILDS + GUILD_MESSAGES + DIRECT_MESSAGES + MESSAGE_CONTENT
-    group_policy: Literal["mention", "open"] = "mention"
-
-class SlackDMConfig(Base):
-    """Slack DM policy configuration."""
-
-    enabled: bool = True
-    policy: str = "open"  # "open" or "allowlist"
-    allow_from: list[str] = Field(default_factory=list)  # Allowed Slack user IDs
-
-
-class SlackConfig(Base):
-    """Slack channel configuration (Socket Mode)."""
-
-    enabled: bool = False
-    mode: str = "socket"  # "socket" supported
-    webhook_path: str = "/slack/events"
-    bot_token: str = ""  # xoxb-...
-    app_token: str = ""  # xapp-...
-    user_token_read_only: bool = True
-    reply_in_thread: bool = True
-    react_emoji: str = "eyes"
-    allow_from: list[str] = Field(default_factory=list)  # Allowed Slack user IDs (sender-level)
-    group_policy: str = "mention"  # "mention", "open", "allowlist"
-    group_allow_from: list[str] = Field(default_factory=list)  # Allowed channel IDs if allowlist
-    dm: SlackDMConfig = Field(default_factory=SlackDMConfig)
-
-class EmailConfig(Base):
-    """Email channel configuration (IMAP inbound + SMTP outbound)."""
-
-    enabled: bool = False
-    consent_granted: bool = False  # Explicit owner permission to access mailbox data
-
-    # IMAP (receive)
-    imap_host: str = ""
-    imap_port: int = 993
-    imap_username: str = ""
-    imap_password: str = ""
-    imap_mailbox: str = "INBOX"
-    imap_use_ssl: bool = True
-
-    # SMTP (send)
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    smtp_use_tls: bool = True
-    smtp_use_ssl: bool = False
-    from_address: str = ""
-
-    # Behavior
-    auto_reply_enabled: bool = (
-        True  # If false, inbound email is read but no automatic reply is sent
-    )
-    poll_interval_seconds: int = 30
-    mark_seen: bool = True
-    max_body_chars: int = 12000
-    subject_prefix: str = "Re: "
-    allow_from: list[str] = Field(default_factory=list)  # Allowed sender email addresses
-
-
 class ChannelsConfig(Base):
-    """Configuration for chat channels."""
+    """Configuration for chat channels.
 
-    whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
-    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
-    slack: SlackConfig = Field(default_factory=SlackConfig)
-    discord: DiscordConfig = Field(default_factory=DiscordConfig)
-    email: EmailConfig = Field(default_factory=EmailConfig)
+    Built-in and plugin channel configs are stored as extra fields (dicts).
+    Each channel parses its own config in __init__.
+    Per-channel "streaming": true enables streaming output (requires send_delta impl).
+    """
 
+    model_config = ConfigDict(extra="allow")
+
+    send_progress: bool = True  # stream agent's text progress to the channel
+    send_tool_hints: bool = False  # stream tool-call hints (e.g. read_file("…"))
+    send_max_retries: int = Field(default=3, ge=0, le=10)  # Max delivery attempts (initial send included)
 
 class AgentDefaults(Base):
     """Default agent configuration."""
@@ -119,14 +34,21 @@ class AgentDefaults(Base):
     model: str = "anthropic/claude-opus-4-5"
     provider: str = "auto"  # Provider name (e.g. "anthropic", "openrouter") or "auto" for auto-detection
     summarizer_model: str | None = None  # Model for summarization (defaults to main model)
-    embedding_model: str = "ollama/nomic-embed-text"  # Model for vector embeddings
     max_tokens: int = 8192
     temperature: float = 0.7
     reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
     max_tool_iterations: int = 20
     llm_timeout: int = 60  # Timeout for LLM API calls in seconds
-    memory_window: int = 50  # Max messages before triggering summarization
     daily_summary_hour: int = 3  # Hour to run daily summary (0-23, default 3am)
+    # Context management
+    memory_window: int = 50  # Max messages before triggering summarization
+    context_window_tokens: int | None = None
+    context_block_limit: int | None = None
+    max_tool_result_chars: int = 50000
+    # Provider retry
+    provider_retry_mode: str | None = None
+    # Timezone for scheduled tasks
+    timezone: str | None = None
 
 
 class AgentsConfig(Base):
@@ -146,17 +68,40 @@ class ProviderConfig(Base):
 class ProvidersConfig(Base):
     """Configuration for LLM providers."""
 
+    custom: ProviderConfig = Field(default_factory=ProviderConfig)  # Any OpenAI-compatible endpoint
+    azure_openai: ProviderConfig = Field(default_factory=ProviderConfig)  # Azure OpenAI (model = deployment name)
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     openai: ProviderConfig = Field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = Field(default_factory=ProviderConfig)
     deepseek: ProviderConfig = Field(default_factory=ProviderConfig)
     groq: ProviderConfig = Field(default_factory=ProviderConfig)
     zhipu: ProviderConfig = Field(default_factory=ProviderConfig)
-    dashscope: ProviderConfig = Field(default_factory=ProviderConfig)  # 阿里云通义千问
+    dashscope: ProviderConfig = Field(default_factory=ProviderConfig)
     vllm: ProviderConfig = Field(default_factory=ProviderConfig)
+    ollama: ProviderConfig = Field(default_factory=ProviderConfig)  # Ollama local models
+    ovms: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenVINO Model Server (OVMS)
     gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     moonshot: ProviderConfig = Field(default_factory=ProviderConfig)
+    minimax: ProviderConfig = Field(default_factory=ProviderConfig)
+    mistral: ProviderConfig = Field(default_factory=ProviderConfig)
+    stepfun: ProviderConfig = Field(default_factory=ProviderConfig)  # Step Fun (阶跃星辰)
+    xiaomi_mimo: ProviderConfig = Field(default_factory=ProviderConfig)  # Xiaomi MIMO (小米)
     aihubmix: ProviderConfig = Field(default_factory=ProviderConfig)  # AiHubMix API gateway
+    siliconflow: ProviderConfig = Field(default_factory=ProviderConfig)  # SiliconFlow (硅基流动)
+    volcengine: ProviderConfig = Field(default_factory=ProviderConfig)  # VolcEngine (火山引擎)
+    volcengine_coding_plan: ProviderConfig = Field(default_factory=ProviderConfig)  # VolcEngine Coding Plan
+    byteplus: ProviderConfig = Field(default_factory=ProviderConfig)  # BytePlus (VolcEngine international)
+    byteplus_coding_plan: ProviderConfig = Field(default_factory=ProviderConfig)  # BytePlus Coding Plan
+    openai_codex: ProviderConfig = Field(default_factory=ProviderConfig, exclude=True)  # OpenAI Codex (OAuth)
+    github_copilot: ProviderConfig = Field(default_factory=ProviderConfig, exclude=True)  # Github Copilot (OAuth)
+
+
+class HeartbeatConfig(Base):
+    """Heartbeat service configuration."""
+
+    enabled: bool = True
+    interval_s: int = 1800  # 30 minutes
+    keep_recent_messages: int = 10  # Number of recent messages to keep
 
 
 class GatewayConfig(Base):
@@ -164,6 +109,7 @@ class GatewayConfig(Base):
 
     host: str = "0.0.0.0"
     port: int = 18790
+    heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
 
 
 class WebSearchConfig(Base):
@@ -186,17 +132,16 @@ class ExecToolConfig(Base):
 
 
 class MCPServerConfig(Base):
-    """MCP server connection configuration (stdio or HTTP).
+    """MCP server connection configuration (stdio or HTTP)."""
 
-    Stdio mode: set ``command`` (and optionally ``args``, ``env``).
-    HTTP mode: set ``url`` (and optionally ``headers``).
-    """
-
-    command: str = ""
-    args: list[str] = Field(default_factory=list)
-    env: dict[str, str] = Field(default_factory=dict)
-    url: str = ""
-    headers: dict[str, str] = Field(default_factory=dict)
+    type: Literal["stdio", "sse", "streamableHttp"] | None = None  # auto-detected if omitted
+    command: str = ""  # Stdio: command to run (e.g. "npx")
+    args: list[str] = Field(default_factory=list)  # Stdio: command arguments
+    env: dict[str, str] = Field(default_factory=dict)  # Stdio: extra env vars
+    url: str = ""  # HTTP/SSE: endpoint URL
+    headers: dict[str, str] = Field(default_factory=dict)  # HTTP/SSE: custom headers
+    tool_timeout: int = 30  # seconds before a tool call is cancelled
+    enabled_tools: list[str] = Field(default_factory=lambda: ["*"])  # Only register these tools; accepts raw MCP names or wrapped mcp_<server>_<tool> names; ["*"] = all tools; [] = no tools
 
 
 class LensConfig(Base):
@@ -215,6 +160,13 @@ class ToolsConfig(Base):
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
+class ApiConfig(Base):
+    """OpenAI-compatible API server configuration."""
+
+    host: str = "127.0.0.1"  # Safer default: local-only bind.
+    port: int = 8900
+    timeout: float = 120.0  # Per-request timeout in seconds.
+
 
 class AuthorIdentity(Base):
     """Platform identities for an author (like API keys, keep private)."""
@@ -231,6 +183,7 @@ class Config(BaseSettings):
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
+    api: ApiConfig = Field(default_factory=ApiConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     authors: dict[str, AuthorIdentity] = Field(

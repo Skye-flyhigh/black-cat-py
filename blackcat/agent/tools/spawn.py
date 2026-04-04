@@ -15,14 +15,19 @@ class SpawnTool(Tool):
     The subagent runs asynchronously and announces its result back
     to the main agent when complete.
     """
-
-    name = "spawn"
-    description = (
+    @property
+    def name(self) -> str:
+        return "spawn"
+    @property
+    def description(self) -> str:
+        return (
         "Spawn a subagent to handle a task in the background. "
         "Use this for complex or time-consuming tasks that can run independently. "
         "The subagent will complete the task and report back when done."
     )
-    parameters = {
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
         "type": "object",
         "properties": {
             "task": {

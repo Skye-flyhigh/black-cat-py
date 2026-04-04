@@ -9,34 +9,42 @@ from blackcat.lens import LensClient
 class LensDefinitionTool(Tool):
     """Find symbol definition via LSP."""
 
-    name = "lens_definition"
-    description = (
-        "Find where a symbol (function, class, variable) is defined. "
-        "Use this when you need to understand the implementation of something "
-        "or navigate to the source of a symbol."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {
-                "type": "string",
-                "description": "Path to the file containing the symbol",
+    @property
+    def name(self) -> str:
+        return "lens_definition"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Find where a symbol (function, class, variable) is defined. "
+            "Use this when you need to understand the implementation of something "
+            "or navigate to the source of a symbol."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file containing the symbol",
+                },
+                "line": {
+                    "type": "integer",
+                    "description": "Line number (0-indexed) where the symbol is",
+                },
+                "character": {
+                    "type": "integer",
+                    "description": "Character position (0-indexed) in the line",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config (e.g., 'black-cat-py')",
+                },
             },
-            "line": {
-                "type": "integer",
-                "description": "Line number (0-indexed) where the symbol is",
-            },
-            "character": {
-                "type": "integer",
-                "description": "Character position (0-indexed) in the line",
-            },
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config (e.g., 'black-cat-py')",
-            },
-        },
-        "required": ["file_path", "line", "character"],
-    }
+            "required": ["file_path", "line", "character"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -74,33 +82,41 @@ class LensDefinitionTool(Tool):
 class LensReferencesTool(Tool):
     """Find all references to a symbol."""
 
-    name = "lens_references"
-    description = (
-        "Find all references to a symbol across the codebase. "
-        "Use this when you need to understand where a function, class, or variable is used."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {
-                "type": "string",
-                "description": "Path to the file containing the symbol",
+    @property
+    def name(self) -> str:
+        return "lens_references"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Find all references to a symbol across the codebase. "
+            "Use this when you need to understand where a function, class, or variable is used."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file containing the symbol",
+                },
+                "line": {
+                    "type": "integer",
+                    "description": "Line number (0-indexed) where the symbol is",
+                },
+                "character": {
+                    "type": "integer",
+                    "description": "Character position (0-indexed) in the line",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config",
+                },
             },
-            "line": {
-                "type": "integer",
-                "description": "Line number (0-indexed) where the symbol is",
-            },
-            "character": {
-                "type": "integer",
-                "description": "Character position (0-indexed) in the line",
-            },
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config",
-            },
-        },
-        "required": ["file_path", "line", "character"],
-    }
+            "required": ["file_path", "line", "character"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -139,30 +155,41 @@ class LensReferencesTool(Tool):
 class LensHoverTool(Tool):
     """Get type information and documentation for a symbol."""
 
-    name = "lens_hover"
-    description = (
-        "Get type information and documentation for a symbol under the cursor. "
-        "Use this when you need to understand what a variable or function is."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {"type": "string", "description": "Path to the file"},
-            "line": {
-                "type": "integer",
-                "description": "Line number (0-indexed)",
+    @property
+    def name(self) -> str:
+        return "lens_hover"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Get type information and documentation for a symbol under the cursor. "
+            "Use this when you need to understand what a variable or function is."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file",
+                },
+                "line": {
+                    "type": "integer",
+                    "description": "Line number (0-indexed)",
+                },
+                "character": {
+                    "type": "integer",
+                    "description": "Character position (0-indexed)",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config",
+                },
             },
-            "character": {
-                "type": "integer",
-                "description": "Character position (0-indexed)",
-            },
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config",
-            },
-        },
-        "required": ["file_path", "line", "character"],
-    }
+            "required": ["file_path", "line", "character"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -190,21 +217,29 @@ class LensHoverTool(Tool):
 class LensWorkspaceSymbolTool(Tool):
     """Search for symbols across the workspace."""
 
-    name = "lens_workspace_symbol"
-    description = (
-        "Search for symbols (functions, classes, variables) across the entire workspace. "
-        "Use this when you need to find something by name."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Symbol name to search for (e.g., 'AgentLoop', 'build_messages')",
-            }
-        },
-        "required": ["query"],
-    }
+    @property
+    def name(self) -> str:
+        return "lens_workspace_symbol"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Search for symbols (functions, classes, variables) across the entire workspace. "
+            "Use this when you need to find something by name."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Symbol name to search for (e.g., 'AgentLoop', 'build_messages')",
+                }
+            },
+            "required": ["query"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -242,22 +277,33 @@ class LensWorkspaceSymbolTool(Tool):
 class LensDocumentSymbolTool(Tool):
     """Get document outline (symbols)."""
 
-    name = "lens_document_symbol"
-    description = (
-        "Get the outline of a document - all classes, functions, and variables defined in it. "
-        "Use this to understand the structure of a file."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {"type": "string", "description": "Path to the file"},
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config",
+    @property
+    def name(self) -> str:
+        return "lens_document_symbol"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Get the outline of a document - all classes, functions, and variables defined in it. "
+            "Use this to understand the structure of a file."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config",
+                },
             },
-        },
-        "required": ["file_path"],
-    }
+            "required": ["file_path"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -296,30 +342,41 @@ class LensDocumentSymbolTool(Tool):
 class LensCompletionTool(Tool):
     """Get code completion suggestions at cursor position."""
 
-    name = "lens_completion"
-    description = (
-        "Get autocomplete suggestions at a specific cursor position. "
-        "Use this when you want to see what methods, properties, or completions are available."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {"type": "string", "description": "Path to the file"},
-            "line": {
-                "type": "integer",
-                "description": "Line number (0-indexed) where cursor is",
+    @property
+    def name(self) -> str:
+        return "lens_completion"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Get autocomplete suggestions at a specific cursor position. "
+            "Use this when you want to see what methods, properties, or completions are available."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file",
+                },
+                "line": {
+                    "type": "integer",
+                    "description": "Line number (0-indexed) where cursor is",
+                },
+                "character": {
+                    "type": "integer",
+                    "description": "Character position (0-indexed) in the line",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config",
+                },
             },
-            "character": {
-                "type": "integer",
-                "description": "Character position (0-indexed) in the line",
-            },
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config",
-            },
-        },
-        "required": ["file_path", "line", "character"],
-    }
+            "required": ["file_path", "line", "character"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -362,29 +419,46 @@ class LensCompletionTool(Tool):
 class LensRenameTool(Tool):
     """Rename a symbol across the entire codebase."""
 
-    name = "lens_rename"
-    description = (
-        "Rename a symbol (variable, function, class) across the entire codebase. "
-        "Shows a preview of all files that would be modified. "
-        "Use this for refactoring when you need to rename something that appears in multiple files."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {"type": "string", "description": "Path to the file containing the symbol"},
-            "line": {"type": "integer", "description": "Line number (0-indexed) where the symbol is"},
-            "character": {
-                "type": "integer",
-                "description": "Character position (0-indexed) in the line",
+    @property
+    def name(self) -> str:
+        return "lens_rename"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Rename a symbol (variable, function, class) across the entire codebase. "
+            "Shows a preview of all files that would be modified. "
+            "Use this for refactoring when you need to rename something that appears in multiple files."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file containing the symbol",
+                },
+                "line": {
+                    "type": "integer",
+                    "description": "Line number (0-indexed) where the symbol is",
+                },
+                "character": {
+                    "type": "integer",
+                    "description": "Character position (0-indexed) in the line",
+                },
+                "new_name": {
+                    "type": "string",
+                    "description": "New name for the symbol",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config",
+                },
             },
-            "new_name": {"type": "string", "description": "New name for the symbol"},
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config",
-            },
-        },
-        "required": ["file_path", "line", "character", "new_name"],
-    }
+            "required": ["file_path", "line", "character", "new_name"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -427,27 +501,50 @@ class LensRenameTool(Tool):
 class LensCodeActionTool(Tool):
     """Get quick fixes and refactorings for a code range."""
 
-    name = "lens_code_action"
-    description = (
-        "Get quick fixes and code actions for a selected range. "
-        "Use this for 'import missing module', 'remove unused import', 'extract method', etc. "
-        "Shows available refactorings and quick fixes."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {"type": "string", "description": "Path to the file"},
-            "start_line": {"type": "integer", "description": "Start line (0-indexed)"},
-            "start_character": {"type": "integer", "description": "Start character position"},
-            "end_line": {"type": "integer", "description": "End line (0-indexed)"},
-            "end_character": {"type": "integer", "description": "End character position"},
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config",
+    @property
+    def name(self) -> str:
+        return "lens_code_action"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Get quick fixes and code actions for a selected range. "
+            "Use this for 'import missing module', 'remove unused import', 'extract method', etc. "
+            "Shows available refactorings and quick fixes."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file",
+                },
+                "start_line": {
+                    "type": "integer",
+                    "description": "Start line (0-indexed)",
+                },
+                "start_character": {
+                    "type": "integer",
+                    "description": "Start character position",
+                },
+                "end_line": {
+                    "type": "integer",
+                    "description": "End line (0-indexed)",
+                },
+                "end_character": {
+                    "type": "integer",
+                    "description": "End character position",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config",
+                },
             },
-        },
-        "required": ["file_path", "start_line", "start_character", "end_line", "end_character"],
-    }
+            "required": ["file_path", "start_line", "start_character", "end_line", "end_character"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -495,29 +592,44 @@ class LensCodeActionTool(Tool):
 class LensFormatTool(Tool):
     """Format a document using the LSP formatter."""
 
-    name = "lens_format"
-    description = (
-        "Format a document using the LSP formatter (same as VS Code's format document). "
-        "Shows the formatting changes that would be applied. "
-        "Use this to see formatting edits without applying them directly."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {"type": "string", "description": "Path to the file to format"},
-            "tab_size": {"type": "integer", "default": 4, "description": "Number of spaces per tab"},
-            "insert_spaces": {
-                "type": "boolean",
-                "default": True,
-                "description": "Use spaces instead of tabs",
+    @property
+    def name(self) -> str:
+        return "lens_format"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Format a document using the LSP formatter (same as VS Code's format document). "
+            "Shows the formatting changes that would be applied. "
+            "Use this to see formatting edits without applying them directly."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to format",
+                },
+                "tab_size": {
+                    "type": "integer",
+                    "default": 4,
+                    "description": "Number of spaces per tab",
+                },
+                "insert_spaces": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Use spaces instead of tabs",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config",
+                },
             },
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config",
-            },
-        },
-        "required": ["file_path"],
-    }
+            "required": ["file_path"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client
@@ -556,31 +668,42 @@ class LensFormatTool(Tool):
 class LensSignatureHelpTool(Tool):
     """Get function signature help as you type."""
 
-    name = "lens_signature_help"
-    description = (
-        "Get function signature information including parameter names and types. "
-        "Use this when you're inside a function call and want to see what parameters it accepts. "
-        "Shows active parameter and documentation."
-    )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "file_path": {"type": "string", "description": "Path to the file"},
-            "line": {
-                "type": "integer",
-                "description": "Line number (0-indexed) where cursor is inside function call",
+    @property
+    def name(self) -> str:
+        return "lens_signature_help"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Get function signature information including parameter names and types. "
+            "Use this when you're inside a function call and want to see what parameters it accepts. "
+            "Shows active parameter and documentation."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file",
+                },
+                "line": {
+                    "type": "integer",
+                    "description": "Line number (0-indexed) where cursor is inside function call",
+                },
+                "character": {
+                    "type": "integer",
+                    "description": "Character position (0-indexed) in the line",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config",
+                },
             },
-            "character": {
-                "type": "integer",
-                "description": "Character position (0-indexed) in the line",
-            },
-            "workspace": {
-                "type": "string",
-                "description": "Optional workspace name from config",
-            },
-        },
-        "required": ["file_path", "line", "character"],
-    }
+            "required": ["file_path", "line", "character"],
+        }
 
     def __init__(self, client: LensClient):
         self.client = client

@@ -12,7 +12,7 @@ from loguru import logger
 from blackcat.agent.memory import Journal
 from blackcat.agent.summarizer import Summarizer
 from blackcat.session.manager import SessionManager
-from blackcat.utils.helpers import today_date
+from blackcat.utils.time import today_date
 
 # Default: run at 3am
 DEFAULT_SUMMARY_HOUR = 3
