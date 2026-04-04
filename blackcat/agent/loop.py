@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import re
+import time
 from collections.abc import Awaitable, Callable
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, nullcontext
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from blackcat.agent.handler import MessageHandler
+from blackcat.agent.hook import AgentHook, AgentHookContext, CompositeHook
+from blackcat.agent.runner import AgentRunner, AgentRunSpec
 from blackcat.agent.tools.lens import (
     LensCodeActionTool,
     LensCompletionTool,
@@ -23,16 +29,13 @@ from blackcat.agent.tools.lens import (
     LensSignatureHelpTool,
     LensWorkspaceSymbolTool,
 )
-from blackcat.utils.helpers import (
-    build_tool_call_dicts,
-    parse_session_key,
-    safe_json_dumps,
-    truncate_string,
-)
+from blackcat.command.router import CommandContext, CommandRouter
+from blackcat.config.schema import ChannelsConfig
 
 if TYPE_CHECKING:
     from blackcat.config.schema import Config, ExecToolConfig
     from blackcat.cron.service import CronService
+    from blackcat.session.manager import Session
 
 from blackcat.agent.context import ContextManager
 from blackcat.agent.subagent import SubagentManager
@@ -50,6 +53,110 @@ from blackcat.providers.base import LLMProvider
 from blackcat.session.manager import SessionManager
 
 
+class _LoopHook(AgentHook):
+    """Core hook for the main loop."""
+
+    def __init__(
+        self,
+        agent_loop: "AgentLoop",
+        on_progress: Callable[..., Awaitable[None]] | None = None,
+        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream_end: Callable[..., Awaitable[None]] | None = None,
+        *,
+        channel: str = "cli",
+        chat_id: str = "direct",
+        message_id: str | None = None,
+    ) -> None:
+        self._loop = agent_loop
+        self._on_progress = on_progress
+        self._on_stream = on_stream
+        self._on_stream_end = on_stream_end
+        self._channel = channel
+        self._chat_id = chat_id
+        self._message_id = message_id
+        self._stream_buf = ""
+
+    def wants_streaming(self) -> bool:
+        return self._on_stream is not None
+
+    async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+        prev_clean = AgentLoop._strip_think(self._stream_buf)
+        self._stream_buf += delta
+        new_clean = AgentLoop._strip_think(self._stream_buf)
+        incremental = new_clean[len(prev_clean):] if new_clean and prev_clean else (new_clean or "")
+        if incremental and self._on_stream:
+            await self._on_stream(incremental)
+
+    async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
+        if self._on_stream_end:
+            await self._on_stream_end(resuming=resuming)
+        self._stream_buf = ""
+
+    async def before_execute_tools(self, context: AgentHookContext) -> None:
+        if self._on_progress:
+            if not self._on_stream:
+                thought = AgentLoop._strip_think(
+                    context.response.content if context.response else None
+                )
+                if thought:
+                    await self._on_progress(thought)
+            tool_hint = AgentLoop._strip_think(AgentLoop._tool_hint(context.tool_calls))
+            await self._on_progress(tool_hint, tool_hint=True)
+        for tc in context.tool_calls:
+            args_str = json.dumps(tc.arguments, ensure_ascii=False)
+            logger.info("Tool call: {}({})", tc.name, args_str[:200])
+        self._loop._set_tool_context(self._channel, self._chat_id, self._message_id)
+
+    async def after_iteration(self, context: AgentHookContext) -> None:
+        u = context.usage or {}
+        logger.debug(
+            "LLM usage: prompt={} completion={} cached={}",
+            u.get("prompt_tokens", 0),
+            u.get("completion_tokens", 0),
+            u.get("cached_tokens", 0),
+        )
+
+    def finalize_content(self, context: AgentHookContext, content: str | None) -> str | None:
+        return AgentLoop._strip_think(content)
+
+
+class _LoopHookChain(AgentHook):
+    """Run the core hook before extra hooks."""
+
+    __slots__ = ("_primary", "_extras")
+
+    def __init__(self, primary: AgentHook, extra_hooks: list[AgentHook]) -> None:
+        self._primary = primary
+        self._extras = CompositeHook(extra_hooks)
+
+    def wants_streaming(self) -> bool:
+        return self._primary.wants_streaming() or self._extras.wants_streaming()
+
+    async def before_iteration(self, context: AgentHookContext) -> None:
+        await self._primary.before_iteration(context)
+        await self._extras.before_iteration(context)
+
+    async def on_stream(self, context: AgentHookContext, delta: str) -> None:
+        await self._primary.on_stream(context, delta)
+        await self._extras.on_stream(context, delta)
+
+    async def on_stream_end(self, context: AgentHookContext, *, resuming: bool) -> None:
+        await self._primary.on_stream_end(context, resuming=resuming)
+        await self._extras.on_stream_end(context, resuming=resuming)
+
+    async def before_execute_tools(self, context: AgentHookContext) -> None:
+        await self._primary.before_execute_tools(context)
+        await self._extras.before_execute_tools(context)
+
+    async def after_iteration(self, context: AgentHookContext) -> None:
+        await self._primary.after_iteration(context)
+        await self._extras.after_iteration(context)
+
+    def finalize_content(self, context: AgentHookContext, content: str | None) -> str | None:
+        content = self._primary.finalize_content(context, content)
+        return self._extras.finalize_content(context, content)
+
+
 class AgentLoop:
     """
     The agent loop is the core processing engine.
@@ -62,6 +169,8 @@ class AgentLoop:
     5. Sends responses back
     """
 
+    _RUNTIME_CHECKPOINT_KEY = "runtime_checkpoint"
+
     def __init__(
         self,
         bus: MessageBus,
@@ -70,6 +179,9 @@ class AgentLoop:
         context: ContextManager | None = None,
         model: str | None = None,
         max_iterations: int = 20,
+        max_tool_result_chars: int = 50000,
+        context_window_tokens: int | None = None,
+        context_block_limit: int | None = None,
         brave_api_key: str | None = None,
         exec_config: ExecToolConfig | None = None,
         cron_service: CronService | None = None,
@@ -79,6 +191,8 @@ class AgentLoop:
         llm_timeout: int | None = 60,
         mcp_servers: dict | None = None,
         reasoning_effort: str | None = None,
+        hooks: list[AgentHook] | None = None,
+        channels_config: ChannelsConfig | None = None
     ):
         from blackcat.config.schema import ExecToolConfig as ExecToolConfigRuntime
 
@@ -87,6 +201,10 @@ class AgentLoop:
         self.workspace = workspace
         self.model = model or provider.get_default_model()
         self.max_iterations = max_iterations
+        self.max_tool_result_chars = max_tool_result_chars
+        self.context_window_tokens = context_window_tokens
+        self.context_block_limit = context_block_limit
+        self.channels_config = channels_config
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfigRuntime()
         self.cron_service = cron_service
@@ -94,6 +212,9 @@ class AgentLoop:
         self.config = config
         self.llm_timeout = llm_timeout
         self.reasoning_effort = reasoning_effort
+        self._start_time = time.time()
+        self._last_usage: dict[str, int] = {}
+        self._extra_hooks: list[AgentHook] = hooks or []
 
         # Summarizer for context compaction (created first, passed to ContextManager)
         summarizer_model = config.agents.defaults.summarizer_model if config else None
@@ -106,6 +227,7 @@ class AgentLoop:
         self.context = context or ContextManager(workspace, summarizer=self.summarizer)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
+        self.runner = AgentRunner(provider)
 
         if config and config.tools.lens.enabled:
             from blackcat.lens import LensClient
@@ -124,20 +246,26 @@ class AgentLoop:
             workspace=workspace,
             bus=bus,
             model=self.model,
-            brave_api_key=brave_api_key,
+            max_tool_result_chars=self.max_tool_result_chars,
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
-            llm_timeout=llm_timeout,
         )
 
         self.memory_window = config.agents.defaults.memory_window if config else 51
         self._running = False
-
-        # MCP server lifecycle
         self._mcp_servers = mcp_servers or {}
         self._mcp_stack: AsyncExitStack | None = None
         self._mcp_connected = False
         self._mcp_connecting = False
+        self._active_tasks: dict[str, list[asyncio.Task]] = {}
+        self._background_tasks: list[asyncio.Task] = []
+        self._session_locks: dict[str, asyncio.Lock] = {}
+        # BLACKCAT_MAX_CONCURRENT_REQUESTS: <=0 means unlimited; default 3.
+        _max = int(os.environ.get("BLACKCAT_MAX_CONCURRENT_REQUESTS", "3"))
+        self._concurrency_gate: asyncio.Semaphore | None = (
+            asyncio.Semaphore(_max) if _max > 0 else None
+        )
+        self.commands = CommandRouter()
 
         self._register_default_tools()
 
@@ -175,7 +303,6 @@ class AgentLoop:
 
         # lens tools (for code intelligence)
         if self.lens_client and self.config and self.config.tools.lens.enabled:
-            logger.info("Registering {} lens LSP tools", 10)
             self.tools.register(LensDefinitionTool(self.lens_client))
             self.tools.register(LensReferencesTool(self.lens_client))
             self.tools.register(LensHoverTool(self.lens_client))
@@ -215,192 +342,102 @@ class AgentLoop:
         finally:
             self._mcp_connecting = False
 
+
+    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
+        """Update context for all tools that need routing info."""
+        for name in ("message", "spawn", "cron"):
+            tool = self.tools.get(name)
+            if tool and hasattr(tool, "set_context"):
+                if name == "message":
+                    tool.set_context(channel, chat_id, message_id)  # type: ignore[union-attr]
+                else:
+                    tool.set_context(channel, chat_id)  # type: ignore[union-attr]
+
+    async def run(self) -> None:
+        """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
+        self._running = True
+        await self._connect_mcp()
+        logger.info("Agent loop started")
+
+        while self._running:
+            try:
+                msg = await asyncio.wait_for(self.bus.consume_inbound(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                # Preserve real task cancellation so shutdown can complete cleanly.
+                current = asyncio.current_task()
+                if not self._running:
+                    raise
+                if current is not None and current.cancelling():
+                    raise
+                continue
+            except Exception as e:
+                logger.warning("Error consuming inbound message: {}, continuing...", e)
+                continue
+
+            raw = msg.content.strip()
+            if self.commands.is_priority(raw):
+                ctx = CommandContext(msg=msg, session=None, key=msg.session_key, raw=raw, loop=self)
+                result = await self.commands.dispatch_priority(ctx)
+                if result:
+                    await self.bus.publish_outbound(result)
+                continue
+            task = asyncio.create_task(self._dispatch(msg))
+            self._active_tasks.setdefault(msg.session_key, []).append(task)
+            task.add_done_callback(
+                lambda t, k=msg.session_key: self._active_tasks.get(k, []) and self._active_tasks[k].remove(t)
+                if t in self._active_tasks.get(k, []) else None
+            )
+
+    async def _dispatch(self, msg: InboundMessage) -> None:
+        """Process a message: per-session serial, cross-session concurrent."""
+        lock = self._session_locks.setdefault(msg.session_key, asyncio.Lock())
+        gate = self._concurrency_gate or nullcontext()
+        async with lock, gate:
+            try:
+                handler = MessageHandler(self, msg)
+                response = await handler.process()
+                if response is not None:
+                    await self.bus.publish_outbound(response)
+                elif msg.channel == "cli":
+                    await self.bus.publish_outbound(OutboundMessage(
+                        channel=msg.channel, chat_id=msg.chat_id,
+                        content="", metadata=msg.metadata or {},
+                    ))
+            except asyncio.CancelledError:
+                logger.info("Task cancelled for session {}", msg.session_key)
+                raise
+            except Exception:
+                logger.exception("Error processing message for session {}", msg.session_key)
+                await self.bus.publish_outbound(OutboundMessage(
+                    channel=msg.channel, chat_id=msg.chat_id,
+                    content="Sorry, I encountered an error.",
+                ))
+
     async def close_mcp(self) -> None:
-        """Shut down MCP server connections."""
+        """Drain pending background archives, then close MCP connections."""
+        if self._background_tasks:
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            self._background_tasks.clear()
         if self._mcp_stack:
             try:
                 await self._mcp_stack.aclose()
             except (RuntimeError, BaseExceptionGroup):
                 pass  # MCP SDK cancel scope cleanup is noisy but harmless
-            except Exception as e:
-                logger.warning("Error closing MCP connections: {}", e)
             self._mcp_stack = None
-            self._mcp_connected = False
 
-    def _resolve_author(self, sender_id: str, channel: str) -> str:
-        """Resolve sender_id to author name using config, or return sender_id as-is."""
-        if self.config:
-            return self.config.resolve_author(sender_id, channel)
-        return sender_id  # Fallback: use raw sender_id if no config
-
-    async def run(self) -> None:
-        """Run the agent loop, processing messages from the bus."""
-        self._running = True
-        logger.info("Agent loop started")
-
-        while self._running:
-            try:
-                # Wait for next message
-                msg = await asyncio.wait_for(self.bus.consume_inbound(), timeout=1.0)
-
-                # Process it
-                try:
-                    response = await self._process_message(msg)
-                    if response is not None:
-                        await self.bus.publish_outbound(response)
-                    elif msg.channel == "cli":
-                        # CLI needs an empty response to unblock the prompt
-                        await self.bus.publish_outbound(
-                            OutboundMessage(
-                                channel=msg.channel,
-                                chat_id=msg.chat_id,
-                                content="",
-                                metadata=msg.metadata or {},
-                            )
-                        )
-                except Exception as e:
-                    logger.error("Error processing message: {}", e)
-                    await self.bus.publish_outbound(
-                        OutboundMessage(
-                            channel=msg.channel,
-                            chat_id=msg.chat_id,
-                            content=f"Sorry, I encountered an error: {str(e)}",
-                        )
-                    )
-            except asyncio.TimeoutError:
-                continue
+    def _schedule_background(self, coro) -> None:
+        """Schedule a coroutine as a tracked background task (drained on shutdown)."""
+        task = asyncio.create_task(coro)
+        self._background_tasks.append(task)
+        task.add_done_callback(self._background_tasks.remove)
 
     def stop(self) -> None:
         """Stop the agent loop."""
         self._running = False
         logger.info("Agent loop stopping")
 
-    async def _process_message(self, msg: InboundMessage) -> OutboundMessage | None:
-        """
-        Process a single inbound message (regular or system).
-
-        Args:
-            msg: The inbound message to process.
-
-        Returns:
-            The response message, or None if no response needed.
-        """
-        is_system = msg.channel == "system"
-
-        # Parse origin (system messages encode origin in chat_id as "channel:chat_id")
-        if is_system:
-            if ":" in msg.chat_id:
-                origin_channel, origin_chat_id = parse_session_key(msg.chat_id)
-            else:
-                origin_channel, origin_chat_id = "cli", msg.chat_id
-            session_key = f"{origin_channel}:{origin_chat_id}"
-            logger.info("Processing system message from {}", msg.sender_id)
-        else:
-            origin_channel, origin_chat_id = msg.channel, msg.chat_id
-            session_key = msg.session_key
-            logger.info(
-                "Processing message from {}:{}: {}",
-                origin_channel, msg.sender_id, truncate_string(msg.content, 80),
-            )
-
-        # Connect MCP servers lazily on first message
-        await self._connect_mcp()
-
-        # Get or create session
-        session = self.sessions.get_or_create(session_key)
-
-        # Update tool contexts and reset per-turn tracking
-        self._update_tool_contexts(origin_channel, origin_chat_id)
-        message_tool = self.tools.get("message")
-        if isinstance(message_tool, MessageTool):
-            message_tool.start_turn()
-
-        # Build initial messages
-        author = self._resolve_author(msg.sender_id, msg.channel)
-        messages = await self.context.build_messages(
-            history=session.get_history(max_messages=self.memory_window),
-            current_message=msg.content,
-            author=author,
-            channel=origin_channel,
-            chat_id=origin_chat_id,
-            media=msg.media if msg.media and not is_system else None,
-        )
-
-        # Compact context if needed
-        messages, _ = await self.context.sliding_window(
-            messages,
-            window_size=self.memory_window,
-            model=self.model,
-            session = session,
-        )
-
-        # Progress callback: sends intermediate output to the user's channel
-        async def _send_progress(content: str) -> None:
-            await self.bus.publish_outbound(
-                OutboundMessage(
-                    channel=origin_channel,
-                    chat_id=origin_chat_id,
-                    content=content,
-                    metadata=msg.metadata or {},
-                )
-            )
-
-        # Agent loop
-        final_content, tools_used = await self._run_agent_loop(
-            messages, on_progress=_send_progress
-        )
-
-        if not final_content or not final_content.strip():
-            if is_system:
-                final_content = "Background task completed."
-            elif final_content is None:
-                final_content = "I've completed processing but have no response to give."
-            else:
-                final_content = "I've completed processing but have no response to give."
-
-        # Log response preview
-        logger.info(
-            "Response to {}:{}: {}",
-            origin_channel, msg.sender_id, truncate_string(final_content, 120),
-        )
-
-        # Save to session
-        user_content = f"[System: {msg.sender_id}] {msg.content}" if is_system else msg.content
-        session.add_message("user", user_content, author=author)
-        agent = self.context.get_identity()
-        agent_name = agent.get("identity", {}).get("name") if isinstance(agent, dict) else None
-        agent_name = agent_name or "blackcat"
-
-        session.add_message("assistant", final_content, author=agent_name)
-        self.sessions.save(session)
-
-        # If the message tool already sent a reply this turn, don't send a duplicate
-        message_tool = self.tools.get("message")
-        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
-            return None
-
-        metadata = msg.metadata or {}
-        return OutboundMessage(
-            channel=origin_channel,
-            chat_id=origin_chat_id,
-            content=final_content,
-            reply_to=str(metadata["reply_to"]) if metadata.get("reply_to") else None,
-            metadata=metadata,
-        )
-
-    def _update_tool_contexts(self, channel: str, chat_id: str) -> None:
-        """Update tool contexts with current channel and chat_id."""
-        message_tool = self.tools.get("message")
-        if isinstance(message_tool, MessageTool):
-            message_tool.set_context(channel, chat_id)
-
-        spawn_tool = self.tools.get("spawn")
-        if isinstance(spawn_tool, SpawnTool):
-            spawn_tool.set_context(channel, chat_id)
-
-        cron_tool = self.tools.get("cron")
-        if isinstance(cron_tool, CronTool):
-            cron_tool.set_context(channel, chat_id)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -426,89 +463,90 @@ class AgentLoop:
 
     async def _run_agent_loop(
         self,
-        messages: list[dict],
-        on_progress: Callable[[str], Awaitable[None]] | None = None,
-    ) -> tuple[str | None, list[str]]:
+        initial_messages: list[dict],
+        on_progress: Callable[..., Awaitable[None]] | None = None,
+        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream_end: Callable[..., Awaitable[None]] | None = None,
+        *,
+        session: "Session | None" = None,
+        channel: str = "cli",
+        chat_id: str = "direct",
+        message_id: str | None = None,
+    ) -> tuple[str | None, list[str], list[dict]]:
+        """Run the agent iteration loop.
+
+        *on_stream*: called with each content delta during streaming.
+        *on_stream_end(resuming)*: called when a streaming session finishes.
+        ``resuming=True`` means tool calls follow (spinner should restart);
+        ``resuming=False`` means this is the final response.
         """
-        Run the agent loop: call LLM, execute tools, repeat until done.
+        loop_hook = _LoopHook(
+            self,
+            on_progress=on_progress,
+            on_stream=on_stream,
+            on_stream_end=on_stream_end,
+            channel=channel,
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+        hook: AgentHook = (
+            _LoopHookChain(loop_hook, self._extra_hooks)
+            if self._extra_hooks
+            else loop_hook
+        )
 
-        Args:
-            messages: The conversation messages.
-            on_progress: Optional callback to push intermediate progress to the user.
+        async def _checkpoint(payload: dict[str, Any]) -> None:
+            if session is None:
+                return
+            self._set_runtime_checkpoint(session, payload)
 
-        Returns:
-            Tuple of (final_content, tools_used).
-        """
-        iteration = 0
-        tools_used: list[str] = []
+        result = await self.runner.run(AgentRunSpec(
+            initial_messages=initial_messages,
+            tools=self.tools,
+            model=self.model,
+            max_iterations=self.max_iterations,
+            max_tool_result_chars=self.max_tool_result_chars,
+            hook=hook,
+            error_message="Sorry, I encountered an error calling the AI model.",
+            concurrent_tools=True,
+            workspace=self.workspace,
+            session_key=session.key if session else None,
+            context_window_tokens=self.context_window_tokens,
+            context_block_limit=self.context_block_limit,
+            progress_callback=on_progress,
+            checkpoint_callback=_checkpoint,
+        ))
+        self._last_usage = result.usage
+        if result.stop_reason == "max_iterations":
+            logger.warning("Max iterations ({}) reached", self.max_iterations)
+        elif result.stop_reason == "error":
+            logger.error("LLM returned error: {}", (result.final_content or "")[:200])
+        return result.final_content, result.tools_used, result.messages
 
-        while iteration < self.max_iterations:
-            iteration += 1
+    def _set_runtime_checkpoint(self, session: "Session", payload: dict[str, Any]) -> None:
+        """Persist the latest in-flight turn state into session metadata."""
+        session.metadata[self._RUNTIME_CHECKPOINT_KEY] = payload
+        self.sessions.save(session)
 
-            response = await self.provider.chat(
-                messages=messages,
-                tools=self.tools.get_definitions(),
-                model=self.model,
-                timeout=self.llm_timeout,
-                reasoning_effort=self.reasoning_effort,
-            )
-
-            if response.has_tool_calls:
-                # Send progress to user (thinking text or tool hint)
-                if on_progress:
-                    clean = self._strip_think(response.content)
-                    if clean:
-                        await on_progress(clean)
-                    await on_progress(self._tool_hint(response.tool_calls))
-
-                # TODO Add assistant message with tool calls
-                messages = self.context.add_assistant_message(
-                    messages,
-                    response.content,
-                    build_tool_call_dicts(response.tool_calls),
-                    reasoning_content=response.reasoning_content,
-                    thinking_blocks=response.thinking_blocks,
-                )
-
-                # Execute tools
-                for tool_call in response.tool_calls:
-                    tools_used.append(tool_call.name)
-                    args_str = safe_json_dumps(tool_call.arguments)
-                    logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
-                    result = await self.tools.execute(tool_call.name, tool_call.arguments)
-                    messages = self.context.add_tool_result(
-                        messages, tool_call.id, tool_call.name, result
-                    )
-            else:
-                clean = self._strip_think(response.content)
-                # Don't persist error responses to session history — they can
-                # poison the context and cause permanent 400 loops.
-                if response.finish_reason == "error":
-                    logger.error("LLM returned error: {}", (clean or "")[:200])
-                    return clean or "Sorry, I encountered an error calling the AI model.", tools_used
-                return clean, tools_used
-
-        logger.warning("Max iterations reached ({})", self.max_iterations)
-        return None, tools_used
+    def _clear_runtime_checkpoint(self, session: "Session") -> None:
+        if self._RUNTIME_CHECKPOINT_KEY in session.metadata:
+            session.metadata.pop(self._RUNTIME_CHECKPOINT_KEY, None)
 
     async def process_direct(
         self,
         content: str,
+        session_key: str = "cli:direct",
         channel: str = "cli",
         chat_id: str = "direct",
-    ) -> str:
-        """
-        Process a message directly (for CLI or cron usage).
-
-        Args:
-            content: The message content.
-            channel: Source channel (for context).
-            chat_id: Source chat ID (for context).
-
-        Returns:
-            The agent's response.
-        """
+        on_progress: Callable[[str], Awaitable[None]] | None = None,
+        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream_end: Callable[..., Awaitable[None]] | None = None,
+    ) -> OutboundMessage | None:
+        """Process a message directly and return the outbound payload."""
+        await self._connect_mcp()
         msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
-
-        response = await self._process_message(msg)
-        return response.content if response else ""
+        handler = MessageHandler(self, msg)
+        return await handler.process(
+            session_key=session_key, on_progress=on_progress,
+            on_stream=on_stream, on_stream_end=on_stream_end,
+        )
