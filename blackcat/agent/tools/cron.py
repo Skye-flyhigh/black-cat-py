@@ -13,9 +13,15 @@ from blackcat.cron.types import CronJob, CronSchedule
 class CronTool(Tool):
     """Tool to schedule reminders, recurring tasks, and tool executions."""
 
-    name = "cron"
-    description = "Schedule reminders, recurring tasks, and tool executions. Actions: add, list, remove, update, pause, resume."
-    parameters = {
+    @property
+    def name(self) -> str:
+        return "cron"
+    @property
+    def description(self) -> str:
+        return "Schedule reminders, recurring tasks, and tool executions. Actions: add, list, remove, update, pause, resume."
+    @property
+    def parameters(self) -> dict:
+        return {
         "type": "object",
         "properties": {
             "action": {

@@ -12,9 +12,15 @@ from blackcat.agent.tools.base import Tool
 class ExecTool(Tool):
     """Tool to execute shell commands."""
 
-    name = "exec"
-    description = "Execute a shell command and return its output. Use with caution."
-    parameters = {
+    @property
+    def name(self) -> str:
+        return "exec"
+    @property
+    def description(self) -> str:
+        return "Execute a shell command and return its output. Use with caution."
+    @property
+    def parameters(self) -> dict: 
+        return {
         "type": "object",
         "properties": {
             "command": {"type": "string", "description": "The shell command to execute"},
