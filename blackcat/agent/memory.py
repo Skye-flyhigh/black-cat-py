@@ -3,7 +3,8 @@
 from datetime import datetime
 from pathlib import Path
 
-from blackcat.utils.helpers import ensure_dir, today_date
+from blackcat.utils.helpers import ensure_dir
+from blackcat.utils.time import today_date
 
 
 class Journal:

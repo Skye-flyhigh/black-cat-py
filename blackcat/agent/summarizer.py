@@ -6,7 +6,7 @@ from typing import Any
 from loguru import logger
 
 from blackcat.providers.base import LLMProvider
-from blackcat.utils.helpers import last_24h
+from blackcat.utils.time import last_24h
 
 
 class Summarizer:
@@ -95,8 +95,6 @@ Format as bullet points."""
                 timeout=self.timeout,
             )
             summary = response.content or ""
-            logger.debug("Content: {}", summary)
-            logger.debug("Summarized {} messages into {} chars", len(messages), len(summary))
             return summary.strip()
 
         except Exception as e:
