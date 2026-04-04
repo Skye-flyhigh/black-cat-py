@@ -5,8 +5,7 @@ import pytest
 
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
-from blackcat.channels.email import EmailChannel
-from blackcat.config.schema import EmailConfig
+from blackcat.channels.email import EmailChannel, EmailConfig
 
 
 def _make_config() -> EmailConfig:

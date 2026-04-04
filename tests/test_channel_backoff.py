@@ -62,8 +62,7 @@ def test_whatsapp_dedup_init():
     bus = MagicMock()
 
     ch = WhatsAppChannel(config, bus)
-    assert hasattr(ch, "_seen_ids")
-    assert ch._seen_ids.maxlen == 2000
+    assert hasattr(ch, "_processed_message_ids")
 
 
 # ── Manager allow_from validation ─────────────────────────────────
