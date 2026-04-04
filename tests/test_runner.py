@@ -189,7 +189,7 @@ class TestAgentRunner:
         ))
 
         assert result.final_content == "Done!"
-        assert "echo" in result.tools_used
+        assert any(t["name"] == "echo" for t in result.tools_used)
 
     @pytest.mark.asyncio
     async def test_max_iterations(self):

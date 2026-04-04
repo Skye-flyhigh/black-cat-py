@@ -29,6 +29,7 @@ from blackcat.agent.tools.lens import (
     LensSignatureHelpTool,
     LensWorkspaceSymbolTool,
 )
+from blackcat.agent.tools.search import GlobTool, GrepTool
 from blackcat.command.router import CommandContext, CommandRouter
 from blackcat.config.schema import ChannelsConfig
 
@@ -273,8 +274,8 @@ class AgentLoop:
         """Register the default set of tools."""
         # File tools (workspace for relative paths, restrict if configured)
         allowed_dir = self.workspace if self.restrict_to_workspace else None
-        for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool):
-            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
+        for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool, GrepTool, GlobTool):
+            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir)) # type: ignore[arg-type]
 
         # Shell tool
         self.tools.register(
@@ -331,6 +332,9 @@ class AgentLoop:
             await self._mcp_stack.__aenter__()
             await connect_mcp_servers(self._mcp_servers, self.tools, self._mcp_stack)
             self._mcp_connected = True
+            # Export MCP tools documentation
+            self.tools.export_mcp_md(self.workspace / "MCP.md")
+            logger.info("MCP tools exported to MCP.md")
         except Exception as e:
             logger.error("Failed to connect MCP servers (will retry next message): {}", e)
             if self._mcp_stack:
@@ -472,7 +476,7 @@ class AgentLoop:
         channel: str = "cli",
         chat_id: str = "direct",
         message_id: str | None = None,
-    ) -> tuple[str | None, list[str], list[dict]]:
+    ) -> tuple[str | None, list[dict[str, Any]], list[dict[str, Any]]]:
         """Run the agent iteration loop.
 
         *on_stream*: called with each content delta during streaming.

@@ -79,6 +79,7 @@ class MCPToolWrapper(Tool):
 
     def __init__(self, session, server_name: str, tool_def, tool_timeout: int = 30):
         self._session = session
+        self._server_name = server_name
         self._original_name = tool_def.name
         self._name = f"mcp_{server_name}_{tool_def.name}"
         self._description = tool_def.description or tool_def.name
@@ -97,6 +98,16 @@ class MCPToolWrapper(Tool):
     @property
     def parameters(self) -> dict[str, Any]:
         return self._parameters
+
+    @property
+    def server_name(self) -> str:
+        """The MCP server this tool comes from."""
+        return self._server_name
+
+    @property
+    def original_name(self) -> str:
+        """The tool name without the mcp_ prefix."""
+        return self._original_name
 
     async def execute(self, **kwargs: Any) -> str:
         from mcp import types

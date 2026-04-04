@@ -62,7 +62,7 @@ class AgentRunResult:
 
     final_content: str | None
     messages: list[dict[str, Any]]
-    tools_used: list[str] = field(default_factory=list)
+    tools_used: list[dict[str, Any]] = field(default_factory=list)
     usage: dict[str, int] = field(default_factory=dict)
     stop_reason: str = "completed"
     error: str | None = None
@@ -79,7 +79,7 @@ class AgentRunner:
         hook = spec.hook or AgentHook()
         messages = list(spec.initial_messages)
         final_content: str | None = None
-        tools_used: list[str] = []
+        tools_used: list[dict[str, Any]] = []
         usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0}
         error: str | None = None
         stop_reason = "completed"
@@ -118,7 +118,6 @@ class AgentRunner:
                     thinking_blocks=response.thinking_blocks,
                 )
                 messages.append(assistant_message)
-                tools_used.extend(tc.name for tc in response.tool_calls)
                 await self._emit_checkpoint(
                     spec,
                     {
@@ -166,6 +165,12 @@ class AgentRunner:
                     }
                     messages.append(tool_message)
                     completed_tool_results.append(tool_message)
+                    tools_used.append({
+                        "id": tool_call.id,
+                        "name": tool_call.name,
+                        "arguments": tool_call.arguments,
+                        "result": result,
+                    })
                 await self._emit_checkpoint(
                     spec,
                     {

@@ -140,16 +140,15 @@ def test_format_trust(ctx):
 
 
 async def test_build_core_prompt(ctx):
-    prompt = await ctx.build_core_prompt(author="skye", channel="telegram")
+    prompt = await ctx._build_system_prompt(author="skye", channel="telegram")
     assert "Soul" in prompt or "helpful assistant" in prompt
     assert "trusted" in prompt.lower()
-    assert "telegram" in prompt.lower()
     assert "Environment" in prompt
 
 
 async def test_build_core_prompt_includes_journal(ctx):
     ctx.journal.write_long_term("User likes coffee")
-    prompt = await ctx.build_core_prompt(author="skye")
+    prompt = await ctx._build_system_prompt(author="skye")
     assert "coffee" in prompt
 
 
@@ -500,36 +499,35 @@ async def test_build_messages_merges_consecutive_user_messages(ctx):
 # ── System blocks (caching) ─────────────────────────────────────────
 
 
-def test_build_system_blocks_returns_list(ctx):
-    """Verify build_system_blocks returns a list of blocks."""
-    blocks = ctx.build_system_blocks(author="skye", channel="telegram")
+def test_build_static_blocks_returns_list(ctx):
+    """Verify _build_static_blocks returns a list of blocks."""
+    blocks = ctx._build_static_blocks()
     assert isinstance(blocks, list)
     assert len(blocks) > 0
     assert all("type" in b for b in blocks)
     assert all(b["type"] == "text" for b in blocks)
 
 
-def test_build_system_blocks_has_cache_control(ctx):
-    """Verify static blocks have cache_control marker."""
-    blocks = ctx.build_system_blocks(author="skye", enable_caching=True)
+def test_build_static_blocks_has_cache_control(ctx):
+    """Verify static blocks have cache_control marker when caching enabled."""
+    blocks = ctx._build_static_blocks(enable_caching=True)
     # At least one block should have cache_control
     cached_blocks = [b for b in blocks if "cache_control" in b]
     assert len(cached_blocks) >= 1
-    # The first cached block should be the last identity block
     assert cached_blocks[0]["cache_control"] == {"type": "ephemeral"}
 
 
-def test_build_system_blocks_no_caching(ctx):
+def test_build_static_blocks_no_caching(ctx):
     """Verify cache_control can be disabled."""
-    blocks = ctx.build_system_blocks(author="skye", enable_caching=False)
+    blocks = ctx._build_static_blocks(enable_caching=False)
     # No blocks should have cache_control
     cached_blocks = [b for b in blocks if "cache_control" in b]
     assert len(cached_blocks) == 0
 
 
-def test_build_system_blocks_includes_dynamic_content(ctx):
+async def test_build_dynamic_blocks_includes_content(ctx):
     """Verify dynamic content (time, session) is included."""
-    blocks = ctx.build_system_blocks(author="skye", channel="telegram", chat_id="123")
+    blocks = await ctx._build_dynamic_blocks(author="skye", channel="telegram", chat_id="123")
     # Join all block texts
     full_text = "".join(b.get("text", "") for b in blocks)
     assert "telegram" in full_text

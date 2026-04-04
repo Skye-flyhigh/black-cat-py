@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -182,7 +182,7 @@ class MessageHandler:
         session: "Session",
         msg: "InboundMessage",
         final_content: str,
-        tools_used: list[str],
+        tools_used: list[dict[str, Any]],
         is_system: bool,
     ) -> None:
         """Persist conversation turn to session."""
@@ -195,6 +195,13 @@ class MessageHandler:
         agent_name = agent_name or "blackcat"
 
         for tool in tools_used:
-            session.add_message("assistant", f"Tool call: {tool}", author=agent_name)
+            session.add_message(
+                "tool",
+                content=tool["result"],
+                author=agent_name,
+                id= tool["id"],
+                name= tool["name"],
+                arguments= tool["arguments"],
+            )
         session.add_message("assistant", final_content, author=agent_name)
         self._loop.sessions.save(session)

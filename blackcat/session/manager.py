@@ -27,9 +27,20 @@ class Session:
     metadata: dict[str, Any] = field(default_factory=dict)
     last_consolidated: int = 0
 
-    def add_message(self, role: str, content: str, **kwargs: Any) -> None:
-        """Add a message to the session."""
-        msg = {"role": role, "content": content, "timestamp": timestamp(), **kwargs}
+    def add_message(self, role: str, content: str | None = None, **kwargs: Any) -> None:
+        """Add a message to the session.
+
+        Args:
+            role: Message role (user, assistant, tool, system)
+            content: Message content (optional for tool_calls messages)
+            **kwargs: Additional fields (tool_calls, tool_call_id, name, etc.)
+        """
+        msg: dict[str, Any] = {"role": role, "timestamp": timestamp(), **kwargs}
+        if content is not None:
+            msg["content"] = content
+        elif "tool_calls" not in kwargs and "tool_call_id" not in kwargs:
+            # Default empty content for non-tool messages
+            msg["content"] = ""
         self.messages.append(msg)
         self.updated_at = datetime.now()
 

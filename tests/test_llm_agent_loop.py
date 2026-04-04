@@ -119,7 +119,7 @@ async def test_run_agent_loop_with_read_file(provider, tmp_path):
     ]
 
     content, tools_used, _ = await agent._run_agent_loop(messages)
-    assert "read_file" in tools_used
+    assert any(t["name"] == "read_file" for t in tools_used)
     assert content is not None
     # The model read the file — that's what we're testing.
     # Whether it reports "42" or refuses on principle is model behavior.
@@ -160,7 +160,7 @@ async def test_run_agent_loop_with_write_file(provider, tmp_path):
     ]
 
     content, tools_used, _ = await agent._run_agent_loop(messages)
-    assert "write_file" in tools_used
+    assert any(t["name"] == "write_file" for t in tools_used)
     assert (workspace / "output.txt").exists()
     assert "hello world" in (workspace / "output.txt").read_text()
 

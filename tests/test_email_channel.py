@@ -21,6 +21,8 @@ def _make_config() -> EmailConfig:
         smtp_username="bot@example.com",
         smtp_password="secret",
         mark_seen=True,
+        verify_spf=False,  # Disable for tests
+        verify_dkim=False,  # Disable for tests
     )
 
 
@@ -200,6 +202,10 @@ async def test_send_skips_when_auto_reply_disabled(monkeypatch) -> None:
     cfg = _make_config()
     cfg.auto_reply_enabled = False
     channel = EmailChannel(cfg, MessageBus())
+
+    # Simulate a reply scenario: alice has sent us an email before
+    channel._last_subject_by_chat["alice@example.com"] = "Previous email"
+
     await channel.send(
         OutboundMessage(
             channel="email",
