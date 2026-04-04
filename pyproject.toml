@@ -46,6 +46,7 @@ dependencies = [
     "chardet>=3.0.2,<6.0.0",
     "openai>=2.8.0",
     "tiktoken>=0.12.0,<1.0.0",
+    "tomli_w>=1.0.0,<2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -109,3 +110,16 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.pyright]
+include = ["blackcat"]
+exclude = ["**/__pycache__", "**/.pytest_cache", "tests"]
+extraPaths = ["blackcat/stubs"]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+reportMissingImports = "warning"
+reportMissingModuleSource = "none"
+reportAttributeAccessIssue = "warning"
+reportOptionalMemberAccess = "warning"
+reportCallIssue = "warning"
+reportGeneralTypeIssues = "warning"
