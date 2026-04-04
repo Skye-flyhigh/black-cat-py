@@ -240,7 +240,7 @@ modify_soul = true
 <summary><b>Telegram Setup</b></summary>
 
 1. Create bot via @BotFather, get token
-2. Get your user ID from @userinfobot
+2. Get your user ID from @userinfobot (or use your @username)
 3. Configure:
 
 ```json
@@ -249,11 +249,17 @@ modify_soul = true
     "telegram": {
       "enabled": true,
       "token": "YOUR_BOT_TOKEN",
-      "allow_from": ["YOUR_USER_ID"]
+      "allowFrom": ["YOUR_USER_ID"]
     }
   }
 }
 ```
+
+**`allowFrom` options:**
+- `["12345678"]` — Allow specific user ID
+- `["username"]` — Allow by Telegram username (case-sensitive)
+- `["12345678", "username"]` — Allow either ID or username
+- `["*"]` — Allow all users (open access)
 
 4. Run `blackcat gateway`
 
@@ -273,11 +279,20 @@ modify_soul = true
     "discord": {
       "enabled": true,
       "token": "YOUR_BOT_TOKEN",
-      "allow_from": ["YOUR_USER_ID"]
+      "allowFrom": ["YOUR_USER_ID"],
+      "groupPolicy": "mention"
     }
   }
 }
 ```
+
+**`allowFrom` options:**
+- `["123456789"]` — Allow specific user ID
+- `["*"]` — Allow all users
+
+**`groupPolicy` options:**
+- `"mention"` — Bot only responds when @mentioned in group channels (default)
+- `"open"` — Bot responds to all messages in group channels
 
 5. Invite bot to server, run `blackcat gateway`
 

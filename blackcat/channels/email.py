@@ -15,23 +15,61 @@ from email.utils import parseaddr
 from typing import Any
 
 from loguru import logger
+from pydantic import Field
 
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.schema import EmailConfig
+from blackcat.config.schema import Base
+
+
+class EmailConfig(Base):
+    """Email channel configuration (IMAP inbound + SMTP outbound)."""
+
+    enabled: bool = False
+    consent_granted: bool = False
+
+    imap_host: str = ""
+    imap_port: int = 993
+    imap_username: str = ""
+    imap_password: str = ""
+    imap_mailbox: str = "INBOX"
+    imap_use_ssl: bool = True
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    from_address: str = ""
+
+    auto_reply_enabled: bool = True
+    poll_interval_seconds: int = 30
+    mark_seen: bool = True
+    max_body_chars: int = 12000
+    subject_prefix: str = "Re: "
+    allow_from: list[str] = Field(default_factory=list)
+
+    # Email authentication verification (anti-spoofing)
+    verify_dkim: bool = True   # Require Authentication-Results with dkim=pass
+    verify_spf: bool = True    # Require Authentication-Results with spf=pass
 
 
 class EmailChannel(BaseChannel):
     """
     Email channel.
 
-    Inbound: Poll IMAP mailbox for unread messages.
-    Outbound: Send responses via SMTP back to the sender address.
+    Inbound:
+    - Poll IMAP mailbox for unread messages.
+    - Convert each message into an inbound event.
+
+    Outbound:
+    - Send responses via SMTP back to the sender address.
     """
 
     name = "email"
-
+    display_name = "Email"
     _IMAP_MONTHS = (
         "Jan",
         "Feb",
@@ -46,16 +84,35 @@ class EmailChannel(BaseChannel):
         "Nov",
         "Dec",
     )
+    _IMAP_RECONNECT_MARKERS = (
+        "disconnected for inactivity",
+        "eof occurred in violation of protocol",
+        "socket error",
+        "connection reset",
+        "broken pipe",
+        "bye",
+    )
+    _IMAP_MISSING_MAILBOX_MARKERS = (
+        "mailbox doesn't exist",
+        "select failed",
+        "no such mailbox",
+        "can't open mailbox",
+        "does not exist",
+    )
 
-    # Dedup cache limit
-    _MAX_PROCESSED_UIDS = 100000
+    @classmethod
+    def default_config(cls) -> dict[str, Any]:
+        return EmailConfig().model_dump(by_alias=True)
 
-    def __init__(self, config: EmailConfig, bus: MessageBus):
+    def __init__(self, config: Any, bus: MessageBus):
+        if isinstance(config, dict):
+            config = EmailConfig.model_validate(config)
         super().__init__(config, bus)
         self.config: EmailConfig = config
         self._last_subject_by_chat: dict[str, str] = {}
         self._last_message_id_by_chat: dict[str, str] = {}
-        self._processed_uids: set[str] = set()
+        self._processed_uids: set[str] = set()  # Capped to prevent unbounded growth
+        self._MAX_PROCESSED_UIDS = 100000
 
     async def start(self) -> None:
         """Start polling IMAP for inbound emails."""
@@ -70,14 +127,18 @@ class EmailChannel(BaseChannel):
             return
 
         self._running = True
+        if not self.config.verify_dkim and not self.config.verify_spf:
+            logger.warning(
+                "Email channel: DKIM and SPF verification are both DISABLED. "
+                "Emails with spoofed From headers will be accepted. "
+                "Set verify_dkim=true and verify_spf=true for anti-spoofing protection."
+            )
         logger.info("Starting Email channel (IMAP polling mode)...")
 
         poll_seconds = max(5, int(self.config.poll_interval_seconds))
-
         while self._running:
             try:
                 inbound_items = await asyncio.to_thread(self._fetch_new_messages)
-
                 for item in inbound_items:
                     sender = item["sender"]
                     subject = item.get("subject", "")
@@ -94,7 +155,6 @@ class EmailChannel(BaseChannel):
                         content=item["content"],
                         metadata=item.get("metadata", {}),
                     )
-
             except Exception as e:
                 logger.error("Email polling error: {}", e)
 
@@ -105,44 +165,41 @@ class EmailChannel(BaseChannel):
         self._running = False
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Send email via SMTP (with consent and auto-reply checks)."""
+        """Send email via SMTP."""
         if not self.config.consent_granted:
             logger.warning("Skip email send: consent_granted is false")
-            return
-
-        force_send = bool((msg.metadata or {}).get("force_send"))
-        if not self.config.auto_reply_enabled and not force_send:
-            logger.info("Skip automatic email reply: auto_reply_enabled is false")
             return
 
         if not self.config.smtp_host:
             logger.warning("Email channel SMTP host not configured")
             return
 
-        await super().send(msg)
-
-    async def _send_impl(self, msg: OutboundMessage) -> None:
-        """Email-specific send implementation."""
         to_addr = msg.chat_id.strip()
         if not to_addr:
             logger.warning("Email channel missing recipient address")
             return
 
+        # Determine if this is a reply (recipient has sent us an email before)
+        is_reply = to_addr in self._last_subject_by_chat
+        force_send = bool((msg.metadata or {}).get("force_send"))
+
+        # autoReplyEnabled only controls automatic replies, not proactive sends
+        if is_reply and not self.config.auto_reply_enabled and not force_send:
+            logger.info("Skip automatic email reply to {}: auto_reply_enabled is false", to_addr)
+            return
+
         base_subject = self._last_subject_by_chat.get(to_addr, "blackcat reply")
         subject = self._reply_subject(base_subject)
-
         if msg.metadata and isinstance(msg.metadata.get("subject"), str):
             override = msg.metadata["subject"].strip()
             if override:
                 subject = override
 
         email_msg = EmailMessage()
-        email_msg["From"] = (
-            self.config.from_address or self.config.smtp_username or self.config.imap_username
-        )
+        email_msg["From"] = self.config.from_address or self.config.smtp_username or self.config.imap_username
         email_msg["To"] = to_addr
         email_msg["Subject"] = subject
-        email_msg.set_content(msg.content)
+        email_msg.set_content(msg.content or "")
 
         in_reply_to = self._last_message_id_by_chat.get(to_addr)
         if in_reply_to:
@@ -155,12 +212,12 @@ class EmailChannel(BaseChannel):
             logger.error("Error sending email to {}: {}", to_addr, e)
             raise
 
-    # ========================================================================
-    # Configuration Validation
-    # ========================================================================
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """Email channel uses custom send(), this is not used."""
+        # EmailChannel overrides send() directly for SMTP sending
+        pass
 
     def _validate_config(self) -> bool:
-        """Validate required configuration fields."""
         missing = []
         if not self.config.imap_host:
             missing.append("imap_host")
@@ -180,14 +237,8 @@ class EmailChannel(BaseChannel):
             return False
         return True
 
-    # ========================================================================
-    # SMTP Sending
-    # ========================================================================
-
     def _smtp_send(self, msg: EmailMessage) -> None:
-        """Send email via SMTP (blocking)."""
         timeout = 30
-
         if self.config.smtp_use_ssl:
             with smtplib.SMTP_SSL(
                 self.config.smtp_host,
@@ -203,18 +254,6 @@ class EmailChannel(BaseChannel):
                 smtp.starttls(context=ssl.create_default_context())
             smtp.login(self.config.smtp_username, self.config.smtp_password)
             smtp.send_message(msg)
-
-    def _reply_subject(self, base_subject: str) -> str:
-        """Generate reply subject line."""
-        subject = (base_subject or "").strip() or "blackcat reply"
-        prefix = self.config.subject_prefix or "Re: "
-        if subject.lower().startswith("re:"):
-            return subject
-        return f"{prefix}{subject}"
-
-    # ========================================================================
-    # IMAP Fetching
-    # ========================================================================
 
     def _fetch_new_messages(self) -> list[dict[str, Any]]:
         """Poll IMAP and return parsed unread messages."""
@@ -234,7 +273,7 @@ class EmailChannel(BaseChannel):
         """
         Fetch messages in [start_date, end_date) by IMAP date search.
 
-        Used for historical summarization tasks.
+        This is used for historical summarization tasks (e.g. "yesterday").
         """
         if end_date <= start_date:
             return []
@@ -258,8 +297,37 @@ class EmailChannel(BaseChannel):
         dedupe: bool,
         limit: int,
     ) -> list[dict[str, Any]]:
-        """Fetch messages by arbitrary IMAP search criteria."""
         messages: list[dict[str, Any]] = []
+        cycle_uids: set[str] = set()
+
+        for attempt in range(2):
+            try:
+                self._fetch_messages_once(
+                    search_criteria,
+                    mark_seen,
+                    dedupe,
+                    limit,
+                    messages,
+                    cycle_uids,
+                )
+                return messages
+            except Exception as exc:
+                if attempt == 1 or not self._is_stale_imap_error(exc):
+                    raise
+                logger.warning("Email IMAP connection went stale, retrying once: {}", exc)
+
+        return messages
+
+    def _fetch_messages_once(
+        self,
+        search_criteria: tuple[str, ...],
+        mark_seen: bool,
+        dedupe: bool,
+        limit: int,
+        messages: list[dict[str, Any]],
+        cycle_uids: set[str],
+    ) -> None:
+        """Fetch messages by arbitrary IMAP search criteria."""
         mailbox = self.config.imap_mailbox or "INBOX"
 
         if self.config.imap_use_ssl:
@@ -269,18 +337,24 @@ class EmailChannel(BaseChannel):
 
         try:
             client.login(self.config.imap_username, self.config.imap_password)
-            status, _ = client.select(mailbox)
+            try:
+                status, _ = client.select(mailbox)
+            except Exception as exc:
+                if self._is_missing_mailbox_error(exc):
+                    logger.warning("Email mailbox unavailable, skipping poll for {}: {}", mailbox, exc)
+                    return
+                raise
             if status != "OK":
-                return messages
+                logger.warning("Email mailbox select returned {}, skipping poll for {}", status, mailbox)
+                return
 
             status, data = client.search(None, *search_criteria)
             if status != "OK" or not data:
-                return messages
+                return
 
             ids = data[0].split()
             if limit > 0 and len(ids) > limit:
                 ids = ids[-limit:]
-
             for imap_id in ids:
                 status, fetched = client.fetch(imap_id, "(BODY.PEEK[] UID)")
                 if status != "OK" or not fetched:
@@ -291,12 +365,31 @@ class EmailChannel(BaseChannel):
                     continue
 
                 uid = self._extract_uid(fetched)
+                if uid and uid in cycle_uids:
+                    continue
                 if dedupe and uid and uid in self._processed_uids:
                     continue
 
                 parsed = BytesParser(policy=policy.default).parsebytes(raw_bytes)
                 sender = parseaddr(parsed.get("From", ""))[1].strip().lower()
                 if not sender:
+                    continue
+
+                # --- Anti-spoofing: verify Authentication-Results ---
+                spf_pass, dkim_pass = self._check_authentication_results(parsed)
+                if self.config.verify_spf and not spf_pass:
+                    logger.warning(
+                        "Email from {} rejected: SPF verification failed "
+                        "(no 'spf=pass' in Authentication-Results header)",
+                        sender,
+                    )
+                    continue
+                if self.config.verify_dkim and not dkim_pass:
+                    logger.warning(
+                        "Email from {} rejected: DKIM verification failed "
+                        "(no 'dkim=pass' in Authentication-Results header)",
+                        sender,
+                    )
                     continue
 
                 subject = self._decode_header_value(parsed.get("Subject", ""))
@@ -309,7 +402,7 @@ class EmailChannel(BaseChannel):
 
                 body = body[: self.config.max_body_chars]
                 content = (
-                    f"Email received.\n"
+                    f"[EMAIL-CONTEXT] Email received.\n"
                     f"From: {sender}\n"
                     f"Subject: {subject}\n"
                     f"Date: {date_value}\n\n"
@@ -333,43 +426,48 @@ class EmailChannel(BaseChannel):
                     }
                 )
 
+                if uid:
+                    cycle_uids.add(uid)
                 if dedupe and uid:
                     self._processed_uids.add(uid)
+                    # mark_seen is the primary dedup; this set is a safety net
                     if len(self._processed_uids) > self._MAX_PROCESSED_UIDS:
-                        self._processed_uids.clear()
+                        # Evict a random half to cap memory; mark_seen is the primary dedup
+                        self._processed_uids = set(list(self._processed_uids)[len(self._processed_uids) // 2:])
 
                 if mark_seen:
                     client.store(imap_id, "+FLAGS", "\\Seen")
-
         finally:
             try:
                 client.logout()
             except Exception:
                 pass
 
-        return messages
+    @classmethod
+    def _is_stale_imap_error(cls, exc: Exception) -> bool:
+        message = str(exc).lower()
+        return any(marker in message for marker in cls._IMAP_RECONNECT_MARKERS)
+
+    @classmethod
+    def _is_missing_mailbox_error(cls, exc: Exception) -> bool:
+        message = str(exc).lower()
+        return any(marker in message for marker in cls._IMAP_MISSING_MAILBOX_MARKERS)
 
     @classmethod
     def _format_imap_date(cls, value: date) -> str:
-        """Format date for IMAP search."""
+        """Format date for IMAP search (always English month abbreviations)."""
         month = cls._IMAP_MONTHS[value.month - 1]
         return f"{value.day:02d}-{month}-{value.year}"
 
     @staticmethod
     def _extract_message_bytes(fetched: list[Any]) -> bytes | None:
-        """Extract message bytes from IMAP fetch response."""
         for item in fetched:
-            if (
-                isinstance(item, tuple)
-                and len(item) >= 2
-                and isinstance(item[1], (bytes, bytearray))
-            ):
+            if isinstance(item, tuple) and len(item) >= 2 and isinstance(item[1], (bytes, bytearray)):
                 return bytes(item[1])
         return None
 
     @staticmethod
     def _extract_uid(fetched: list[Any]) -> str:
-        """Extract UID from IMAP fetch response."""
         for item in fetched:
             if isinstance(item, tuple) and item and isinstance(item[0], (bytes, bytearray)):
                 head = bytes(item[0]).decode("utf-8", errors="ignore")
@@ -380,7 +478,6 @@ class EmailChannel(BaseChannel):
 
     @staticmethod
     def _decode_header_value(value: str) -> str:
-        """Decode MIME-encoded header value."""
         if not value:
             return ""
         try:
@@ -394,28 +491,22 @@ class EmailChannel(BaseChannel):
         if msg.is_multipart():
             plain_parts: list[str] = []
             html_parts: list[str] = []
-
             for part in msg.walk():
                 if part.get_content_disposition() == "attachment":
                     continue
-
                 content_type = part.get_content_type()
-
                 try:
                     payload = part.get_content()
                 except Exception:
                     payload_bytes = part.get_payload(decode=True) or b""
                     charset = part.get_content_charset() or "utf-8"
                     payload = payload_bytes.decode(charset, errors="replace")
-
                 if not isinstance(payload, str):
                     continue
-
                 if content_type == "text/plain":
                     plain_parts.append(payload)
                 elif content_type == "text/html":
                     html_parts.append(payload)
-
             if plain_parts:
                 return "\n\n".join(plain_parts).strip()
             if html_parts:
@@ -428,18 +519,39 @@ class EmailChannel(BaseChannel):
             payload_bytes = msg.get_payload(decode=True) or b""
             charset = msg.get_content_charset() or "utf-8"
             payload = payload_bytes.decode(charset, errors="replace")
-
         if not isinstance(payload, str):
             return ""
-
         if msg.get_content_type() == "text/html":
             return cls._html_to_text(payload).strip()
         return payload.strip()
 
     @staticmethod
+    def _check_authentication_results(parsed_msg: Any) -> tuple[bool, bool]:
+        """Parse Authentication-Results headers for SPF and DKIM verdicts.
+
+        Returns:
+            A tuple of (spf_pass, dkim_pass) booleans.
+        """
+        spf_pass = False
+        dkim_pass = False
+        for ar_header in parsed_msg.get_all("Authentication-Results") or []:
+            ar_lower = ar_header.lower()
+            if re.search(r"\bspf\s*=\s*pass\b", ar_lower):
+                spf_pass = True
+            if re.search(r"\bdkim\s*=\s*pass\b", ar_lower):
+                dkim_pass = True
+        return spf_pass, dkim_pass
+
+    @staticmethod
     def _html_to_text(raw_html: str) -> str:
-        """Convert HTML to plain text."""
         text = re.sub(r"<\s*br\s*/?>", "\n", raw_html, flags=re.IGNORECASE)
         text = re.sub(r"<\s*/\s*p\s*>", "\n", text, flags=re.IGNORECASE)
         text = re.sub(r"<[^>]+>", "", text)
         return html.unescape(text)
+
+    def _reply_subject(self, base_subject: str) -> str:
+        subject = (base_subject or "").strip() or "blackcat reply"
+        prefix = self.config.subject_prefix or "Re: "
+        if subject.lower().startswith("re:"):
+            return subject
+        return f"{prefix}{subject}"

@@ -10,7 +10,9 @@ Run explicitly:
 
 import pytest
 
+from blackcat.agent.handler import MessageHandler
 from blackcat.agent.loop import AgentLoop
+from blackcat.agent.runner import AgentRunner
 from blackcat.agent.tools.filesystem import ReadFileTool, WriteFileTool
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.bus.events import InboundMessage
@@ -59,6 +61,12 @@ async def test_run_agent_loop_simple_response(provider):
     agent.tools = tools
     agent.llm_timeout = 60
     agent.reasoning_effort = None
+    agent._extra_hooks = []
+    agent.runner = AgentRunner(provider)
+    agent.max_tool_result_chars = 50000
+    agent.context_window_tokens = None
+    agent.context_block_limit = None
+    agent.workspace = None
 
     # Bypass the full context manager — just raw messages
     from blackcat.agent.context import ContextManager
@@ -70,7 +78,7 @@ async def test_run_agent_loop_simple_response(provider):
         {"role": "user", "content": "What is 2 + 2? Reply with just the number."},
     ]
 
-    content, tools_used = await agent._run_agent_loop(messages)
+    content, tools_used, _ = await agent._run_agent_loop(messages)
     assert content is not None
     assert "4" in content
     assert tools_used == []
@@ -94,6 +102,12 @@ async def test_run_agent_loop_with_read_file(provider, tmp_path):
     agent.tools = tools
     agent.llm_timeout = 60
     agent.reasoning_effort = None
+    agent._extra_hooks = []
+    agent.runner = AgentRunner(provider)
+    agent.max_tool_result_chars = 50000
+    agent.context_window_tokens = None
+    agent.context_block_limit = None
+    agent.workspace = workspace
 
     from blackcat.agent.context import ContextManager
 
@@ -104,8 +118,8 @@ async def test_run_agent_loop_with_read_file(provider, tmp_path):
         {"role": "user", "content": "Read secret.txt and tell me the answer."},
     ]
 
-    content, tools_used = await agent._run_agent_loop(messages)
-    assert "read_file" in tools_used
+    content, tools_used, _ = await agent._run_agent_loop(messages)
+    assert any(t["name"] == "read_file" for t in tools_used)
     assert content is not None
     # The model read the file — that's what we're testing.
     # Whether it reports "42" or refuses on principle is model behavior.
@@ -129,6 +143,12 @@ async def test_run_agent_loop_with_write_file(provider, tmp_path):
     agent.tools = tools
     agent.llm_timeout = 60
     agent.reasoning_effort = None
+    agent._extra_hooks = []
+    agent.runner = AgentRunner(provider)
+    agent.max_tool_result_chars = 50000
+    agent.context_window_tokens = None
+    agent.context_block_limit = None
+    agent.workspace = workspace
 
     from blackcat.agent.context import ContextManager
 
@@ -139,8 +159,8 @@ async def test_run_agent_loop_with_write_file(provider, tmp_path):
         {"role": "user", "content": "Write the text 'hello world' to a file called output.txt"},
     ]
 
-    content, tools_used = await agent._run_agent_loop(messages)
-    assert "write_file" in tools_used
+    content, tools_used, _ = await agent._run_agent_loop(messages)
+    assert any(t["name"] == "write_file" for t in tools_used)
     assert (workspace / "output.txt").exists()
     assert "hello world" in (workspace / "output.txt").read_text()
 
@@ -155,12 +175,13 @@ async def test_process_direct_responds(agent):
     response = await agent.process_direct("What is 2 + 2?")
 
     # Small models sometimes use the message tool instead of text response.
-    # When that happens, process_direct returns "" because _sent_in_turn=True.
+    # When that happens, process_direct returns None because _sent_in_turn=True.
     # Either way, the agent should NOT crash.
     assert response is not None
     # Check if the response is meaningful OR the message was sent via bus
-    if response and response.strip() and "completed processing" not in response:
-        assert "4" in response
+    content = response.content if response else ""
+    if content and content.strip() and "completed processing" not in content:
+        assert "4" in content
     else:
         # The model used the message tool — check the outbound bus
         if agent.bus.outbound_size > 0:
@@ -177,7 +198,8 @@ async def test_process_direct_preserves_session(agent):
 
     # Check both direct response and bus for the answer
     found = False
-    if response and "butterfly" in response.lower():
+    content = response.content if response else ""
+    if content and "butterfly" in content.lower():
         found = True
     while agent.bus.outbound_size > 0:
         msg = await agent.bus.consume_outbound()
@@ -189,7 +211,7 @@ async def test_process_direct_preserves_session(agent):
 @pytest.mark.llm
 @pytest.mark.asyncio
 async def test_process_message_returns_outbound(agent):
-    """_process_message should return an OutboundMessage or send via bus."""
+    """MessageHandler.process should return an OutboundMessage or send via bus."""
     msg = InboundMessage(
         channel="test",
         sender_id="user1",
@@ -197,7 +219,8 @@ async def test_process_message_returns_outbound(agent):
         content="Say the word 'pong'. Nothing else.",
     )
 
-    response = await agent._process_message(msg)
+    handler = MessageHandler(agent, msg)
+    response = await handler.process()
 
     # Either direct response or message tool was used
     found_pong = False

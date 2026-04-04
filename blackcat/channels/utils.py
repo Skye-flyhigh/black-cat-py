@@ -11,6 +11,7 @@ For the base class and stateful behavior, see base.py.
 """
 
 import re
+import unicodedata
 from pathlib import Path
 
 # ============================================================================
@@ -40,16 +41,39 @@ MAX_MESSAGE_LENGTH_DISCORD = 2000
 # Markdown Conversion
 # ============================================================================
 
+def _strip_md(s: str) -> str:
+    """Strip markdown inline formatting from text."""
+    s = re.sub(r'\*\*(.+?)\*\*', r'\1', s)
+    s = re.sub(r'__(.+?)__', r'\1', s)
+    s = re.sub(r'~~(.+?)~~', r'\1', s)
+    s = re.sub(r'`([^`]+)`', r'\1', s)
+    return s.strip()
+
 
 def markdown_to_telegram_html(text: str) -> str:
     """
     Convert markdown to Telegram-safe HTML.
 
     Handles: code blocks, inline code, headers, blockquotes, links,
-    bold, italic, strikethrough, and bullet lists.
+    bold, italic, strikethrough, bullet lists, and tables.
     """
     if not text:
         return ""
+
+    # 0. Extract and convert markdown tables to preformatted blocks
+    table_blocks: list[str] = []
+
+    def save_table(m: re.Match) -> str:
+        table_blocks.append(m.group(0))
+        return f"\x00TB{len(table_blocks) - 1}\x00"
+
+    # Match tables (lines with | separators)
+    text = re.sub(
+        r'(^[|].+[|]\n)(^[|][-:| ]+[|]\n)(^[|].+[|]\n?)+',
+        save_table,
+        text,
+        flags=re.MULTILINE
+    )
 
     # 1. Extract and protect code blocks
     code_blocks: list[str] = []
@@ -104,8 +128,45 @@ def markdown_to_telegram_html(text: str) -> str:
         escaped = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         text = text.replace(f"\x00CB{i}\x00", f"<pre><code>{escaped}</code></pre>")
 
+    # 13. Restore tables as preformatted blocks
+    for i, table in enumerate(table_blocks):
+        lines = table.strip().split('\n')
+        rendered = _render_table_box(lines)
+        escaped = rendered.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        text = text.replace(f"\x00TB{i}\x00", f"<pre><code>{escaped}</code></pre>")
+
     return text
 
+def _render_table_box(table_lines: list[str]) -> str:
+    """Convert markdown pipe-table to compact aligned text for <pre> display."""
+
+    def dw(s: str) -> int:
+        return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in s)
+
+    rows: list[list[str]] = []
+    has_sep = False
+    for line in table_lines:
+        cells = [_strip_md(c) for c in line.strip().strip('|').split('|')]
+        if all(re.match(r'^:?-+:?$', c) for c in cells if c):
+            has_sep = True
+            continue
+        rows.append(cells)
+    if not rows or not has_sep:
+        return '\n'.join(table_lines)
+
+    ncols = max(len(r) for r in rows)
+    for r in rows:
+        r.extend([''] * (ncols - len(r)))
+    widths = [max(dw(r[c]) for r in rows) for c in range(ncols)]
+
+    def dr(cells: list[str]) -> str:
+        return '  '.join(f'{c}{" " * (w - dw(c))}' for c, w in zip(cells, widths))
+
+    out = [dr(rows[0])]
+    out.append('  '.join('─' * w for w in widths))
+    for row in rows[1:]:
+        out.append(dr(row))
+    return '\n'.join(out)
 
 # ============================================================================
 # File Extension Mapping

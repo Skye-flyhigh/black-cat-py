@@ -48,6 +48,11 @@ class AnthropicProvider(LLMProvider):
             client_kw["default_headers"] = extra_headers
         self._client = AsyncAnthropic(**client_kw)
 
+    @property
+    def supports_prompt_caching(self) -> bool:
+        """Anthropic supports prompt caching via cache_control blocks."""
+        return True
+
     @staticmethod
     def _strip_prefix(model: str) -> str:
         if model.startswith("anthropic/"):

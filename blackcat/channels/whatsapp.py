@@ -2,20 +2,31 @@
 
 import asyncio
 import json
-from collections import deque
-from typing import Any
+import mimetypes
+import os
+import shutil
+import subprocess
+from collections import OrderedDict
+from pathlib import Path
+from typing import Any, Literal
 
 from loguru import logger
+from pydantic import Field
 
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.channels.utils import (
-    RECONNECT_DELAY_INITIAL,
-    RECONNECT_DELAY_MAX,
-    format_reply_context,
-)
-from blackcat.config.schema import WhatsAppConfig
+from blackcat.config.schema import Base
+
+
+class WhatsAppConfig(Base):
+    """WhatsApp channel configuration."""
+
+    enabled: bool = False
+    bridge_url: str = "ws://localhost:3001"
+    bridge_token: str = ""
+    allow_from: list[str] = Field(default_factory=list)
+    group_policy: Literal["open", "mention"] = "open"  # "open" responds to all, "mention" only when @mentioned
 
 
 class WhatsAppChannel(BaseChannel):
@@ -27,14 +38,54 @@ class WhatsAppChannel(BaseChannel):
     """
 
     name = "whatsapp"
-    _MAX_DEDUP_IDS = 2000
+    display_name = "WhatsApp"
 
-    def __init__(self, config: WhatsAppConfig, bus: MessageBus):
+    @classmethod
+    def default_config(cls) -> dict[str, Any]:
+        return WhatsAppConfig().model_dump(by_alias=True)
+
+    def __init__(self, config: Any, bus: MessageBus):
+        if isinstance(config, dict):
+            config = WhatsAppConfig.model_validate(config)
         super().__init__(config, bus)
-        self.config: WhatsAppConfig = config
         self._ws = None
         self._connected = False
-        self._seen_ids: deque[str] = deque(maxlen=self._MAX_DEDUP_IDS)
+        self._processed_message_ids: OrderedDict[str, None] = OrderedDict()
+
+    async def login(self, force: bool = False) -> bool:
+        """
+        Set up and run the WhatsApp bridge for QR code login.
+
+        This spawns the Node.js bridge process which handles the WhatsApp
+        authentication flow. The process blocks until the user scans the QR code
+        or interrupts with Ctrl+C.
+        """
+        from blackcat.config.paths import get_runtime_subdir
+
+        try:
+            bridge_dir = _ensure_bridge_setup()
+        except RuntimeError as e:
+            logger.error("{}", e)
+            return False
+
+        env = {**os.environ}
+        if self.config.bridge_token:
+            env["BRIDGE_TOKEN"] = self.config.bridge_token
+        env["AUTH_DIR"] = str(get_runtime_subdir("whatsapp-auth"))
+
+        logger.info("Starting WhatsApp bridge for QR login...")
+        npm_path = shutil.which("npm")
+        if not npm_path:
+            logger.error("npm not found in PATH")
+            return False
+        try:
+            subprocess.run(
+                [npm_path, "start"], cwd=bridge_dir, check=True, env=env
+            )
+        except subprocess.CalledProcessError:
+            return False
+
+        return True
 
     async def start(self) -> None:
         """Start the WhatsApp channel by connecting to the bridge."""
@@ -45,23 +96,24 @@ class WhatsAppChannel(BaseChannel):
         logger.info("Connecting to WhatsApp bridge at {}...", bridge_url)
 
         self._running = True
-        delay = RECONNECT_DELAY_INITIAL
 
         while self._running:
             try:
-                extra_headers = {}
-                if self.config.bridge_token:
-                    extra_headers["Authorization"] = f"Bearer {self.config.bridge_token}"
-
-                async with websockets.connect(bridge_url, additional_headers=extra_headers) as ws:
+                async with websockets.connect(bridge_url) as ws:
                     self._ws = ws
+                    # Send auth token if configured
+                    if self.config.bridge_token:
+                        await ws.send(
+                            json.dumps({"type": "auth", "token": self.config.bridge_token})
+                        )
                     self._connected = True
-                    delay = RECONNECT_DELAY_INITIAL  # reset on successful connection
                     logger.info("Connected to WhatsApp bridge")
 
+                    # Listen for messages
                     async for message in ws:
                         try:
-                            raw = message if isinstance(message, str) else message.decode("utf-8")
+                            # message is bytes, decode to str
+                            raw = message.decode("utf-8") if isinstance(message, bytes) else message
                             await self._handle_bridge_message(raw)
                         except Exception as e:
                             logger.error("Error handling bridge message: {}", e)
@@ -71,12 +123,11 @@ class WhatsAppChannel(BaseChannel):
             except Exception as e:
                 self._connected = False
                 self._ws = None
-                if not self._running:
-                    break
-                logger.warning("WhatsApp bridge connection lost: {}", e)
-                logger.info("Retrying in {}s...", delay)
-                await asyncio.sleep(delay)
-                delay = min(delay * 2, RECONNECT_DELAY_MAX)
+                logger.warning("WhatsApp bridge connection error: {}", e)
+
+                if self._running:
+                    logger.info("Reconnecting in 5 seconds...")
+                    await asyncio.sleep(5)
 
     async def stop(self) -> None:
         """Stop the WhatsApp channel."""
@@ -87,21 +138,41 @@ class WhatsAppChannel(BaseChannel):
             await self._ws.close()
             self._ws = None
 
-    async def _send_impl(self, msg: OutboundMessage) -> None:
-        """WhatsApp-specific send implementation."""
+    async def send(self, msg: OutboundMessage) -> None:
+        """Send a message through WhatsApp."""
         if not self._ws or not self._connected:
             logger.warning("WhatsApp bridge not connected")
             return
 
-        try:
-            payload = {
-                "type": "send",
-                "to": msg.chat_id,
-                "text": msg.content,
-            }
-            await self._ws.send(json.dumps(payload, ensure_ascii=False))
-        except Exception as e:
-            logger.error("Error sending WhatsApp message: {}", e)
+        chat_id = msg.chat_id
+
+        if msg.content:
+            try:
+                payload = {"type": "send", "to": chat_id, "text": msg.content}
+                await self._ws.send(json.dumps(payload, ensure_ascii=False))
+            except Exception as e:
+                logger.error("Error sending WhatsApp message: {}", e)
+                raise
+
+        for media_path in msg.media or []:
+            try:
+                mime, _ = mimetypes.guess_type(media_path)
+                payload = {
+                    "type": "send_media",
+                    "to": chat_id,
+                    "filePath": media_path,
+                    "mimetype": mime or "application/octet-stream",
+                    "fileName": media_path.rsplit("/", 1)[-1],
+                }
+                await self._ws.send(json.dumps(payload, ensure_ascii=False))
+            except Exception as e:
+                logger.error("Error sending WhatsApp media {}: {}", media_path, e)
+                raise
+
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """WhatsApp channel uses custom send(), this is not used."""
+        # WhatsAppChannel overrides send() directly for WebSocket sending
+        pass
 
     async def _handle_bridge_message(self, raw: str) -> None:
         """Handle a message from the bridge."""
@@ -114,63 +185,128 @@ class WhatsAppChannel(BaseChannel):
         msg_type = data.get("type")
 
         if msg_type == "message":
-            await self._handle_incoming_message(data)
+            # Incoming message from WhatsApp
+            # Deprecated by whatsapp: old phone number style typically: <phone>@s.whatspp.net
+            pn = data.get("pn", "")
+            # New LID sytle typically:
+            sender = data.get("sender", "")
+            content = data.get("content", "")
+            message_id = data.get("id", "")
+
+            if message_id:
+                if message_id in self._processed_message_ids:
+                    return
+                self._processed_message_ids[message_id] = None
+                while len(self._processed_message_ids) > 1000:
+                    self._processed_message_ids.popitem(last=False)
+
+            # Extract just the phone number or lid as chat_id
+            is_group = data.get("isGroup", False)
+            was_mentioned = data.get("wasMentioned", False)
+
+            if is_group and getattr(self.config, "group_policy", "open") == "mention":
+                if not was_mentioned:
+                    return
+
+            user_id = pn if pn else sender
+            sender_id = user_id.split("@")[0] if "@" in user_id else user_id
+            logger.info("Sender {}", sender)
+
+            # Handle voice transcription if it's a voice message
+            if content == "[Voice Message]":
+                logger.info(
+                    "Voice message received from {}, but direct download from bridge is not yet supported.",
+                    sender_id,
+                )
+                content = "[Voice Message: Transcription not available for WhatsApp yet]"
+
+            # Extract media paths (images/documents/videos downloaded by the bridge)
+            media_paths = data.get("media") or []
+
+            # Build content tags matching Telegram's pattern: [image: /path] or [file: /path]
+            if media_paths:
+                for p in media_paths:
+                    mime, _ = mimetypes.guess_type(p)
+                    media_type = "image" if mime and mime.startswith("image/") else "file"
+                    media_tag = f"[{media_type}: {p}]"
+                    content = f"{content}\n{media_tag}" if content else media_tag
+
+            await self._handle_message(
+                sender_id=sender_id,
+                chat_id=sender,  # Use full LID for replies
+                content=content,
+                media=media_paths,
+                metadata={
+                    "message_id": message_id,
+                    "timestamp": data.get("timestamp"),
+                    "is_group": data.get("isGroup", False),
+                },
+            )
+
         elif msg_type == "status":
+            # Connection status update
             status = data.get("status")
             logger.info("WhatsApp status: {}", status)
-            self._connected = status == "connected"
+
+            if status == "connected":
+                self._connected = True
+            elif status == "disconnected":
+                self._connected = False
+
         elif msg_type == "qr":
+            # QR code for authentication
             logger.info("Scan QR code in the bridge terminal to connect WhatsApp")
+
         elif msg_type == "error":
-            logger.error("WhatsApp bridge error: {}", data.get('error'))
+            logger.error("WhatsApp bridge error: {}", data.get("error"))
 
-    async def _handle_incoming_message(self, data: dict[str, Any]) -> None:
-        """Handle an incoming WhatsApp message."""
-        # Dedup by message ID to prevent loops
-        message_id = data.get("id", "")
-        if message_id:
-            if message_id in self._seen_ids:
-                logger.debug("Duplicate message {}, skipping", message_id)
-                return
-            self._seen_ids.append(message_id)
 
-        # Phone number (deprecated) or LID (new format)
-        pn = data.get("pn", "")
-        sender = data.get("sender", "")
-        content = data.get("content", "")
+def _ensure_bridge_setup() -> Path:
+    """
+    Ensure the WhatsApp bridge is set up and built.
 
-        user_id = pn if pn else sender
-        sender_id = user_id.split("@")[0] if "@" in user_id else user_id
+    Returns the bridge directory. Raises RuntimeError if npm is not found
+    or bridge cannot be built.
+    """
+    from blackcat.config.paths import get_bridge_install_dir
 
-        logger.debug("WhatsApp message from {}", sender_id)
+    user_bridge = get_bridge_install_dir()
 
-        content_parts: list[str] = []
+    if (user_bridge / "dist" / "index.js").exists():
+        return user_bridge
 
-        # Include reply context if bridge provides it
-        quoted = data.get("quoted") or data.get("quotedMessage")
-        if quoted:
-            reply_ctx = format_reply_context(
-                author=data.get("quotedParticipant") or data.get("quotedAuthor"),
-                content=quoted if isinstance(quoted, str) else quoted.get("text", ""),
-            )
-            if reply_ctx:
-                content_parts.append(reply_ctx)
+    npm_path = shutil.which("npm")
+    if not npm_path:
+        raise RuntimeError("npm not found. Please install Node.js >= 18.")
 
-        # Handle voice messages
-        if content == "[Voice Message]":
-            logger.info("Voice message from {} - transcription not yet supported", sender_id)
-            content = "[Voice Message: Transcription not available for WhatsApp yet]"
+    # Find source bridge
+    current_file = Path(__file__)
+    pkg_bridge = current_file.parent.parent / "bridge"
+    src_bridge = current_file.parent.parent.parent / "bridge"
 
-        content_parts.append(content)
-        final_content = "\n".join(content_parts)
+    source = None
+    if (pkg_bridge / "package.json").exists():
+        source = pkg_bridge
+    elif (src_bridge / "package.json").exists():
+        source = src_bridge
 
-        await self._handle_message(
-            sender_id=sender_id,
-            chat_id=sender,  # Use full LID for replies
-            content=final_content,
-            metadata={
-                "message_id": message_id,
-                "timestamp": data.get("timestamp"),
-                "is_group": data.get("isGroup", False),
-            },
+    if not source:
+        raise RuntimeError(
+            "WhatsApp bridge source not found. "
+            "Try reinstalling: pip install --force-reinstall blackcat"
         )
+
+    logger.info("Setting up WhatsApp bridge...")
+    user_bridge.parent.mkdir(parents=True, exist_ok=True)
+    if user_bridge.exists():
+        shutil.rmtree(user_bridge)
+    shutil.copytree(source, user_bridge, ignore=shutil.ignore_patterns("node_modules", "dist"))
+
+    logger.info("  Installing dependencies...")
+    subprocess.run([npm_path, "install"], cwd=user_bridge, check=True, capture_output=True)
+
+    logger.info("  Building...")
+    subprocess.run([npm_path, "run", "build"], cwd=user_bridge, check=True, capture_output=True)
+
+    logger.info("Bridge ready")
+    return user_bridge

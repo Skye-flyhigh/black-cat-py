@@ -140,16 +140,15 @@ def test_format_trust(ctx):
 
 
 async def test_build_core_prompt(ctx):
-    prompt = await ctx.build_core_prompt(author="skye", channel="telegram")
+    prompt = await ctx._build_system_prompt(author="skye", channel="telegram")
     assert "Soul" in prompt or "helpful assistant" in prompt
     assert "trusted" in prompt.lower()
-    assert "telegram" in prompt.lower()
     assert "Environment" in prompt
 
 
 async def test_build_core_prompt_includes_journal(ctx):
     ctx.journal.write_long_term("User likes coffee")
-    prompt = await ctx.build_core_prompt(author="skye")
+    prompt = await ctx._build_system_prompt(author="skye")
     assert "coffee" in prompt
 
 
@@ -354,3 +353,183 @@ def test_apply_compaction_empty_summary(ctx):
     recent = [{"role": "user", "content": "hi"}]
     result = ctx.apply_compaction(sys_msg, "", recent)
     assert len(result) == 2  # No summary message added
+
+
+# ── System message preservation through providers ─────────────────────
+
+
+def test_system_message_preserved_in_openai_compat():
+    """Verify system message is preserved by OpenAICompatProvider."""
+    from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"},
+    ]
+
+    provider = OpenAICompatProvider(api_key="test", default_model="test")
+    sanitized = provider._sanitize_messages(messages)
+
+    assert len(sanitized) == 2
+    assert sanitized[0]["role"] == "system"
+    assert sanitized[0]["content"] == "You are a helpful assistant."
+    assert sanitized[1]["role"] == "user"
+
+
+def test_system_message_extracted_by_anthropic():
+    """Verify Anthropic provider extracts system message correctly."""
+    from blackcat.providers.anthropic_provider import AnthropicProvider
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"},
+    ]
+
+    provider = AnthropicProvider(api_key="test")
+    system, converted = provider._convert_messages(messages)
+
+    assert system == "You are a helpful assistant."
+    assert len(converted) == 1
+    assert converted[0]["role"] == "user"
+
+
+async def test_build_messages_preserves_system_first(ctx):
+    """Verify build_messages always puts system message first."""
+    messages = await ctx.build_messages(
+        history=[
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+        ],
+        current_message="how are you?",
+        author="skye",
+    )
+
+    assert messages[0]["role"] == "system"
+    assert "TestBot" in messages[0]["content"] or "helpful" in messages[0]["content"]
+
+
+def test_system_message_with_thinking_blocks_preserved():
+    """Verify system message is preserved when assistant has thinking blocks."""
+    from blackcat.providers.anthropic_provider import AnthropicProvider
+
+    messages = [
+        {"role": "system", "content": "System prompt here."},
+        {"role": "user", "content": "Question?"},
+        {
+            "role": "assistant",
+            "content": "Answer",
+            "thinking_blocks": [
+                {"type": "thinking", "thinking": "Thought process", "signature": "abc"}
+            ],
+        },
+    ]
+
+    provider = AnthropicProvider(api_key="test")
+    system, converted = provider._convert_messages(messages)
+
+    assert system == "System prompt here."
+    assert len(converted) == 2  # user + assistant
+
+
+# ── Message merge (consecutive same-role handling) ──────────────────
+
+
+def test_merge_message_content_strings(ctx):
+    """Test merging two string contents."""
+    existing = "First message"
+    new = "Second message"
+    result = ctx._merge_message_content(existing, new)
+    assert result == "First message\n\nSecond message"
+
+
+def test_merge_message_content_lists(ctx):
+    """Test merging two list contents (multimodal)."""
+    existing = [{"type": "text", "text": "First"}]
+    new = [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]
+    result = ctx._merge_message_content(existing, new)
+    assert len(result) == 2
+    assert result[0]["type"] == "text"
+    assert result[1]["type"] == "image_url"
+
+
+def test_merge_message_content_string_and_list(ctx):
+    """Test merging string with list."""
+    existing = "Text message"
+    new = [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]
+    result = ctx._merge_message_content(existing, new)
+    assert len(result) == 2
+    assert result[0]["type"] == "text"
+    assert result[0]["text"] == "Text message"
+
+
+def test_merge_message_content_list_and_string(ctx):
+    """Test merging list with string."""
+    existing = [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]
+    new = "Text message"
+    result = ctx._merge_message_content(existing, new)
+    assert len(result) == 2
+    assert result[1]["type"] == "text"
+    assert result[1]["text"] == "Text message"
+
+
+async def test_build_messages_merges_consecutive_user_messages(ctx):
+    """Verify build_messages merges consecutive user messages."""
+    # History ends with user message
+    history = [
+        {"role": "user", "content": "First question"},
+        {"role": "assistant", "content": "Answer"},
+        {"role": "user", "content": "Follow-up"},
+    ]
+
+    messages = await ctx.build_messages(
+        history=history,
+        current_message="Another question",
+        author="skye",
+    )
+
+    # Should have: system, user (merged), assistant, user (merged)
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"
+    # The last user message should be merged with the previous
+    assert "Follow-up" in messages[-1]["content"]
+    assert "Another question" in messages[-1]["content"]
+    assert len(messages) == 4  # system + merged user + assistant + merged user
+
+
+# ── System blocks (caching) ─────────────────────────────────────────
+
+
+def test_build_static_blocks_returns_list(ctx):
+    """Verify _build_static_blocks returns a list of blocks."""
+    blocks = ctx._build_static_blocks()
+    assert isinstance(blocks, list)
+    assert len(blocks) > 0
+    assert all("type" in b for b in blocks)
+    assert all(b["type"] == "text" for b in blocks)
+
+
+def test_build_static_blocks_has_cache_control(ctx):
+    """Verify static blocks have cache_control marker when caching enabled."""
+    blocks = ctx._build_static_blocks(enable_caching=True)
+    # At least one block should have cache_control
+    cached_blocks = [b for b in blocks if "cache_control" in b]
+    assert len(cached_blocks) >= 1
+    assert cached_blocks[0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_build_static_blocks_no_caching(ctx):
+    """Verify cache_control can be disabled."""
+    blocks = ctx._build_static_blocks(enable_caching=False)
+    # No blocks should have cache_control
+    cached_blocks = [b for b in blocks if "cache_control" in b]
+    assert len(cached_blocks) == 0
+
+
+async def test_build_dynamic_blocks_includes_content(ctx):
+    """Verify dynamic content (time, session) is included."""
+    blocks = await ctx._build_dynamic_blocks(author="skye", channel="telegram", chat_id="123")
+    # Join all block texts
+    full_text = "".join(b.get("text", "") for b in blocks)
+    assert "telegram" in full_text
+    assert "123" in full_text
+    assert "Current Time" in full_text

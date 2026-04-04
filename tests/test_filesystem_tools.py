@@ -63,7 +63,8 @@ async def test_read_file(tmp_path):
     f.write_text("hello world", encoding="utf-8")
     tool = ReadFileTool(workspace=tmp_path)
     result = await tool.execute(path=str(f))
-    assert result == "hello world"
+    # ReadFileTool now returns formatted output with line numbers
+    assert "hello world" in result
 
 
 @pytest.mark.asyncio
@@ -72,7 +73,8 @@ async def test_read_file_relative_path(tmp_path):
     f.write_text("relative content", encoding="utf-8")
     tool = ReadFileTool(workspace=tmp_path)
     result = await tool.execute(path="data.txt")
-    assert result == "relative content"
+    # ReadFileTool now returns formatted output with line numbers
+    assert "relative content" in result
 
 
 @pytest.mark.asyncio
@@ -181,13 +183,13 @@ async def test_edit_file_diff_hints(tmp_path):
     assert "similar" in result.lower()
 
 
-# ── EditFileTool._not_found_message ────────────────────────────────
+# ── EditFileTool._not_found_msg ────────────────────────────────
 
 
 def test_not_found_message_with_similar_text():
     content = "def hello():\n    print('hi')\n    return True\n"
     old_text = "def hello():\n    print('hello')\n    return True\n"
-    msg = EditFileTool._not_found_message(old_text, content, "test.py")
+    msg = EditFileTool._not_found_msg(old_text, content, "test.py")
     assert "similar" in msg.lower()
     assert "test.py" in msg
 
@@ -195,7 +197,7 @@ def test_not_found_message_with_similar_text():
 def test_not_found_message_with_no_match():
     content = "completely different content\n"
     old_text = "nothing like this at all\nwith many lines\n"
-    msg = EditFileTool._not_found_message(old_text, content, "test.py")
+    msg = EditFileTool._not_found_msg(old_text, content, "test.py")
     assert "No similar text found" in msg
 
 
