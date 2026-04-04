@@ -14,6 +14,7 @@ from blackcat.agent.hook import AgentHook, AgentHookContext
 from blackcat.agent.runner import AgentRunner, AgentRunSpec
 from blackcat.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from blackcat.agent.tools.registry import ToolRegistry
+from blackcat.agent.tools.search import GlobTool, GrepTool
 from blackcat.agent.tools.shell import ExecTool
 from blackcat.agent.tools.web import WebFetchTool, WebSearchTool
 from blackcat.bus.events import InboundMessage
@@ -107,10 +108,8 @@ class SubagentManager:
             # Build subagent tools (no message tool, no spawn tool)
             tools = ToolRegistry()
             allowed_dir = self.workspace if self.restrict_to_workspace else None
-            tools.register(ReadFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(WriteFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
+            for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool, GlobTool, GrepTool):
+                tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir)) # type: ignore[arg-type]
             tools.register(ExecTool(
                 working_dir=str(self.workspace),
                 timeout=self.exec_config.timeout,
