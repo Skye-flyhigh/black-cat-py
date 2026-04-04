@@ -37,10 +37,28 @@ class BaseChannel(ABC):
     """
 
     name: str = "base"
+    display_name: str = "Base Channel"
 
     # Subclasses can override this to enable typing indicators.
     # Set to 0 to disable, or a positive number for the interval in seconds.
     typing_interval: float = 0
+
+    @classmethod
+    def default_config(cls) -> dict:
+        """Return default configuration for this channel."""
+        return {}
+
+    async def login(self, force: bool = False) -> bool:
+        """
+        Perform channel-specific interactive login (e.g. QR code scan).
+
+        Args:
+            force: If True, ignore existing credentials and force re-authentication.
+
+        Returns True if already authenticated or login succeeds.
+        Override in subclasses that support interactive login.
+        """
+        return True
 
     def __init__(self, config: Any, bus: MessageBus):
         """
@@ -54,6 +72,7 @@ class BaseChannel(ABC):
         self.bus = bus
         self._running = False
         self._typing_tasks: dict[str, asyncio.Task] = {}
+        self.transcription_api_key: str | None = None
 
     def _require_config(self, **fields: Any) -> bool:
         """Check that required config fields are set. Logs error and returns False if any missing."""
@@ -111,9 +130,19 @@ class BaseChannel(ABC):
         """
         pass
 
-    # ========================================================================
-    # Typing Indicator Management
-    # ========================================================================
+    async def send_delta(self, chat_id: str, content: str, metadata: dict[str, Any]) -> None:
+        """
+        Send a streaming delta message.
+
+        Override in subclasses that support streaming updates.
+
+        Args:
+            chat_id: The chat ID to send to.
+            content: The delta content to send.
+            metadata: Additional metadata about the stream.
+        """
+        # Default: no-op, subclasses can override for streaming support
+        pass
 
     async def _start_typing(self, chat_id: str) -> None:
         """
@@ -162,9 +191,6 @@ class BaseChannel(ABC):
             task.cancel()
         self._typing_tasks.clear()
 
-    # ========================================================================
-    # Media Helpers
-    # ========================================================================
 
     def _get_media_dir(self) -> Path:
         """Get the media directory, creating it if needed."""
@@ -200,9 +226,6 @@ class BaseChannel(ABC):
 
         return file_path
 
-    # ========================================================================
-    # Permission Checking
-    # ========================================================================
 
     def is_allowed(self, sender_id: str) -> bool:
         """Check if *sender_id* is permitted.  Empty list -> deny all; ``"*"`` -> allow all."""
@@ -211,15 +234,18 @@ class BaseChannel(ABC):
             logger.warning("{}: allow_from is empty — all access denied", self.name)
             return False
         if "*" in allow_list:
+            logger.debug("{}: access granted to {} (wildcard)", self.name, sender_id)
             return True
         sender_str = str(sender_id)
-        return sender_str in allow_list or any(
+        allowed = sender_str in allow_list or any(
             p in allow_list for p in sender_str.split("|") if p
         )
+        if allowed:
+            logger.debug("{}: access granted to {}", self.name, sender_id)
+        else:
+            logger.warning("{}: access denied to {} (not in allow_from)", self.name, sender_id)
+        return allowed
 
-    # ========================================================================
-    # Message Handling
-    # ========================================================================
 
     async def _handle_message(
         self,
