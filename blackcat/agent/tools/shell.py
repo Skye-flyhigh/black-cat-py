@@ -19,7 +19,7 @@ class ExecTool(Tool):
     def description(self) -> str:
         return "Execute a shell command and return its output. Use with caution."
     @property
-    def parameters(self) -> dict: 
+    def parameters(self) -> dict:
         return {
         "type": "object",
         "properties": {
