@@ -9,7 +9,7 @@ import pytest
 from blackcat.agent.tools.cron import CronTool
 from blackcat.cron.service import CronService, _compute_next_run
 from blackcat.cron.types import CronSchedule
-from blackcat.utils.helpers import now_ms
+from blackcat.utils.time import now_ms
 
 # ── Schedule computation ──────────────────────────────────────────
 

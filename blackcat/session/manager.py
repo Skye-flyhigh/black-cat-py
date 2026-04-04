@@ -8,7 +8,8 @@ from typing import Any
 
 from loguru import logger
 
-from blackcat.utils.helpers import ensure_dir, safe_filename, timestamp
+from blackcat.utils.helpers import ensure_dir, find_legal_message_start, safe_filename
+from blackcat.utils.time import timestamp
 
 
 @dataclass
@@ -24,6 +25,7 @@ class Session:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     metadata: dict[str, Any] = field(default_factory=dict)
+    last_consolidated: int = 0
 
     def add_message(self, role: str, content: str, **kwargs: Any) -> None:
         """Add a message to the session."""
@@ -77,6 +79,33 @@ class Session:
         """Clear all messages in the session."""
         self.messages = []
         self.updated_at = datetime.now()
+
+    def retain_recent_legal_suffix(self, max_messages: int) -> None:
+        """Keep a legal recent suffix, mirroring get_history boundary rules."""
+        if max_messages <= 0:
+            self.clear()
+            return
+        if len(self.messages) <= max_messages:
+            return
+
+        start_idx = max(0, len(self.messages) - max_messages)
+
+        # If the cutoff lands mid-turn, extend backward to the nearest user turn.
+        while start_idx > 0 and self.messages[start_idx].get("role") != "user":
+            start_idx -= 1
+
+        retained = self.messages[start_idx:]
+
+        # Mirror get_history(): avoid persisting orphan tool results at the front.
+        start = find_legal_message_start(retained)
+        if start:
+            retained = retained[start:]
+
+        dropped = len(self.messages) - len(retained)
+        self.messages = retained
+        self.last_consolidated = max(0, self.last_consolidated - dropped)
+        self.updated_at = datetime.now()
+
 
     def get_recently_touched_files(self, limit: int = 5) -> list[str]:
         """Extract file paths from recent tool calls/operations.

@@ -11,7 +11,7 @@ from loguru import logger
 
 from blackcat.cron.types import CronJob, CronJobState, CronPayload, CronSchedule, CronStore
 from blackcat.utils.helpers import ensure_dir
-from blackcat.utils.helpers import now_ms as _now_ms
+from blackcat.utils.time import now_ms as _now_ms
 
 
 def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
