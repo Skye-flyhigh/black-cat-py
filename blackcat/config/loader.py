@@ -2,20 +2,23 @@
 
 import json
 from pathlib import Path
+from venv import logger
+
+import pydantic
 
 from blackcat.config.schema import Config
-from blackcat.utils.helpers import convert_keys, convert_to_camel, get_data_path
 
+_current_config_path: Path | None = None
+
+
+def set_config_path(path: Path) -> None:
+    """Set the current config path (used to derive data directory)."""
+    global _current_config_path
+    _current_config_path = path
 
 def get_config_path() -> Path:
     """Get the default configuration file path."""
     return Path.home() / ".blackcat" / "config.json"
-
-
-def get_data_dir() -> Path:
-    """Get the blackcat data directory."""
-    return get_data_path()
-
 
 def load_config(config_path: Path | None = None) -> Config:
     """
@@ -31,25 +34,16 @@ def load_config(config_path: Path | None = None) -> Config:
 
     if path.exists():
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             data = _migrate_config(data)
-
-            # Extract MCP servers before key conversion — env vars and HTTP
-            # headers contain arbitrary keys that must not be mangled.
-            raw_mcp = data.get("tools", {}).pop("mcpServers", None)
-
-            converted = convert_keys(data)
-
-            if raw_mcp is not None:
-                converted.setdefault("tools", {})["mcp_servers"] = raw_mcp
-
-            return Config.model_validate(converted)
-        except (json.JSONDecodeError, ValueError) as e:
-            print(f"Warning: Failed to load config from {path}: {e}")
-            print("Using default configuration.")
+            return Config.model_validate(data)
+        except (json.JSONDecodeError, ValueError, pydantic.ValidationError) as e:
+            logger.warning(f"Failed to load config from {path}: {e}")
+            logger.warning("Using default configuration.")
 
     return Config()
+
 
 
 def save_config(config: Config, config_path: Path | None = None) -> None:
@@ -63,20 +57,10 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
     path = config_path or get_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Convert to camelCase format
-    data = config.model_dump()
+    data = config.model_dump(mode="json", by_alias=True)
 
-    # Extract MCP servers before camelCase conversion — env vars and HTTP
-    # headers contain arbitrary keys that must not be mangled.
-    raw_mcp = data.get("tools", {}).pop("mcp_servers", None)
-
-    data = convert_to_camel(data)
-
-    if raw_mcp is not None:
-        data.setdefault("tools", {})["mcpServers"] = raw_mcp
-
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def _migrate_config(data: dict) -> dict:
