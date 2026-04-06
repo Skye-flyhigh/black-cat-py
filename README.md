@@ -369,14 +369,47 @@ Black Cat integrates with VS Code via the **lens** extension for Language Server
     "lens": {
       "enabled": true,
       "port": 8765,
+      "diagnostics_source": "cli",
       "workspaces": {
-        "black-cat-py": "/cat/flap/to/the/black-cat-py",
-        "telos": "/path/to/telos"
+        "black-cat-py": "/path/to/black-cat-py",
+        "telos": "/path/to/telos",
+        "Nomad's Map": {
+          "path": "/path/to/NomadsMap",
+          "diagnostics_source": "vscode"
+        }
       }
     }
   }
 }
 ```
+
+#### `diagnostics_source` Configuration
+
+Controls how `lens_diagnostics` gets type errors and warnings:
+
+| Value | Behavior | Use When |
+|-------|----------|----------|
+| `"cli"` | Runs `pyright`/`tsc` directly (fresh results) | Default. Healthy codebases, Python, small TypeScript |
+| `"vscode"` | Uses VSCode extension (faster, may be stale) | Large/complex TypeScript where `tsc --noEmit` is slow or fails |
+
+**Per-workspace override**: Use object syntax to override for specific workspaces:
+
+```json
+"workspaces": {
+  "healthy-project": "/path/to/healthy",
+  "broken-project": {
+    "path": "/path/to/broken",
+    "diagnostics_source": "vscode"
+  }
+}
+```
+
+**Why two modes?**
+
+- **CLI** gives fresh results by running type checkers directly — works great for healthy codebases
+- **VSCode** uses the extension's cached diagnostics — faster but may be stale, useful as fallback for broken setups
+
+**Default**: `"cli"` — fresh results work for most projects.
 
 ### How It Works
 
@@ -386,6 +419,7 @@ Black Cat integrates with VS Code via the **lens** extension for Language Server
 
 | Tool | Purpose |
 |------|---------|
+| `lens_diagnostics` | Get errors/warnings for a file |
 | `lens_definition` | Go to symbol definition |
 | `lens_references` | Find all references |
 | `lens_hover` | Get type information |
