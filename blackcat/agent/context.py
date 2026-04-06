@@ -36,6 +36,7 @@ class ContextManager:
         - Session: channel, author, trust level, tool permissions
         - Skills: loaded on request
         - Memory: from Journal (daily notes), semantic via MCP (mnemo)
+        - Static and dynamic block to enable prompt caching.
 
     Trust system (get_trust_level, get_allowed_tools):
         - Evaluates author against IDENTITY.toml boundaries
@@ -72,11 +73,13 @@ class ContextManager:
 
     _GUIDELINE_PROMPT = """## blackcat Guidelines
 - State intent before tool calls, but NEVER predict or claim results before receiving them.
+- Before starting a task, check the relevant skills (list) to retrieve relevant context and deliver it with ease.
 - Before modifying a file, read it first. Do not assume files or directories exist.
 - After writing or editing a file, re-read it if accuracy matters.
 - If a tool call fails, analyze the error before retrying with a different approach.
 - Ask for clarification when the request is ambiguous.
 - You need VSCode running for lens (use bash command code in the relevant directory)
+- For coding tasks, load and follow the **coding-hygiene** skill.
 
 Reply directly with text for conversations. Only use the 'message' tool to send to a specific chat channel.
 IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST call the 'message' tool with the 'media' parameter. Do NOT use read_file to "send" a file — reading a file only shows its content to you, it does NOT deliver the file to the user. Example: message(content="Here is the file", media=["/path/to/file.png"])"""
@@ -364,6 +367,7 @@ Your workspace is at: {path}
         author: str,
         channel: str | None,
         chat_id: str | None,
+        history: list[dict[str, Any]] | None = None,
     ) -> str:
         """Build the dynamic session block (time, channel, trust, etc.)."""
         from datetime import datetime
@@ -384,7 +388,7 @@ Your workspace is at: {path}
         diagnostics_prompt = None
         if self.lens_client:
             try:
-                diagnostics_prompt = await self._get_code_diagnostics()
+                diagnostics_prompt = await self._get_code_diagnostics(history)
             except Exception:
                 pass  # Silently skip if lens fails
 
@@ -412,7 +416,7 @@ You are within blackcat harness/structure.
 ## Personality traits
 {personality}
 
-{diagnostics_prompt or "## Lens Code Health (no VSCode environment opened)"}
+{diagnostics_prompt or "## Lens Code Health: Lens not connected. Start VSCode with the lens extension in your workspace."}
 """
 
     def _build_static_blocks(
@@ -460,6 +464,7 @@ You are within blackcat harness/structure.
         author: str = "unknown",
         channel: str | None = None,
         chat_id: str | None = None,
+        history: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Build dynamic blocks (session, journal) that change frequently.
@@ -472,7 +477,7 @@ You are within blackcat harness/structure.
         blocks: list[dict[str, Any]] = []
 
         # Dynamic: session block (time, channel, author, trust)
-        session_block = await self._build_session_block(author, channel, chat_id)
+        session_block = await self._build_session_block(author, channel, chat_id, history)
         blocks.append({"type": "text", "text": session_block})
 
         # Dynamic: journal
@@ -488,6 +493,7 @@ You are within blackcat harness/structure.
         channel: str | None = None,
         chat_id: str | None = None,
         skill_names: list[str] | None = None,
+        history: list[dict[str, Any]] | None = None,
     ) -> str:
         """
         Build the complete system prompt for non-Anthropic providers.
@@ -499,7 +505,7 @@ You are within blackcat harness/structure.
             Complete system prompt string, sections joined by "---".
         """
         static_blocks = self._build_static_blocks(skill_names, enable_caching=False)
-        dynamic_blocks = await self._build_dynamic_blocks(author, channel, chat_id)
+        dynamic_blocks = await self._build_dynamic_blocks(author, channel, chat_id, history)
 
         # Convert blocks to string
         all_blocks = static_blocks + dynamic_blocks
@@ -540,13 +546,13 @@ You are within blackcat harness/structure.
         if use_structured_system:
             # Structured blocks for Anthropic-style caching
             static_blocks = self._build_static_blocks(skill_names, enable_caching=True)
-            dynamic_blocks = await self._build_dynamic_blocks(author, channel, chat_id)
+            dynamic_blocks = await self._build_dynamic_blocks(author, channel, chat_id, history)
             system_blocks = static_blocks + dynamic_blocks
             messages: list[dict[str, Any]] = [{"role": "system", "content": system_blocks}]
         else:
             # String-based system prompt (default)
             system_prompt = await self._build_system_prompt(
-                author, channel, chat_id, skill_names
+                author, channel, chat_id, skill_names, history
             )
             messages = [{"role": "system", "content": system_prompt}]
 
@@ -681,8 +687,33 @@ You are within blackcat harness/structure.
                             break
             recent_files = list(recent_files_set)[:3]
 
+        # Build workspace info - combine config workspaces with discovered (running) workspaces
+        from ..lens.discovery import read_port_mapping
+
+        config_workspaces = self.lens_client.workspace_paths
+        discovered_workspaces = read_port_mapping()  # {path: port} from VSCode
+
+        logger.debug(f"Config workspaces: {config_workspaces}")
+        logger.debug(f"Discovered workspaces: {discovered_workspaces}")
+
+        # Create alias -> path mapping
+        # For discovered workspaces without alias in config, use path stem as alias
+        workspaces_dict: dict[str, str] = dict(config_workspaces)
+        for ws_path in discovered_workspaces:
+            # Check if this path already has an alias in config
+            if ws_path not in config_workspaces.values():
+                # Use directory name as alias
+                alias = Path(ws_path).name
+                workspaces_dict[alias] = ws_path
+
+        workspaces_info = ", ".join(f"{alias}: {path}" for alias, path in workspaces_dict.items())
+        workspaces_header = f"Workspaces: {workspaces_info}" if workspaces_dict else ""
+
         if not recent_files:
-            return None
+            # Lens is connected but no files referenced yet
+            if workspaces_header:
+                return f"## Lens Code Health\n\n{workspaces_header}\nAwaiting file references..."
+            return "## Lens Code Health\n\nConnected. Awaiting file references..."
 
         # Get diagnostics for up to 3 most recently mentioned files
         diagnostics_parts = []
@@ -690,18 +721,41 @@ You are within blackcat harness/structure.
             try:
                 diags = await self.lens_client.get_diagnostics(file_path)
                 if diags:
-                    try:
-                        rel_path = str(Path(file_path).relative_to(self.workspace))
-                    except ValueError:
-                        rel_path = Path(file_path).name
+                    # Resolve workspace for this file
+                    workspace_result = self.lens_client._get_workspace_for_file(file_path)
+                    workspace_alias = workspace_result[0] if workspace_result else None
+
+                    # Get relative path from the correct workspace
+                    if workspace_alias and workspace_alias in self.lens_client.workspace_paths:
+                        workspace_path = self.lens_client.workspace_paths[workspace_alias]
+                        try:
+                            rel_path = str(Path(file_path).relative_to(workspace_path))
+                        except ValueError:
+                            rel_path = Path(file_path).name
+                    else:
+                        # Fallback to blackcat's workspace
+                        try:
+                            rel_path = str(Path(file_path).relative_to(self.workspace))
+                        except ValueError:
+                            rel_path = Path(file_path).name
+
                     formatted = format_diagnostics(diags, max_items=5)
-                    diagnostics_parts.append(f"### {rel_path}\n{formatted}")
+                    if workspace_alias:
+                        diagnostics_parts.append(f"### {rel_path} [{workspace_alias}]\n{formatted}")
+                    else:
+                        diagnostics_parts.append(f"### {rel_path}\n{formatted}")
             except Exception:
                 continue  # Skip files that fail
 
         if diagnostics_parts:
-            return f"## Code Health (through VSCode extension lens)\n\n{chr(10).join(diagnostics_parts)}"
-        return None
+            diagnostics_text = chr(10).join(diagnostics_parts)
+            if workspaces_header:
+                return f"## Lens Code Health\n\n{workspaces_header}\n\n{diagnostics_text}"
+            return f"## Lens Code Health\n\n{diagnostics_text}"
+        # Files referenced but no diagnostics (clean code) - still show workspaces
+        if workspaces_header:
+            return f"## Lens Code Health\n\n{workspaces_header}\n\nNo issues in referenced files."
+        return "## Lens Code Health\n\nNo issues in referenced files."
 
     def context_pruning(
         self,
@@ -894,6 +948,19 @@ You are within blackcat harness/structure.
         )
 
         if not old_messages:
+            return messages, False
+
+        # Check if old_messages has meaningful content to summarize
+        # (system/tool messages are filtered out by summarizer, leading to empty summary)
+        has_content = any(
+            m.get("role") in ("user", "assistant") and m.get("content")
+            for m in old_messages
+        )
+        if not has_content:
+            logger.warning(
+                "Compaction skipped: old messages contain no summarizable content "
+                "(only system/tool/empty messages)"
+            )
             return messages, False
 
         # Summarize
