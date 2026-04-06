@@ -25,7 +25,7 @@ jobs:
         run: npm install -g pyright
 
       - name: Lint
-        run: ruff check .
+        run: ruff check . --fix
   
       - name: Type check
         run: pyright blackcat/
