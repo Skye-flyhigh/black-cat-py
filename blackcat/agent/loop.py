@@ -46,6 +46,12 @@ from blackcat.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileT
 from blackcat.agent.tools.message import MessageTool
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.agent.tools.shell import ExecTool
+from blackcat.agent.tools.skills import (
+    SkillCreateTool,
+    SkillGetTool,
+    SkillListTool,
+    SkillUpdateTool,
+)
 from blackcat.agent.tools.spawn import SpawnTool
 from blackcat.agent.tools.web import WebFetchTool, WebSearchTool
 from blackcat.bus.events import InboundMessage, OutboundMessage
@@ -314,6 +320,12 @@ class AgentLoop:
             self.tools.register(LensCodeActionTool(self.lens_client))
             self.tools.register(LensFormatTool(self.lens_client))
             self.tools.register(LensSignatureHelpTool(self.lens_client))
+
+        # Skill management tools
+        self.tools.register(SkillListTool(workspace=self.workspace))
+        self.tools.register(SkillGetTool(workspace=self.workspace))
+        self.tools.register(SkillCreateTool(workspace=self.workspace))
+        self.tools.register(SkillUpdateTool(workspace=self.workspace))
 
         self.tools.export_md(self.workspace / "TOOLS.md")
 
