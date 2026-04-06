@@ -21,6 +21,7 @@ from blackcat.agent.tools.lens import (
     LensCodeActionTool,
     LensCompletionTool,
     LensDefinitionTool,
+    LensDiagnosticsTool,
     LensDocumentSymbolTool,
     LensFormatTool,
     LensHoverTool,
@@ -48,7 +49,9 @@ from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.agent.tools.shell import ExecTool
 from blackcat.agent.tools.skills import (
     SkillCreateTool,
+    SkillGetReferenceTool,
     SkillGetTool,
+    SkillListReferencesTool,
     SkillListTool,
     SkillUpdateTool,
 )
@@ -313,6 +316,11 @@ class AgentLoop:
             self.tools.register(LensDefinitionTool(self.lens_client))
             self.tools.register(LensReferencesTool(self.lens_client))
             self.tools.register(LensHoverTool(self.lens_client))
+            # Pass workspace configs to diagnostics tool for per-workspace overrides
+            self.tools.register(LensDiagnosticsTool(
+                self.lens_client,
+                default_source=self.config.tools.lens.diagnostics_source,
+            ))
             self.tools.register(LensWorkspaceSymbolTool(self.lens_client))
             self.tools.register(LensDocumentSymbolTool(self.lens_client))
             self.tools.register(LensCompletionTool(self.lens_client))
@@ -326,6 +334,8 @@ class AgentLoop:
         self.tools.register(SkillGetTool(workspace=self.workspace))
         self.tools.register(SkillCreateTool(workspace=self.workspace))
         self.tools.register(SkillUpdateTool(workspace=self.workspace))
+        self.tools.register(SkillListReferencesTool(workspace=self.workspace))
+        self.tools.register(SkillGetReferenceTool(workspace=self.workspace))
 
         self.tools.export_md(self.workspace / "TOOLS.md")
 

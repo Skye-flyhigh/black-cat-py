@@ -144,11 +144,55 @@ class MCPServerConfig(Base):
     enabled_tools: list[str] = Field(default_factory=lambda: ["*"])  # Only register these tools; accepts raw MCP names or wrapped mcp_<server>_<tool> names; ["*"] = all tools; [] = no tools
 
 
+class WorkspaceConfig(Base):
+    """Per-workspace Lens configuration."""
+
+    path: str  # absolute path to workspace
+    diagnostics_source: Literal["cli", "vscode"] | None = None
+    """Override global diagnostics_source for this workspace. None = use global default."""
+
+
+def get_workspace_path(ws_config: str | WorkspaceConfig) -> str:
+    """Extract path from workspace config (str or WorkspaceConfig)."""
+    return ws_config.path if isinstance(ws_config, WorkspaceConfig) else ws_config
+
+
 class LensConfig(Base):
     """Lens LSP bridge configuration."""
 
     enabled: bool = False
-    workspaces: dict[str, str] = Field(default_factory=dict)  # name -> absolute path
+    workspaces: dict[str, str | WorkspaceConfig] = Field(default_factory=dict)
+    """Workspace name -> path (str) or full config (WorkspaceConfig).
+
+    Examples:
+        # Simple: just a path
+        "black-cat-py": "/path/to/black-cat-py"
+
+        # Full config with overrides
+        "Nomad's Map": {"path": "/path/to/NomadsMap", "diagnostics_source": "vscode"}
+    """
+    diagnostics_source: Literal["cli", "vscode"] = "cli"
+    """Default source for diagnostics.
+
+    - "cli": Run pyright/tsc directly (fresh results, works for healthy codebases)
+    - "vscode": Use VSCode extension (faster but may be stale, fallback for broken codebases)
+
+    Default is "cli" since most projects are healthy. Use "vscode" for large/complex
+    TypeScript projects where tsc --noEmit would be slow or fail.
+
+    Can be overridden per-workspace via WorkspaceConfig.diagnostics_source.
+    """
+
+    def get_workspace_paths(self) -> dict[str, str]:
+        """Get workspace name -> path mapping (normalizes str | WorkspaceConfig)."""
+        return {name: get_workspace_path(cfg) for name, cfg in self.workspaces.items()}
+
+    def get_workspace_source(self, workspace: str) -> Literal["cli", "vscode"]:
+        """Get diagnostics_source for a workspace (with per-workspace override)."""
+        ws_config = self.workspaces.get(workspace)
+        if isinstance(ws_config, WorkspaceConfig) and ws_config.diagnostics_source:
+            return ws_config.diagnostics_source
+        return self.diagnostics_source
 
 
 class ToolsConfig(Base):

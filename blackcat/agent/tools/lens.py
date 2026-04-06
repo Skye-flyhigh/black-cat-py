@@ -236,7 +236,11 @@ class LensWorkspaceSymbolTool(Tool):
                 "query": {
                     "type": "string",
                     "description": "Symbol name to search for (e.g., 'AgentLoop', 'build_messages')",
-                }
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config (e.g., 'black-cat-py')",
+                },
             },
             "required": ["query"],
         }
@@ -244,9 +248,9 @@ class LensWorkspaceSymbolTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(self, query: str, **kwargs: Any) -> str:
+    async def execute(self, query: str, workspace: str | None = None, **kwargs: Any) -> str:
         try:
-            symbols = await self.client.get_workspace_symbols(query)
+            symbols = await self.client.get_workspace_symbols(query, workspace)
 
             if not symbols:
                 return f"No symbols found matching '{query}'"
@@ -756,3 +760,89 @@ class LensSignatureHelpTool(Tool):
             if "ConnectError" in str(type(e)):
                 return "Error: VS Code extension not running."
             return f"Error getting signature help: {str(e)}"
+
+
+class LensDiagnosticsTool(Tool):
+    """Get diagnostics (errors, warnings) for a file."""
+
+    @property
+    def name(self) -> str:
+        return "lens_diagnostics"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Get diagnostics (errors, warnings, hints) for a file. "
+            "Use this to check code health and see issues like type errors, missing imports, "
+            "or linting problems. "
+            "Source defaults to config.tools.lens.diagnostics_source ('vscode' or 'cli'). "
+            "CLI gives fresh results but may fail on large/broken codebases; "
+            "VSCode is faster but may be stale for TypeScript."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to check",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config (e.g., 'black-cat-py')",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["cli", "vscode"],
+                    "description": "Source: 'cli' (fresh, slower) or 'vscode' (cached, faster)",
+                },
+            },
+            "required": ["file_path"],
+        }
+
+    def __init__(self, client: LensClient, default_source: str = "cli"):
+        self.client = client
+        self.default_source = default_source
+
+    async def execute(
+        self,
+        file_path: str,
+        workspace: str | None = None,
+        source: str | None = None,
+        **kwargs: Any,
+    ) -> str:
+        """Get diagnostics for a file.
+
+        Args:
+            file_path: Path to file (relative to workspace or absolute)
+            workspace: Workspace alias from config
+            source: "cli" (fresh, bypasses VSCode) or "vscode" (cached, faster).
+                    Defaults to per-workspace override or global config.
+        """
+        # Determine source: explicit > per-workspace override > global default
+        if source:
+            actual_source = source
+        elif workspace:
+            actual_source = self.client.get_diagnostics_source(workspace)
+        else:
+            actual_source = self.default_source
+
+        try:
+            full_path = self.client.resolve_path(file_path, workspace)
+            diagnostics = await self.client.get_diagnostics(
+                str(full_path), workspace, source=actual_source
+            )
+
+            if not diagnostics:
+                return f"No diagnostics for {file_path}"
+
+            from blackcat.lens.formatting import format_diagnostics
+
+            return format_diagnostics(diagnostics)
+
+        except Exception as e:
+            if "ConnectError" in str(type(e)):
+                return "Error: VS Code extension not running."
+            return f"Error getting diagnostics: {str(e)}"

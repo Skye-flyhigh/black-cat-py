@@ -20,7 +20,16 @@ class LensClient:
         self.config = config
         self._clients: dict[int, AsyncClient] = {}
 
-    def _get_client(self, workspace: str | None = None, file_uri: str | None = None) -> "AsyncClient":
+    @property
+    def workspace_paths(self) -> dict[str, str]:
+        """Normalized workspace name -> path mapping."""
+        return self.config.get_workspace_paths()
+
+    def get_diagnostics_source(self, workspace: str) -> str:
+        """Get diagnostics_source for a workspace."""
+        return self.config.get_workspace_source(workspace)
+
+    def _get_client(self, workspace: str | None = None, file_uri: str | None = None):
         """Get or create HTTP client for a workspace or file."""
         from httpx import AsyncClient
 
@@ -48,46 +57,43 @@ class LensClient:
         response.raise_for_status()
         return response.json()
 
-    # Forward reference for type hint
-    from httpx import AsyncClient
-
     def _resolve_port(self, workspace: str | None = None, file_path: str | None = None) -> int:
-        """Resolve port for a workspace or file.
+        """Resolve port for a workspace.
 
-        Args:
-            workspace: Workspace alias from config (e.g., "black-cat-py") or None
-            file_path: Absolute file path to resolve workspace from (alternative to workspace)
-
-        Returns:
-            Port number to connect to
+        Priority:
+        1. Explicit workspace alias
+        2. File path -> workspace discovery
+        3. Default port
         """
-        # If workspace alias provided, look up path
-        if workspace and workspace in self.config.workspaces:
-            workspace_path = self.config.workspaces[workspace]
-            return get_port_for_workspace(workspace_path)
+        workspace_paths = self.workspace_paths
+        if workspace and workspace in workspace_paths:
+            workspace_path = workspace_paths[workspace]
+            port = get_port_for_workspace(workspace_path)
+            if port:
+                return port
 
-        # If file_path provided, find workspace it belongs to
         if file_path:
-            result = find_workspace_for_file(file_path, self.config.workspaces)
+            result = find_workspace_for_file(file_path, workspace_paths)
             if result:
-                return result[1]
+                _, port = result
+                return port
 
-        # Fall back to base port
-        from .discovery import workspace_port
+        # Default port from config or fallback
+        return getattr(self.config, "port", 8765)
 
-        return workspace_port("/")
-
-    def _resolve_workspace_from_file(self, file_path: str | None) -> str | None:
-        """Get workspace alias for a file path."""
-        if not file_path:
-            return None
-
-        result = find_workspace_for_file(file_path, self.config.workspaces)
+    def _get_workspace_for_file(self, file_path: str) -> tuple[str, int] | None:
+        """Find workspace alias and port for a file path."""
+        workspace_paths = self.workspace_paths
+        result = find_workspace_for_file(file_path, workspace_paths)
         if result:
-            ws_path, _ = result
-            for alias, path in self.config.workspaces.items():
-                if Path(path).expanduser().resolve() == Path(ws_path).expanduser().resolve():
-                    return alias
+            return result
+
+        # Fallback: check if file is under any configured workspace
+        for alias, path in workspace_paths.items():
+            if file_path.startswith(path):
+                port = get_port_for_workspace(path)
+                if port:
+                    return (alias, port)
         return None
 
     async def is_healthy(self, workspace: str | None = None) -> bool:
@@ -108,8 +114,8 @@ class LensClient:
 
     def resolve_path(self, file_path: str, workspace: str | None = None) -> Path:
         """Resolve file path, handling workspace aliases."""
-        if workspace and workspace in self.config.workspaces:
-            base = Path(self.config.workspaces[workspace])
+        if workspace and workspace in self.workspace_paths:
+            base = Path(self.workspace_paths[workspace])
             return base / file_path
         return Path(file_path).expanduser().resolve()
 
@@ -118,8 +124,31 @@ class LensClient:
         p = Path(file_path).expanduser().resolve()
         return f"file://{p}"
 
-    async def get_diagnostics(self, file_path: str, workspace: str | None = None) -> list[dict]:
-        """Get diagnostics (errors/warnings) for a file."""
+    async def get_diagnostics(
+        self,
+        file_path: str,
+        workspace: str | None = None,
+        source: str = "vscode",
+    ) -> list[dict]:
+        """Get diagnostics (errors/warnings) for a file.
+
+        Args:
+            file_path: Path to file
+            workspace: Workspace alias or path
+            source: "vscode" (cached, fast) or "cli" (fresh, slower)
+
+        Returns:
+            List of diagnostic dicts
+        """
+        if source == "cli":
+            from .cli_diagnostics import get_diagnostics_cli
+
+            ws_path = None
+            if workspace and workspace in self.workspace_paths:
+                ws_path = self.workspace_paths[workspace]
+            return await get_diagnostics_cli(file_path, ws_path)
+
+        # VSCode extension (cached diagnostics)
         uri = self._make_file_uri(file_path)
         return await self._request("diagnostics", {"uri": uri}, workspace, uri)
 
