@@ -205,7 +205,7 @@ class MessageHandler:
             session.add_message("assistant", None, author=agent_name, tool_calls=tool_calls)
             for tool in tools_used:
                 session.add_message(
-                    "tool",
+                    "function",
                     content=tool["result"],
                     author=agent_name,
                     tool_call_id=tool["id"],

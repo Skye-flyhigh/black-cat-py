@@ -124,7 +124,9 @@ class OpenAICompatProvider(LLMProvider):
         if api_key and spec and spec.env_key:
             self._setup_env(api_key, api_base)
 
-        effective_base = api_base or (spec.default_api_base if spec else None) or None
+        if spec and spec.name == "ollama":
+            effective_base = "https://ollama.com/v1/" if api_key else (api_base or "http://localhot:11434/v1/")
+            effective_base = api_base or (spec.default_api_base if spec else None) or None
         default_headers = {"x-session-affinity": uuid.uuid4().hex}
         if _uses_openrouter_attribution(spec, effective_base):
             default_headers.update(_DEFAULT_OPENROUTER_HEADERS)
