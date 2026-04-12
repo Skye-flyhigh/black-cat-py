@@ -27,7 +27,7 @@ _ALNUM = string.ascii_letters + string.digits
 _STANDARD_TC_KEYS = frozenset({"id", "type", "index", "function"})
 _STANDARD_FN_KEYS = frozenset({"name", "arguments"})
 _DEFAULT_OPENROUTER_HEADERS = {
-    "HTTP-Referer": "https://github.com/HKUDS/blackcat",
+    "HTTP-Referer": "https://github.com/skye-flyhigh/black-cat-py",
     "X-OpenRouter-Title": "blackcat",
     "X-OpenRouter-Categories": "cli-agent,personal-agent",
 }
@@ -124,7 +124,7 @@ class OpenAICompatProvider(LLMProvider):
         if api_key and spec and spec.env_key:
             self._setup_env(api_key, api_base)
 
-        effective_base = api_base or (spec.default_api_base if spec else None) or None
+        effective_base = api_base or (spec.default_api_base if spec else None)
         default_headers = {"x-session-affinity": uuid.uuid4().hex}
         if _uses_openrouter_attribution(spec, effective_base):
             default_headers.update(_DEFAULT_OPENROUTER_HEADERS)
