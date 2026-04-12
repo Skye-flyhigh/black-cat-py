@@ -171,7 +171,8 @@ class TestStandardProviders:
 
         provider = _call_make_provider(config)
         assert isinstance(provider, OpenAICompatProvider)
-        assert "api.openai.com" in str(provider._client.base_url)
+        parsed_base_url = urlparse(str(provider._client.base_url))
+        assert parsed_base_url.hostname == "api.openai.com"
 
     def test_deepseek_provider(self):
         from blackcat.providers.openai_compat_provider import OpenAICompatProvider
@@ -187,7 +188,8 @@ class TestStandardProviders:
 
         provider = _call_make_provider(config)
         assert isinstance(provider, OpenAICompatProvider)
-        assert "deepseek.com" in str(provider._client.base_url)
+        host = urlparse(str(provider._client.base_url)).hostname
+        assert host == "api.deepseek.com"
 
     def test_groq_provider(self):
         from blackcat.providers.openai_compat_provider import OpenAICompatProvider
@@ -203,7 +205,8 @@ class TestStandardProviders:
 
         provider = _call_make_provider(config)
         assert isinstance(provider, OpenAICompatProvider)
-        assert "groq.com" in str(provider._client.base_url)
+        host = urlparse(str(provider._client.base_url)).hostname
+        assert host == "api.groq.com"
 
     def test_vllm_provider_local(self):
         from blackcat.providers.openai_compat_provider import OpenAICompatProvider
@@ -234,7 +237,8 @@ class TestStandardProviders:
 
         provider = _call_make_provider(config)
         assert isinstance(provider, OpenAICompatProvider)
-        assert "localhost" in str(provider._client.base_url)
+        host = urlparse(str(provider._client.base_url)).hostname
+        assert host == "localhost"
 
 
 # ── Ollama /v1 normalization ────────────────────────────────────────
