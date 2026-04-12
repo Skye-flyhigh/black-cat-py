@@ -6,6 +6,7 @@ cloud/local routing and edge cases.
 """
 
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 
@@ -88,7 +89,8 @@ class TestOllamaCloudRouting:
         config.get_provider.return_value = _make_mock_provider()
 
         provider = _call_make_provider(config)
-        assert "ollama.com" in str(provider._client.base_url)
+        parsed_base_url = urlparse(str(provider._client.base_url))
+        assert parsed_base_url.hostname == "ollama.com"
 
     def test_cloud_model_default_model_includes_provider_prefix(self):
         """default_model stores the full model string; stripping happens at request time."""
