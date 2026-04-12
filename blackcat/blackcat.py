@@ -120,6 +120,7 @@ def _make_provider(config: Any) -> Any:
     p = config.get_provider(model)
     spec = find_by_name(provider_name) if provider_name else None
     backend = spec.backend if spec else "openai_compat"
+    api_base = config.get_api_base(model)
 
     if backend == "azure_openai":
         if not p or not p.api_key or not p.api_base:
@@ -149,16 +150,22 @@ def _make_provider(config: Any) -> Any:
 
         provider = AnthropicProvider(
             api_key=p.api_key if p else None,
-            api_base=config.get_api_base(model),
+            api_base=api_base,
             default_model=model,
             extra_headers=p.extra_headers if p else None,
         )
     else:
         from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
+        # Ollama cloud models (:cloud suffix) route to ollama.com and require an API key
+        if spec and spec.name == "ollama" and model.endswith(":cloud"):
+            if not p or not p.api_key:
+                raise ValueError(f"No API key configured for Ollama's cloud model {model}")
+            api_base = "https://ollama.com/v1/"
+
         provider = OpenAICompatProvider(
             api_key=p.api_key if p else None,
-            api_base=config.get_api_base(model),
+            api_base=api_base,
             default_model=model,
             extra_headers=p.extra_headers if p else None,
             spec=spec,
