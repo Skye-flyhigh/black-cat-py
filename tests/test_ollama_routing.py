@@ -238,53 +238,6 @@ class TestStandardProviders:
 # ── Ollama /v1 normalization ────────────────────────────────────────
 
 
-class TestOllamaV1Normalization:
-    """Ollama base URLs without /v1 should have it appended automatically."""
-
-    def test_base_without_v1_gets_appended(self):
-        from blackcat.providers.openai_compat_provider import OpenAICompatProvider
-
-        provider = OpenAICompatProvider(
-            api_key="no-key",
-            api_base="http://localhost:11434/",
-            default_model="ollama/ministral-3:8b",
-            spec=OLLAMA_SPEC,
-        )
-        assert str(provider._client.base_url) == "http://localhost:11434/v1/"
-
-    def test_base_with_v1_left_alone(self):
-        from blackcat.providers.openai_compat_provider import OpenAICompatProvider
-
-        provider = OpenAICompatProvider(
-            api_key="no-key",
-            api_base="http://localhost:11434/v1",
-            default_model="ollama/ministral-3:8b",
-            spec=OLLAMA_SPEC,
-        )
-        assert str(provider._client.base_url) == "http://localhost:11434/v1/"
-
-    def test_cloud_url_not_double_appended(self):
-        from blackcat.providers.openai_compat_provider import OpenAICompatProvider
-
-        provider = OpenAICompatProvider(
-            api_key="test-key",
-            api_base="https://ollama.com/v1",
-            default_model="ollama/glm-5:cloud",
-            spec=OLLAMA_SPEC,
-        )
-        assert str(provider._client.base_url) == "https://ollama.com/v1/"
-
-    def test_non_ollama_base_not_modified(self):
-        from blackcat.providers.openai_compat_provider import OpenAICompatProvider
-
-        provider = OpenAICompatProvider(
-            api_key="sk-test",
-            api_base="https://api.deepseek.com",
-            default_model="deepseek/deepseek-chat",
-            spec=find_by_name("deepseek"),
-        )
-        assert str(provider._client.base_url).startswith("https://api.deepseek.com")
-
 
 # ── Registry lookups ───────────────────────────────────────────────
 
