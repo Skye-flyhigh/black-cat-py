@@ -285,6 +285,15 @@ class ProvidersConfig(Base):
                     self.model_extra[key] = ProviderConfig.model_validate(value)
         return self
 
+    @model_validator(mode="after")
+    def convert_extra_providers(self):
+        """Convert extra fields (custom providers) to ProviderConfig objects."""
+        if self.model_extra:
+            for key, value in self.model_extra.items():
+                if isinstance(value, dict):
+                    self.model_extra[key] = ProviderConfig.model_validate(value)
+        return self
+
 
 class HeartbeatConfig(Base):
     """Heartbeat service configuration (now backed by cron)."""
