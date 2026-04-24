@@ -96,8 +96,8 @@ def test_start_turn_resets():
 def test_set_context():
     tool = MessageTool()
     tool.set_context("discord", "789")
-    assert tool._default_channel == "discord"
-    assert tool._default_chat_id == "789"
+    assert tool._default_channel.get() == "discord"
+    assert tool._default_chat_id.get() == "789"
 
 
 def test_set_send_callback():
