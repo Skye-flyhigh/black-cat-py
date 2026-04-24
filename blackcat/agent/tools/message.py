@@ -1,50 +1,34 @@
 """Message tool for sending messages to users."""
 
+from contextvars import ContextVar
 from typing import Any, Awaitable, Callable
 
-from blackcat.agent.tools.base import Tool
+from blackcat.agent.tools.base import Tool, tool_parameters
+from blackcat.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
 from blackcat.bus.events import OutboundMessage
 
 
+@tool_parameters(
+    tool_parameters_schema(
+        content=StringSchema("The message content to send"),
+        channel=StringSchema("Optional: target channel (telegram, discord, etc.)"),
+        chat_id=StringSchema("Optional: target chat/user ID"),
+        media=ArraySchema(
+            StringSchema(""),
+            description="Optional: list of file paths to attach (images, audio, documents)",
+        ),
+        buttons=ArraySchema(
+            ArraySchema(StringSchema("Button label")),
+            description="Optional: inline keyboard buttons as list of rows, each row is list of button labels.",
+        ),
+        required=["content"],
+    )
+)
 class MessageTool(Tool):
     """Tool to send messages to users on chat channels."""
 
-    @property
-    def name(self) -> str:
-        return "message"
-    @property
-    def description(self) -> str:
-        return (
-        "Send a message to the user, optionally with file attachments. "
-        "This is the ONLY way to deliver files (images, documents, audio, video) to the user. "
-        "Use the 'media' parameter with file paths to attach files. "
-        "Do NOT use read_file to send files — that only reads content for your own analysis."
-    )
-    @property
-    def parameters(self) -> dict:
-        return {
-        "type": "object",
-        "properties": {
-            "content": {
-                "type": "string",
-                "description": "The message content to send",
-            },
-            "channel": {
-                "type": "string",
-                "description": "Optional: target channel (telegram, discord, etc.)",
-            },
-            "chat_id": {
-                "type": "string",
-                "description": "Optional: target chat/user ID",
-            },
-            "media": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Optional: list of file paths to attach (images, audio, documents)",
-            },
-        },
-        "required": ["content"],
-    }
+    # Type hint for Pylance: decorator injects this at runtime
+    parameters: dict[str, Any]  # type: ignore[assignment]
 
     def __init__(
         self,
@@ -54,22 +38,21 @@ class MessageTool(Tool):
         default_message_id: str | None = None,
     ):
         self._send_callback = send_callback
-        self._default_channel = default_channel
-        self._default_chat_id = default_chat_id
-        self._default_message_id = default_message_id
-        self._sent_in_turn: bool = False
+        self._default_channel: ContextVar[str] = ContextVar("message_default_channel", default=default_channel)
+        self._default_chat_id: ContextVar[str] = ContextVar("message_default_chat_id", default=default_chat_id)
+        self._default_message_id: ContextVar[str | None] = ContextVar(
+            "message_default_message_id",
+            default=default_message_id,
+        )
+        self._sent_in_turn_var: ContextVar[bool] = ContextVar("message_sent_in_turn", default=False)
 
-    def set_context(
-        self, channel: str, chat_id: str, message_id: str | None = None
-    ) -> None:
+    def set_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
         """Set the current message context."""
-        self._default_channel = channel
-        self._default_chat_id = chat_id
-        self._default_message_id = message_id
+        self._default_channel.set(channel)
+        self._default_chat_id.set(chat_id)
+        self._default_message_id.set(message_id)
 
-    def set_send_callback(
-        self, callback: Callable[[OutboundMessage], Awaitable[None]]
-    ) -> None:
+    def set_send_callback(self, callback: Callable[[OutboundMessage], Awaitable[None]]) -> None:
         """Set the callback for sending messages."""
         self._send_callback = callback
 
@@ -77,23 +60,57 @@ class MessageTool(Tool):
         """Reset per-turn send tracking."""
         self._sent_in_turn = False
 
-    async def execute(self, **kwargs: Any) -> str:
-        content: str = kwargs["content"]
-        channel: str | None = kwargs.get("channel")
-        chat_id: str | None = kwargs.get("chat_id")
-        message_id: str | None = kwargs.get("message_id")
-        media: list[str] | None = kwargs.get("media")
+    @property
+    def _sent_in_turn(self) -> bool:
+        return self._sent_in_turn_var.get()
 
-        channel = channel or self._default_channel
-        chat_id = chat_id or self._default_chat_id
+    @_sent_in_turn.setter
+    def _sent_in_turn(self, value: bool) -> None:
+        self._sent_in_turn_var.set(value)
 
+    @property
+    def name(self) -> str:
+        return "message"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Send a message to the user, optionally with file attachments. "
+            "This is the ONLY way to deliver files (images, documents, audio, video) to the user. "
+            "Use the 'media' parameter with file paths to attach files. "
+            "Do NOT use read_file to send files — that only reads content for your own analysis."
+        )
+
+    async def execute(
+        self,
+        content: str,
+        channel: str | None = None,
+        chat_id: str | None = None,
+        message_id: str | None = None,
+        media: list[str] | None = None,
+        buttons: list[list[str]] | None = None,
+        **kwargs: Any
+    ) -> str:
+        from blackcat.utils.formatting import strip_think
+        content = strip_think(content)
+
+        if buttons is not None:
+            if not isinstance(buttons, list) or any(
+                not isinstance(row, list) or any(not isinstance(label, str) for label in row)
+                for row in buttons
+            ):
+                return "Error: buttons must be a list of list of strings"
+        default_channel = self._default_channel.get()
+        default_chat_id = self._default_chat_id.get()
+        channel = channel or default_channel
+        chat_id = chat_id or default_chat_id
         # Only inherit default message_id when targeting the same channel+chat.
-        # Cross-channel sends must not carry the original message_id, because
+        # Cross-chat sends must not carry the original message_id, because
         # some channels (e.g. Feishu) use it to determine the target
         # conversation via their Reply API, which would route the message
         # to the wrong chat entirely.
-        if channel == self._default_channel and chat_id == self._default_chat_id:
-            message_id = message_id or self._default_message_id
+        if channel == default_channel and chat_id == default_chat_id:
+            message_id = message_id or self._default_message_id.get()
         else:
             message_id = None
 
@@ -108,14 +125,18 @@ class MessageTool(Tool):
             chat_id=chat_id,
             content=content,
             media=media or [],
-            metadata={"message_id": message_id} if message_id else {},
+            buttons=buttons or [],
+            metadata={
+                "message_id": message_id,
+            } if message_id else {},
         )
 
         try:
             await self._send_callback(msg)
-            if channel == self._default_channel and chat_id == self._default_chat_id:
+            if channel == default_channel and chat_id == default_chat_id:
                 self._sent_in_turn = True
             media_info = f" with {len(media)} attachments" if media else ""
-            return f"Message sent to {channel}:{chat_id}{media_info}"
+            button_info = f" with {sum(len(row) for row in buttons)} button(s)" if buttons else ""
+            return f"Message sent to {channel}:{chat_id}{media_info}{button_info}"
         except Exception as e:
             return f"Error sending message: {str(e)}"
