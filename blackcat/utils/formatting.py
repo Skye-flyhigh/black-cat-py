@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 
@@ -97,3 +98,13 @@ def split_message(content: str, max_len: int = 2000) -> list[str]:
         chunks.append(content[:pos])
         content = content[pos:].lstrip()
     return chunks
+
+
+def strip_think(text: str) -> str:
+    """Remove thinking blocks and any unclosed trailing tag."""
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text)
+    text = re.sub(r"^\s*<think>[\s\S]*$", "", text)
+    # Gemma 4 and similar models use <thought>...</thought> blocks
+    text = re.sub(r"<thought>[\s\S]*?</thought>", "", text)
+    text = re.sub(r"^\s*<thought>[\s\S]*$", "", text)
+    return text.strip()

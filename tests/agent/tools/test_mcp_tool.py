@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from types import ModuleType, SimpleNamespace
 
 import pytest
