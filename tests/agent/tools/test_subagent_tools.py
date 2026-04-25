@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.config.schema import AgentDefaults
+from blackcat.config.schema import AgentDefaults
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -15,9 +15,9 @@ _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 @pytest.mark.asyncio
 async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
     """allowed_env_keys from ExecToolConfig must be forwarded to the subagent's ExecTool."""
-    from nanobot.agent.subagent import SubagentManager, SubagentStatus
-    from nanobot.bus.queue import MessageBus
-    from nanobot.config.schema import ExecToolConfig
+    from blackcat.agent.subagent import SubagentManager, SubagentStatus
+    from blackcat.bus.queue import MessageBus
+    from blackcat.config.schema import ExecToolConfig
 
     bus = MessageBus()
     provider = MagicMock()
@@ -57,11 +57,11 @@ async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
 @pytest.mark.asyncio
 async def test_drain_pending_blocks_while_subagents_running(tmp_path):
     """_drain_pending should block when no messages are available but sub-agents are still running."""
-    from nanobot.agent.loop import AgentLoop
-    from nanobot.agent.subagent import SubagentManager
-    from nanobot.bus.events import InboundMessage
-    from nanobot.bus.queue import MessageBus
-    from nanobot.session.manager import Session
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.agent.subagent import SubagentManager
+    from blackcat.bus.events import InboundMessage
+    from blackcat.bus.queue import MessageBus
+    from blackcat.session.manager import Session
 
     bus = MessageBus()
     provider = MagicMock()
@@ -152,8 +152,8 @@ async def test_drain_pending_blocks_while_subagents_running(tmp_path):
 @pytest.mark.asyncio
 async def test_drain_pending_no_block_when_no_subagents(tmp_path):
     """_drain_pending should not block when no sub-agents are running."""
-    from nanobot.agent.loop import AgentLoop
-    from nanobot.bus.queue import MessageBus
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -198,9 +198,9 @@ async def test_drain_pending_no_block_when_no_subagents(tmp_path):
 @pytest.mark.asyncio
 async def test_drain_pending_timeout(tmp_path):
     """_drain_pending should return empty after timeout when sub-agents hang."""
-    from nanobot.agent.loop import AgentLoop
-    from nanobot.bus.queue import MessageBus
-    from nanobot.session.manager import Session
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.bus.queue import MessageBus
+    from blackcat.session.manager import Session
 
     bus = MessageBus()
     provider = MagicMock()
@@ -247,7 +247,7 @@ async def test_drain_pending_timeout(tmp_path):
     assert injection_callback is not None
 
     # Patch the timeout to be very short for testing
-    with patch("nanobot.agent.loop.asyncio.wait_for") as mock_wait:
+    with patch("blackcat.agent.loop.asyncio.wait_for") as mock_wait:
         mock_wait.side_effect = asyncio.TimeoutError
         results = await injection_callback()
         assert results == []

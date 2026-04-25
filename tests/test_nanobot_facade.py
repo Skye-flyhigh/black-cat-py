@@ -7,8 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from nanobot.nanobot import Nanobot, RunResult
+from blackcat.blackcat import Nanobot, RunResult
 
 
 def _write_config(tmp_path: Path, overrides: dict | None = None) -> Path:
@@ -36,10 +35,10 @@ def test_from_config_creates_instance(tmp_path):
 
 
 def test_from_config_default_path():
-    from nanobot.config.schema import Config
+    from blackcat.config.schema import Config
 
-    with patch("nanobot.config.loader.load_config") as mock_load, \
-         patch("nanobot.nanobot._make_provider") as mock_prov:
+    with patch("blackcat.config.loader.load_config") as mock_load, \
+         patch("blackcat.blackcat._make_provider") as mock_prov:
         mock_load.return_value = Config()
         mock_prov.return_value = MagicMock()
         mock_prov.return_value.get_default_model.return_value = "test"
@@ -53,7 +52,7 @@ async def test_run_returns_result(tmp_path):
     config_path = _write_config(tmp_path)
     bot = Nanobot.from_config(config_path, workspace=tmp_path)
 
-    from nanobot.bus.events import OutboundMessage
+    from blackcat.bus.events import OutboundMessage
 
     mock_response = OutboundMessage(
         channel="cli", chat_id="direct", content="Hello back!"
@@ -69,8 +68,8 @@ async def test_run_returns_result(tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_with_hooks(tmp_path):
-    from nanobot.agent.hook import AgentHook, AgentHookContext
-    from nanobot.bus.events import OutboundMessage
+    from blackcat.agent.hook import AgentHook, AgentHookContext
+    from blackcat.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Nanobot.from_config(config_path, workspace=tmp_path)
@@ -95,7 +94,7 @@ async def test_run_hooks_restored_on_error(tmp_path):
     config_path = _write_config(tmp_path)
     bot = Nanobot.from_config(config_path, workspace=tmp_path)
 
-    from nanobot.agent.hook import AgentHook
+    from blackcat.agent.hook import AgentHook
 
     bot._loop.process_direct = AsyncMock(side_effect=RuntimeError("boom"))
     original_hooks = bot._loop._extra_hooks
@@ -126,8 +125,9 @@ def test_workspace_override(tmp_path):
 
 
 def test_sdk_make_provider_uses_github_copilot_backend():
-    from nanobot.config.schema import Config
-    from nanobot.nanobot import _make_provider
+    from blackcat.blackcat import _make_provider
+
+    from blackcat.config.schema import Config
 
     config = Config.model_validate(
         {
@@ -140,7 +140,7 @@ def test_sdk_make_provider_uses_github_copilot_backend():
         }
     )
 
-    with patch("nanobot.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = _make_provider(config)
 
     assert provider.__class__.__name__ == "GitHubCopilotProvider"
@@ -148,7 +148,7 @@ def test_sdk_make_provider_uses_github_copilot_backend():
 
 @pytest.mark.asyncio
 async def test_run_custom_session_key(tmp_path):
-    from nanobot.bus.events import OutboundMessage
+    from blackcat.bus.events import OutboundMessage
 
     config_path = _write_config(tmp_path)
     bot = Nanobot.from_config(config_path, workspace=tmp_path)
@@ -163,6 +163,7 @@ async def test_run_custom_session_key(tmp_path):
 
 
 def test_import_from_top_level():
-    from nanobot import Nanobot as N, RunResult as R
+    from blackcat import Nanobot as N
+    from blackcat import RunResult as R
     assert N is Nanobot
     assert R is RunResult

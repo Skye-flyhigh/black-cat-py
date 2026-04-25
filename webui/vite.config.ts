@@ -1,6 +1,6 @@
-import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import { defineConfig, loadEnv } from "vite";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
       exclude: ["@radix-ui/react-dialog"],
     },
     build: {
-      outDir: path.resolve(__dirname, "../nanobot/web/dist"),
+      outDir: path.resolve(__dirname, "../blackcat/web/dist"),
       emptyOutDir: true,
       sourcemap: false,
     },
@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       // Move Vite's HMR socket to a dedicated port so it doesn't collide with
-      // the ``/`` proxy below (Vite HMR and the nanobot ws upgrade both sit on
+      // the ``/`` proxy below (Vite HMR and the blackcat ws upgrade both sit on
       // the root path, which triggers spurious write-after-end errors as each
       // side tries to close the other's socket).
       hmr: {
@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
         "/webui": { target, changeOrigin: true },
         "/api": { target, changeOrigin: true },
         "/auth": { target, changeOrigin: true },
-        // Forward only WebSocket upgrades on ``/`` to the nanobot gateway;
+        // Forward only WebSocket upgrades on ``/`` to the blackcat gateway;
         // plain HTTP GETs on ``/`` must stay with Vite so it can serve the SPA.
         // ``bypass`` returning the original URL skips the proxy for that
         // request; returning undefined lets the proxy (and ws upgrade handler)

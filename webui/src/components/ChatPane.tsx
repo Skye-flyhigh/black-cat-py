@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Composer } from "@/components/Composer";
 import { MessageList } from "@/components/MessageList";
-import { useClient } from "@/providers/ClientProvider";
 import { useNanobotStream } from "@/hooks/useNanobotStream";
 import { useSessionHistory } from "@/hooks/useSessions";
 import type { ChatSummary } from "@/lib/types";
+import { useClient } from "@/providers/ClientProvider";
 
 interface ChatPaneProps {
   session: ChatSummary | null;
@@ -80,12 +80,12 @@ export function ChatPane({ session, onNewChat }: ChatPaneProps) {
           <div className="flex flex-col items-center gap-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
             <picture>
               <source
-                srcSet="/brand/nanobot_logo.webp"
+                srcSet="/brand/blackcat_logo.webp"
                 type="image/webp"
               />
               <img
-                src="/brand/nanobot_logo.png"
-                alt="nanobot"
+                src="/brand/blackcat_logo.png"
+                alt="blackcat"
                 className="h-12 w-auto select-none drop-shadow-sm"
                 draggable={false}
               />
@@ -94,7 +94,7 @@ export function ChatPane({ session, onNewChat }: ChatPaneProps) {
               What's on your mind?
             </h1>
             <p className="max-w-md text-center text-sm text-muted-foreground">
-              Your conversations are persisted locally under the nanobot
+              Your conversations are persisted locally under the blackcat
               workspace. Start typing and I'll open a new chat.
             </p>
           </div>

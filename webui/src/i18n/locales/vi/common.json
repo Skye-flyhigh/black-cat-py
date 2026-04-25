@@ -1,20 +1,20 @@
 {
   "app": {
-    "brand": "nanobot",
+    "brand": "blackcat",
     "loading": {
-      "connecting": "Đang kết nối tới nanobot…",
-      "boot": "Đang tải nanobot…"
+      "connecting": "Đang kết nối tới blackcat…",
+      "boot": "Đang tải blackcat…"
     },
     "error": {
-      "title": "Không thể kết nối tới nanobot",
-      "gatewayHint": "Hãy chắc chắn gateway đang chạy (`nanobot gateway`) và trang này được mở trên cùng máy."
+      "title": "Không thể kết nối tới blackcat",
+      "gatewayHint": "Hãy chắc chắn gateway đang chạy (`blackcat gateway`) và trang này được mở trên cùng máy."
     },
     "documentTitle": {
-      "base": "nanobot",
-      "chat": "{{title}} · nanobot"
+      "base": "blackcat",
+      "chat": "{{title}} · blackcat"
     },
     "meta": {
-      "description": "Giao diện web nanobot — trò chuyện với workspace nanobot của bạn."
+      "description": "Giao diện web blackcat — trò chuyện với workspace blackcat của bạn."
     }
   },
   "sidebar": {

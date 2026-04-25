@@ -8,15 +8,14 @@ verifies the fallback logic for all code paths.
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from nanobot.providers.openai_compat_provider import OpenAICompatProvider
-
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
 # ── _parse: dict branch ─────────────────────────────────────────────────────
 
 
 def test_parse_dict_stepfun_reasoning_fallback() -> None:
     """When content is None and reasoning exists, content falls back to reasoning."""
-    with patch("nanobot.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     response = {
@@ -38,7 +37,7 @@ def test_parse_dict_stepfun_reasoning_fallback() -> None:
 
 def test_parse_dict_stepfun_reasoning_priority() -> None:
     """reasoning_content field takes priority over reasoning when both present."""
-    with patch("nanobot.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     response = {
@@ -74,7 +73,7 @@ def _make_sdk_message(content, reasoning=None, reasoning_content=None):
 
 def test_parse_sdk_stepfun_reasoning_fallback() -> None:
     """SDK branch: content falls back to msg.reasoning when content is None."""
-    with patch("nanobot.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     msg = _make_sdk_message(content=None, reasoning="After analysis: result is 4.")
@@ -89,7 +88,7 @@ def test_parse_sdk_stepfun_reasoning_fallback() -> None:
 
 def test_parse_sdk_stepfun_reasoning_priority() -> None:
     """reasoning_content field takes priority over reasoning in SDK branch."""
-    with patch("nanobot.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     msg = _make_sdk_message(
@@ -143,7 +142,7 @@ def test_parse_chunks_dict_stepfun_reasoning_fallback() -> None:
 
 def test_parse_dict_normal_model_with_reasoning_content_unaffected() -> None:
     """Models that use reasoning_content (e.g. DeepSeek-R1) are not affected."""
-    with patch("nanobot.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     response = {
@@ -164,7 +163,7 @@ def test_parse_dict_normal_model_with_reasoning_content_unaffected() -> None:
 
 def test_parse_dict_standard_model_no_reasoning_unaffected() -> None:
     """Standard models (no reasoning fields at all) work exactly as before."""
-    with patch("nanobot.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     response = {

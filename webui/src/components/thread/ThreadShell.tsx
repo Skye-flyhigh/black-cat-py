@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { StreamErrorNotice } from "@/components/thread/StreamErrorNotice";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThreadHeader } from "@/components/thread/ThreadHeader";
-import { StreamErrorNotice } from "@/components/thread/StreamErrorNotice";
 import { ThreadViewport } from "@/components/thread/ThreadViewport";
 import { useNanobotStream } from "@/hooks/useNanobotStream";
 import { useSessionHistory } from "@/hooks/useSessions";
@@ -118,13 +118,13 @@ export function ThreadShell({
     <div className="flex w-full max-w-[40rem] flex-col gap-2 text-left animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
       <div className="inline-flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
         <img
-          src="/brand/nanobot_icon.png"
+          src="/brand/blackcat_icon.png"
           alt=""
           aria-hidden
           draggable={false}
           className="h-4 w-4 rounded-sm opacity-90"
         />
-        <span className="text-foreground/82">nanobot</span>
+        <span className="text-foreground/82">blackcat</span>
       </div>
       <p className="max-w-[28rem] text-[13px] leading-6 text-muted-foreground">
         {t("thread.empty.description")}

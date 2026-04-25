@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { DeleteConfirm } from "@/components/DeleteConfirm";
+import { preloadMarkdownText } from "@/components/MarkdownText";
 import { Sidebar } from "@/components/Sidebar";
 import { ThreadShell } from "@/components/thread/ThreadShell";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { preloadMarkdownText } from "@/components/MarkdownText";
 import { useSessions } from "@/hooks/useSessions";
 import { useTheme } from "@/hooks/useTheme";
-import { cn } from "@/lib/utils";
+import { NanobotClient } from "@/lib/blackcat-client";
 import { deriveWsUrl, fetchBootstrap } from "@/lib/bootstrap";
-import { NanobotClient } from "@/lib/nanobot-client";
-import { ClientProvider } from "@/providers/ClientProvider";
 import type { ChatSummary } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { ClientProvider } from "@/providers/ClientProvider";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 type BootState =
   | { status: "loading" }
@@ -23,7 +23,7 @@ type BootState =
       modelName: string | null;
     };
 
-const SIDEBAR_STORAGE_KEY = "nanobot-webui.sidebar";
+const SIDEBAR_STORAGE_KEY = "blackcat-webui.sidebar";
 const SIDEBAR_WIDTH = 279;
 
 function readSidebarOpen(): boolean {
@@ -98,7 +98,7 @@ export default function App() {
       <div className="flex h-full w-full items-center justify-center">
         <div className="flex flex-col items-center gap-3 animate-in fade-in-0 duration-300">
           <img
-            src="/brand/nanobot_icon.png"
+            src="/brand/blackcat_icon.png"
             alt=""
             className="h-10 w-10 animate-pulse select-none"
             aria-hidden
@@ -120,7 +120,7 @@ export default function App() {
       <div className="flex h-full w-full items-center justify-center px-4 text-center">
         <div className="flex max-w-md flex-col items-center gap-3">
           <img
-            src="/brand/nanobot_icon.png"
+            src="/brand/blackcat_icon.png"
             alt=""
             className="h-10 w-10 opacity-60 grayscale select-none"
             aria-hidden

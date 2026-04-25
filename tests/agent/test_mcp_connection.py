@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from nanobot.agent.loop import AgentLoop
-from nanobot.bus.queue import MessageBus
+from blackcat.agent.loop import AgentLoop
+from blackcat.bus.queue import MessageBus
 
 
 def _make_loop(tmp_path, *, mcp_servers: dict | None = None) -> AgentLoop:
@@ -34,7 +34,7 @@ async def test_connect_mcp_retries_when_no_servers_connect(tmp_path, monkeypatch
         attempts += 1
         return {}
 
-    monkeypatch.setattr("nanobot.agent.tools.mcp.connect_mcp_servers", _fake_connect)
+    monkeypatch.setattr("blackcat.agent.tools.mcp.connect_mcp_servers", _fake_connect)
 
     await loop._connect_mcp()
     await loop._connect_mcp()

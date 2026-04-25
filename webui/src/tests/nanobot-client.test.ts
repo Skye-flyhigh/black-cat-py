@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NanobotClient } from "@/lib/nanobot-client";
+import { NanobotClient } from "@/lib/blackcat-client";
 
 /**
  * Minimal fake WebSocket implementing the subset NanobotClient touches.

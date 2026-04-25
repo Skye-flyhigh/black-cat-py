@@ -1,20 +1,20 @@
 {
   "app": {
-    "brand": "nanobot",
+    "brand": "blackcat",
     "loading": {
-      "connecting": "正在連線到 nanobot…",
-      "boot": "正在載入 nanobot…"
+      "connecting": "正在連線到 blackcat…",
+      "boot": "正在載入 blackcat…"
     },
     "error": {
-      "title": "無法連線到 nanobot",
-      "gatewayHint": "請確認 gateway 已啟動（`nanobot gateway`），並且目前頁面與 gateway 在同一台機器上開啟。"
+      "title": "無法連線到 blackcat",
+      "gatewayHint": "請確認 gateway 已啟動（`blackcat gateway`），並且目前頁面與 gateway 在同一台機器上開啟。"
     },
     "documentTitle": {
-      "base": "nanobot",
-      "chat": "{{title}} · nanobot"
+      "base": "blackcat",
+      "chat": "{{title}} · blackcat"
     },
     "meta": {
-      "description": "nanobot Web UI —— 與你的 nanobot 工作區對話。"
+      "description": "blackcat Web UI —— 與你的 blackcat 工作區對話。"
     }
   },
   "sidebar": {
