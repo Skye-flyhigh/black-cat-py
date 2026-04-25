@@ -131,7 +131,7 @@ class Journal:
 # MemoryStore — pure file I/O layer
 # ---------------------------------------------------------------------------
 
-class MemoryStore: # FIXME with the actual format of the blackcat format 
+class MemoryStore: # FIXME with the actual format of the blackcat format
     """Pure file I/O for memory files: MEMORY.md, history.jsonl, SOUL.md, USER.md."""
 
     _DEFAULT_MAX_HISTORY = 1000

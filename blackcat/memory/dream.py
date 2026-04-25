@@ -1,3 +1,12 @@
+# ---------------------------------------------------------------------------
+# Dream — heavyweight cron-scheduled memory consolidation
+# ---------------------------------------------------------------------------
+
+
+# Single source of truth for the staleness threshold used in _annotate_with_ages
+# *and* in the Phase 1 prompt template (passed as `stale_threshold_days`).
+# Keep code and prompt aligned — if you bump this, the LLM's instruction string
+
 import datetime
 from typing import Any
 
@@ -10,6 +19,7 @@ from blackcat.memory.memory import MemoryStore
 from blackcat.providers.base import LLMProvider
 from blackcat.utils.formatting import truncate_text
 
+_STALE_THRESHOLD_DAYS = 14
 
 class Dream:
     """Two-phase memory processor: analyze history.jsonl, then edit files via AgentRunner.
@@ -83,7 +93,7 @@ class Dream:
 
         from blackcat.agent.skills import BUILTIN_SKILLS_DIR
 
-        _DESC_RE = _re.compile(r"^description:\s*(.+)$", _re.MULTILINE | _re.IGNORECASE)
+        _desc_re = _re.compile(r"^description:\s*(.+)$", _re.MULTILINE | _re.IGNORECASE)
         entries: dict[str, str] = {}
         for base in (self.store.workspace / "skills", BUILTIN_SKILLS_DIR):
             if not base.exists():
@@ -98,7 +108,7 @@ class Dream:
                 if d.name in entries and base == BUILTIN_SKILLS_DIR:
                     continue
                 content = skill_md.read_text(encoding="utf-8")[:500]
-                m = _DESC_RE.search(content)
+                m = _desc_re.search(content)
                 desc = m.group(1).strip() if m else "(no description)"
                 entries[d.name] = desc
         return [f"{name} — {desc}" for name, desc in sorted(entries.items())]
@@ -177,7 +187,7 @@ class Dream:
         # Current file contents + per-line age annotations (MEMORY.md only).
         # Each file is capped in the *prompt preview* only; Phase 2 still sees
         # the full file via the read_file tool.
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         raw_memory = self.store.read_memory() or "(empty)"
         annotated_memory = (
             self._annotate_with_ages(raw_memory)

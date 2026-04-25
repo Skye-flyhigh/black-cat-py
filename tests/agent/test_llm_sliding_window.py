@@ -1,5 +1,7 @@
 """Test sliding window compaction."""
 
+import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,8 +9,7 @@ import pytest
 from blackcat.agent.context import ContextManager
 from blackcat.agent.summarizer import Summarizer
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
-import sys
-from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import LLM_TEST_MODEL
 

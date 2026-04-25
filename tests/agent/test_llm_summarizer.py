@@ -8,14 +8,15 @@ Run explicitly:
 """
 
 import re
+import sys
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
 from blackcat.agent.summarizer import Summarizer
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
-import sys
-from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import LLM_TEST_MODEL
 

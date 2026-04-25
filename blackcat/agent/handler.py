@@ -11,9 +11,9 @@ from blackcat.bus.events import OutboundMessage
 from blackcat.utils.document import extract_documents
 
 if TYPE_CHECKING:
+
     from blackcat.agent.loop import AgentLoop
     from blackcat.bus.events import InboundMessage
-    from websockets.asyncio.queue import Queue
 
 
 class MessageHandler:

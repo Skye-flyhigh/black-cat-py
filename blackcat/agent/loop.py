@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import json
 import os
 import re
@@ -18,8 +17,6 @@ from loguru import logger
 from blackcat.agent.handler import MessageHandler
 from blackcat.agent.hook import AgentHook, AgentHookContext, CompositeHook
 from blackcat.agent.runner import AgentRunner, AgentRunSpec
-
-_MAX_INJECTIONS_PER_TURN = 10  # Default limit for mid-turn message injections
 from blackcat.agent.tools.lens import (
     LensCodeActionTool,
     LensCompletionTool,
@@ -35,10 +32,9 @@ from blackcat.agent.tools.lens import (
 )
 from blackcat.agent.tools.notebook import NotebookEditTool
 from blackcat.agent.tools.search import GlobTool, GrepTool
-from blackcat.command.router import CommandContext, CommandRouter
+from blackcat.command.router import CommandRouter
 from blackcat.config.schema import ChannelsConfig, ExecToolConfig, WebToolsConfig
 from blackcat.utils.document import extract_documents
-from blackcat.utils.media import image_placeholder_text
 
 if TYPE_CHECKING:
     from blackcat.config.schema import Config
@@ -68,6 +64,7 @@ from blackcat.bus.queue import MessageBus
 from blackcat.providers.base import LLMProvider
 from blackcat.session.manager import SessionManager
 
+_MAX_INJECTIONS_PER_TURN = 10  # Default limit for mid-turn message injections
 
 class _LoopHook(AgentHook):
     """Core hook for the main loop."""
@@ -202,6 +199,7 @@ class AgentLoop:
         brave_api_key: str | None = None,
         exec_config: ExecToolConfig | None = None,
         cron_service: CronService | None = None,
+        provider_retry_mode: str = "standard",
         restrict_to_workspace: bool = False,
         session_manager: SessionManager | None = None,
         config: Config | None = None,
@@ -298,9 +296,9 @@ class AgentLoop:
         # File tools (workspace for relative paths, restrict if configured)
         allowed_dir = self.workspace if self.restrict_to_workspace else None
         for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool, GrepTool, GlobTool):
-            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir)) # type: ignore[assignment]
+            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
 
-        self.tools.register(NotebookEditTool(workspace=self.workspace, allowed_dir=allowed_dir))  # type: ignore[assignment]
+        self.tools.register(NotebookEditTool(workspace=self.workspace, allowed_dir=allowed_dir))
         if self.exec_config.enable:
             self.tools.register(
                 ExecTool(
@@ -310,14 +308,14 @@ class AgentLoop:
                     sandbox=self.exec_config.sandbox,
                     path_append=self.exec_config.path_append,
                     allowed_env_keys=self.exec_config.allowed_env_keys,
-                ) # type: ignore[arg-type]
+                )
             )
         if self.web_config.enable:
             self.tools.register(
                 WebSearchTool(config=self.web_config.search, proxy=self.web_config.proxy)
             )
             self.tools.register(WebFetchTool(proxy=self.web_config.proxy))
-        self.tools.register(MessageTool(send_callback=self.bus.publish_outbound)) # type: ignore[assignment]
+        self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
         self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
             self.tools.register(

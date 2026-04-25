@@ -77,6 +77,8 @@ class ExecTool(Tool):
         self.path_append = path_append
         self.allowed_env_keys = allowed_env_keys or []
 
+    parameters: dict[str, Any] # type: ignore[assignment]
+
     @property
     def name(self) -> str:
         return "exec"

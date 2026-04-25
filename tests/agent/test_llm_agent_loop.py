@@ -8,6 +8,9 @@ Run explicitly:
     pytest tests/test_llm_agent_loop.py -v
 """
 
+import sys
+from pathlib import Path
+
 import pytest
 
 from blackcat.agent.handler import MessageHandler
@@ -17,8 +20,7 @@ from blackcat.agent.tools.filesystem import ReadFileTool, WriteFileTool
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.bus.events import InboundMessage
 from blackcat.bus.queue import MessageBus
-import sys
-from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import LLM_TEST_MODEL
 

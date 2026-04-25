@@ -59,6 +59,8 @@ class NotebookEditTool(_FsTool):
     _VALID_CELL_TYPES = frozenset({"code", "markdown"})
     _VALID_EDIT_MODES = frozenset({"replace", "insert", "delete"})
 
+    parameters: dict[str, Any] # type: ignore[assignment]
+
     @property
     def name(self) -> str:
         return "notebook_edit"

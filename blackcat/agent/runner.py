@@ -1,600 +1,790 @@
-"""Shared execution loop for tool-using agents."""
-
-from __future__ import annotations
+"""Base LLM provider interface."""
 
 import asyncio
+import json
+import re
+from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from pathlib import Path
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 from loguru import logger
 
-from blackcat.agent.hook import AgentHook, AgentHookContext
-from blackcat.agent.tools.registry import ToolRegistry
-from blackcat.providers.base import LLMProvider, ToolCallRequest
-from blackcat.utils.formatting import build_assistant_message, truncate_text
-from blackcat.utils.helpers import find_legal_message_start
-from blackcat.utils.runtime import (
-    EMPTY_FINAL_RESPONSE_MESSAGE,
-    build_finalization_retry_message,
-    ensure_nonempty_tool_result,
-    is_blank_text,
-    repeated_external_lookup_error,
-)
-from blackcat.utils.tokens import estimate_message_tokens, estimate_prompt_tokens_chain
-from blackcat.utils.tools import maybe_persist_tool_result
-
-_DEFAULT_MAX_ITERATIONS_MESSAGE = (
-    "I reached the maximum number of tool call iterations ({max_iterations}) "
-    "without completing the task. You can try breaking the task into smaller steps."
-)
-_DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
-_SNIP_SAFETY_BUFFER = 1024
-@dataclass(slots=True)
-class AgentRunSpec:
-    """Configuration for a single agent execution."""
-
-    initial_messages: list[dict[str, Any]]
-    tools: ToolRegistry
-    model: str
-    max_iterations: int
-    max_tool_result_chars: int
-    temperature: float | None = None
-    max_tokens: int | None = None
-    reasoning_effort: str | None = None
-    hook: AgentHook | None = None
-    error_message: str | None = _DEFAULT_ERROR_MESSAGE
-    max_iterations_message: str | None = None
-    concurrent_tools: bool = False
-    fail_on_tool_error: bool = False
-    workspace: Path | None = None
-    session_key: str | None = None
-    context_window_tokens: int | None = None
-    context_block_limit: int | None = None
-    provider_retry_mode: str = "standard"
-    progress_callback: Any | None = None
-    checkpoint_callback: Any | None = None
+from blackcat.utils.media import image_placeholder_text
 
 
-@dataclass(slots=True)
-class AgentRunResult:
-    """Outcome of a shared agent execution."""
+@dataclass
+class ToolCallRequest:
+    """A tool call request from the LLM."""
+    id: str
+    name: str
+    arguments: dict[str, Any]
+    extra_content: dict[str, Any] | None = None
+    provider_specific_fields: dict[str, Any] | None = None
+    function_provider_specific_fields: dict[str, Any] | None = None
 
-    final_content: str | None
-    messages: list[dict[str, Any]]
-    tools_used: list[dict[str, Any]] = field(default_factory=list)
-    usage: dict[str, int] = field(default_factory=dict)
-    stop_reason: str = "completed"
-    error: str | None = None
-    tool_events: list[dict[str, str]] = field(default_factory=list)
-
-
-class AgentRunner:
-    """Run a tool-capable LLM loop without product-layer concerns."""
-
-    def __init__(self, provider: LLMProvider):
-        self.provider = provider
-
-    async def run(self, spec: AgentRunSpec) -> AgentRunResult:
-        hook = spec.hook or AgentHook()
-        messages = list(spec.initial_messages)
-        final_content: str | None = None
-        tools_used: list[dict[str, Any]] = []
-        usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0}
-        error: str | None = None
-        stop_reason = "completed"
-        tool_events: list[dict[str, str]] = []
-        external_lookup_counts: dict[str, int] = {}
-
-        for iteration in range(spec.max_iterations):
-            try:
-                messages = self._apply_tool_result_budget(spec, messages)
-                messages_for_model = self._snip_history(spec, messages)
-            except Exception as exc:
-                logger.warning(
-                    "Context governance failed on turn {} for {}: {}; using raw messages",
-                    iteration,
-                    spec.session_key or "default",
-                    exc,
-                )
-                messages_for_model = messages
-            context = AgentHookContext(iteration=iteration, messages=messages)
-            await hook.before_iteration(context)
-            response = await self._request_model(spec, messages_for_model, hook, context)
-            raw_usage = self._usage_dict(response.usage)
-            context.response = response
-            context.usage = dict(raw_usage)
-            context.tool_calls = list(response.tool_calls)
-            self._accumulate_usage(usage, raw_usage)
-
-            if response.has_tool_calls:
-                if hook.wants_streaming():
-                    await hook.on_stream_end(context, resuming=True)
-
-                assistant_message = build_assistant_message(
-                    response.content or "",
-                    tool_calls=[tc.to_openai_tool_call() for tc in response.tool_calls],
-                    reasoning_content=response.reasoning_content,
-                    thinking_blocks=response.thinking_blocks,
-                )
-                messages.append(assistant_message)
-                await self._emit_checkpoint(
-                    spec,
-                    {
-                        "phase": "awaiting_tools",
-                        "iteration": iteration,
-                        "model": spec.model,
-                        "assistant_message": assistant_message,
-                        "completed_tool_results": [],
-                        "pending_tool_calls": [tc.to_openai_tool_call() for tc in response.tool_calls],
-                    },
-                )
-
-                await hook.before_execute_tools(context)
-
-                results, new_events, fatal_error = await self._execute_tools(
-                    spec,
-                    response.tool_calls,
-                    external_lookup_counts,
-                )
-                tool_events.extend(new_events)
-                context.tool_results = list(results)
-                context.tool_events = list(new_events)
-                if fatal_error is not None:
-                    error = f"Error: {type(fatal_error).__name__}: {fatal_error}"
-                    final_content = error
-                    stop_reason = "tool_error"
-                    self._append_final_message(messages, final_content)
-                    context.final_content = final_content
-                    context.error = error
-                    context.stop_reason = stop_reason
-                    await hook.after_iteration(context)
-                    break
-                completed_tool_results: list[dict[str, Any]] = []
-                for tool_call, result in zip(response.tool_calls, results):
-                    tool_message = {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "name": tool_call.name,
-                        "content": self._normalize_tool_result(
-                            spec,
-                            tool_call.id,
-                            tool_call.name,
-                            result,
-                        ),
-                    }
-                    messages.append(tool_message)
-                    completed_tool_results.append(tool_message)
-                    tools_used.append({
-                        "id": tool_call.id,
-                        "name": tool_call.name,
-                        "arguments": tool_call.arguments,
-                        "result": result,
-                    })
-                await self._emit_checkpoint(
-                    spec,
-                    {
-                        "phase": "tools_completed",
-                        "iteration": iteration,
-                        "model": spec.model,
-                        "assistant_message": assistant_message,
-                        "completed_tool_results": completed_tool_results,
-                        "pending_tool_calls": [],
-                    },
-                )
-                await hook.after_iteration(context)
-                continue
-
-            clean = hook.finalize_content(context, response.content)
-            if response.finish_reason != "error" and is_blank_text(clean):
-                logger.warning(
-                    "Empty final response on turn {} for {}; retrying with explicit finalization prompt",
-                    iteration,
-                    spec.session_key or "default",
-                )
-                if hook.wants_streaming():
-                    await hook.on_stream_end(context, resuming=False)
-                response = await self._request_finalization_retry(spec, messages_for_model)
-                retry_usage = self._usage_dict(response.usage)
-                self._accumulate_usage(usage, retry_usage)
-                raw_usage = self._merge_usage(raw_usage, retry_usage)
-                context.response = response
-                context.usage = dict(raw_usage)
-                context.tool_calls = list(response.tool_calls)
-                clean = hook.finalize_content(context, response.content)
-
-            if hook.wants_streaming():
-                await hook.on_stream_end(context, resuming=False)
-
-            if response.finish_reason == "error":
-                final_content = clean or spec.error_message or _DEFAULT_ERROR_MESSAGE
-                stop_reason = "error"
-                error = final_content
-                self._append_final_message(messages, final_content)
-                context.final_content = final_content
-                context.error = error
-                context.stop_reason = stop_reason
-                await hook.after_iteration(context)
-                break
-            if is_blank_text(clean):
-                final_content = EMPTY_FINAL_RESPONSE_MESSAGE
-                stop_reason = "empty_final_response"
-                error = final_content
-                self._append_final_message(messages, final_content)
-                context.final_content = final_content
-                context.error = error
-                context.stop_reason = stop_reason
-                await hook.after_iteration(context)
-                break
-
-            messages.append(build_assistant_message(
-                clean,
-                reasoning_content=response.reasoning_content,
-                thinking_blocks=response.thinking_blocks,
-            ))
-            await self._emit_checkpoint(
-                spec,
-                {
-                    "phase": "final_response",
-                    "iteration": iteration,
-                    "model": spec.model,
-                    "assistant_message": messages[-1],
-                    "completed_tool_results": [],
-                    "pending_tool_calls": [],
-                },
-            )
-            final_content = clean
-            context.final_content = final_content
-            context.stop_reason = stop_reason
-            await hook.after_iteration(context)
-            break
-        else:
-            stop_reason = "max_iterations"
-            template = spec.max_iterations_message or _DEFAULT_MAX_ITERATIONS_MESSAGE
-            final_content = template.format(max_iterations=spec.max_iterations)
-            self._append_final_message(messages, final_content)
-
-        return AgentRunResult(
-            final_content=final_content,
-            messages=messages,
-            tools_used=tools_used,
-            usage=usage,
-            stop_reason=stop_reason,
-            error=error,
-            tool_events=tool_events,
-        )
-
-    def _build_request_kwargs(
-        self,
-        spec: AgentRunSpec,
-        messages: list[dict[str, Any]],
-        *,
-        tools: list[dict[str, Any]] | None,
-    ) -> dict[str, Any]:
-        kwargs: dict[str, Any] = {
-            "messages": messages,
-            "tools": tools,
-            "model": spec.model,
-            "retry_mode": spec.provider_retry_mode,
-            "on_retry_wait": spec.progress_callback,
+    def to_openai_tool_call(self) -> dict[str, Any]:
+        """Serialize to an OpenAI-style tool_call payload."""
+        tool_call = {
+            "id": self.id,
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "arguments": json.dumps(self.arguments, ensure_ascii=False),
+            },
         }
-        if spec.temperature is not None:
-            kwargs["temperature"] = spec.temperature
-        if spec.max_tokens is not None:
-            kwargs["max_tokens"] = spec.max_tokens
-        if spec.reasoning_effort is not None:
-            kwargs["reasoning_effort"] = spec.reasoning_effort
-        return kwargs
+        if self.extra_content:
+            tool_call["extra_content"] = self.extra_content
+        if self.provider_specific_fields:
+            tool_call["provider_specific_fields"] = self.provider_specific_fields
+        if self.function_provider_specific_fields:
+            tool_call["function"]["provider_specific_fields"] = self.function_provider_specific_fields
+        return tool_call
 
-    async def _request_model(
-        self,
-        spec: AgentRunSpec,
-        messages: list[dict[str, Any]],
-        hook: AgentHook,
-        context: AgentHookContext,
-    ):
-        kwargs = self._build_request_kwargs(
-            spec,
-            messages,
-            tools=spec.tools.get_definitions(),
-        )
-        if hook.wants_streaming():
-            async def _stream(delta: str) -> None:
-                await hook.on_stream(context, delta)
 
-            return await self.provider.chat_stream_with_retry(
-                **kwargs,
-                on_content_delta=_stream,
-            )
-        return await self.provider.chat_with_retry(**kwargs)
+@dataclass
+class LLMResponse:
+    """Response from an LLM provider."""
+    content: str | None
+    tool_calls: list[ToolCallRequest] = field(default_factory=list)
+    finish_reason: str = "stop"
+    usage: dict[str, int] = field(default_factory=dict)
+    retry_after: float | None = None  # Provider supplied retry wait in seconds.
+    reasoning_content: str | None = None  # Kimi, DeepSeek-R1, MiMo etc.
+    thinking_blocks: list[dict] | None = None  # Anthropic extended thinking
+    # Structured error metadata used by retry policy when finish_reason == "error".
+    error_status_code: int | None = None
+    error_kind: str | None = None  # e.g. "timeout", "connection"
+    error_type: str | None = None  # Provider/type semantic, e.g. insufficient_quota.
+    error_code: str | None = None  # Provider/code semantic, e.g. rate_limit_exceeded.
+    error_retry_after_s: float | None = None
+    error_should_retry: bool | None = None
 
-    async def _request_finalization_retry(
-        self,
-        spec: AgentRunSpec,
-        messages: list[dict[str, Any]],
-    ):
-        retry_messages = list(messages)
-        retry_messages.append(build_finalization_retry_message())
-        kwargs = self._build_request_kwargs(spec, retry_messages, tools=None)
-        return await self.provider.chat_with_retry(**kwargs)
+    @property
+    def has_tool_calls(self) -> bool:
+        """Check if response contains tool calls."""
+        return len(self.tool_calls) > 0
+
+    @property
+    def should_execute_tools(self) -> bool:
+        """Tools execute only when has_tool_calls AND finish_reason is ``tool_calls`` / ``stop``.
+        Blocks gateway-injected calls under ``refusal`` / ``content_filter`` / ``error`` (#3220)."""
+        if not self.has_tool_calls:
+            return False
+        return self.finish_reason in ("tool_calls", "stop")
+
+
+@dataclass(frozen=True)
+class GenerationSettings:
+    """Default generation settings."""
+
+    temperature: float = 0.7
+    max_tokens: int = 4096
+    reasoning_effort: str | None = None
+
+
+_SYNTHETIC_USER_CONTENT = "(conversation continued)"
+
+
+class LLMProvider(ABC):
+    """Base class for LLM providers."""
+
+    _CHAT_RETRY_DELAYS = (1, 2, 4)
+    _PERSISTENT_MAX_DELAY = 60
+    _PERSISTENT_IDENTICAL_ERROR_LIMIT = 10
+    _RETRY_HEARTBEAT_CHUNK = 30
+    _TRANSIENT_ERROR_MARKERS = (
+        "429",
+        "rate limit",
+        "500",
+        "502",
+        "503",
+        "504",
+        "overloaded",
+        "timeout",
+        "timed out",
+        "connection",
+        "server error",
+        "temporarily unavailable",
+        "速率限制",
+    )
+    _RETRYABLE_STATUS_CODES = frozenset({408, 409, 429})
+    _TRANSIENT_ERROR_KINDS = frozenset({"timeout", "connection"})
+    _NON_RETRYABLE_429_ERROR_TOKENS = frozenset({
+        "insufficient_quota",
+        "quota_exceeded",
+        "quota_exhausted",
+        "billing_hard_limit_reached",
+        "insufficient_balance",
+        "credit_balance_too_low",
+        "billing_not_active",
+        "payment_required",
+    })
+    _RETRYABLE_429_ERROR_TOKENS = frozenset({
+        "rate_limit_exceeded",
+        "rate_limit_error",
+        "too_many_requests",
+        "request_limit_exceeded",
+        "requests_limit_exceeded",
+        "overloaded_error",
+    })
+    _NON_RETRYABLE_429_TEXT_MARKERS = (
+        "insufficient_quota",
+        "insufficient quota",
+        "quota exceeded",
+        "quota exhausted",
+        "billing hard limit",
+        "billing_hard_limit_reached",
+        "billing not active",
+        "insufficient balance",
+        "insufficient_balance",
+        "credit balance too low",
+        "payment required",
+        "out of credits",
+        "out of quota",
+        "exceeded your current quota",
+    )
+    _RETRYABLE_429_TEXT_MARKERS = (
+        "rate limit",
+        "rate_limit",
+        "too many requests",
+        "retry after",
+        "try again in",
+        "temporarily unavailable",
+        "overloaded",
+        "concurrency limit",
+        "速率限制",
+    )
+
+    _SENTINEL = object()
+
+    def __init__(self, api_key: str | None = None, api_base: str | None = None):
+        self.api_key = api_key
+        self.api_base = api_base
+        self.generation: GenerationSettings = GenerationSettings()
 
     @staticmethod
-    def _usage_dict(usage: dict[str, Any] | None) -> dict[str, int]:
-        if not usage:
-            return {}
-        result: dict[str, int] = {}
-        for key, value in usage.items():
-            try:
-                result[key] = int(value or 0)
-            except (TypeError, ValueError):
+    def _sanitize_empty_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Sanitize message content: fix empty blocks, strip internal _meta fields."""
+        result: list[dict[str, Any]] = []
+        for msg in messages:
+            content = msg.get("content")
+
+            if isinstance(content, str) and not content:
+                clean = dict(msg)
+                clean["content"] = None if (msg.get("role") == "assistant" and msg.get("tool_calls")) else "(empty)"
+                result.append(clean)
                 continue
+
+            if isinstance(content, list):
+                new_items: list[Any] = []
+                changed = False
+                for item in content:
+                    if (
+                        isinstance(item, dict)
+                        and item.get("type") in ("text", "input_text", "output_text")
+                        and not item.get("text")
+                    ):
+                        changed = True
+                        continue
+                    if isinstance(item, dict) and "_meta" in item:
+                        new_items.append({k: v for k, v in item.items() if k != "_meta"})
+                        changed = True
+                    else:
+                        new_items.append(item)
+                if changed:
+                    clean = dict(msg)
+                    if new_items:
+                        clean["content"] = new_items
+                    elif msg.get("role") == "assistant" and msg.get("tool_calls"):
+                        clean["content"] = None
+                    else:
+                        clean["content"] = "(empty)"
+                    result.append(clean)
+                    continue
+
+            if isinstance(content, dict):
+                clean = dict(msg)
+                clean["content"] = [content]
+                result.append(clean)
+                continue
+
+            result.append(msg)
         return result
 
     @staticmethod
-    def _accumulate_usage(target: dict[str, int], addition: dict[str, int]) -> None:
-        for key, value in addition.items():
-            target[key] = target.get(key, 0) + value
+    def _tool_name(tool: dict[str, Any]) -> str:
+        """Extract tool name from either OpenAI or Anthropic-style tool schemas."""
+        name = tool.get("name")
+        if isinstance(name, str):
+            return name
+        fn = tool.get("function")
+        if isinstance(fn, dict):
+            fname = fn.get("name")
+            if isinstance(fname, str):
+                return fname
+        return ""
+
+    @classmethod
+    def _tool_cache_marker_indices(cls, tools: list[dict[str, Any]]) -> list[int]:
+        """Return cache marker indices: builtin/MCP boundary and tail index."""
+        if not tools:
+            return []
+
+        tail_idx = len(tools) - 1
+        last_builtin_idx: int | None = None
+        for i in range(tail_idx, -1, -1):
+            if not cls._tool_name(tools[i]).startswith("mcp_"):
+                last_builtin_idx = i
+                break
+
+        ordered_unique: list[int] = []
+        for idx in (last_builtin_idx, tail_idx):
+            if idx is not None and idx not in ordered_unique:
+                ordered_unique.append(idx)
+        return ordered_unique
 
     @staticmethod
-    def _merge_usage(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:
-        merged = dict(left)
-        for key, value in right.items():
-            merged[key] = merged.get(key, 0) + value
+    def _sanitize_request_messages(
+        messages: list[dict[str, Any]],
+        allowed_keys: frozenset[str],
+    ) -> list[dict[str, Any]]:
+        """Keep only provider-safe message keys and normalize assistant content."""
+        sanitized = []
+        for msg in messages:
+            clean = {k: v for k, v in msg.items() if k in allowed_keys}
+            if clean.get("role") == "assistant" and "content" not in clean:
+                clean["content"] = None
+            sanitized.append(clean)
+        return sanitized
+
+    @abstractmethod
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        reasoning_effort: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+    ) -> LLMResponse:
+        """
+        Send a chat completion request.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'.
+            tools: Optional list of tool definitions.
+            model: Model identifier (provider-specific).
+            max_tokens: Maximum tokens in response.
+            temperature: Sampling temperature.
+            tool_choice: Tool selection strategy ("auto", "required", or specific tool dict).
+
+        Returns:
+            LLMResponse with content and/or tool calls.
+        """
+        pass
+
+    @classmethod
+    def _is_transient_error(cls, content: str | None) -> bool:
+        err = (content or "").lower()
+        return any(marker in err for marker in cls._TRANSIENT_ERROR_MARKERS)
+
+    @classmethod
+    def _is_transient_response(cls, response: LLMResponse) -> bool:
+        """Prefer structured error metadata, fallback to text markers for legacy providers."""
+        if response.error_should_retry is not None:
+            return bool(response.error_should_retry)
+
+        if response.error_status_code is not None:
+            status = int(response.error_status_code)
+            if status == 429:
+                return cls._is_retryable_429_response(response)
+            if status in cls._RETRYABLE_STATUS_CODES or status >= 500:
+                return True
+
+        kind = (response.error_kind or "").strip().lower()
+        if kind in cls._TRANSIENT_ERROR_KINDS:
+            return True
+
+        return cls._is_transient_error(response.content)
+
+    @staticmethod
+    def _normalize_error_token(value: Any) -> str | None:
+        if value is None:
+            return None
+        token = str(value).strip().lower()
+        return token or None
+
+    @classmethod
+    def _extract_error_type_code(cls, payload: Any) -> tuple[str | None, str | None]:
+        data: dict[str, Any] | None = None
+        if isinstance(payload, dict):
+            data = payload
+        elif isinstance(payload, str):
+            text = payload.strip()
+            if text:
+                try:
+                    parsed = json.loads(text)
+                except Exception:
+                    parsed = None
+                if isinstance(parsed, dict):
+                    data = parsed
+        if not isinstance(data, dict):
+            return None, None
+
+        error_obj = data.get("error")
+        type_value = data.get("type")
+        code_value = data.get("code")
+        if isinstance(error_obj, dict):
+            type_value = error_obj.get("type") or type_value
+            code_value = error_obj.get("code") or code_value
+
+        return cls._normalize_error_token(type_value), cls._normalize_error_token(code_value)
+
+    @classmethod
+    def _is_retryable_429_response(cls, response: LLMResponse) -> bool:
+        type_token = cls._normalize_error_token(response.error_type)
+        code_token = cls._normalize_error_token(response.error_code)
+        semantic_tokens = {
+            token for token in (type_token, code_token)
+            if token is not None
+        }
+        if any(token in cls._NON_RETRYABLE_429_ERROR_TOKENS for token in semantic_tokens):
+            return False
+
+        content = (response.content or "").lower()
+        if any(marker in content for marker in cls._NON_RETRYABLE_429_TEXT_MARKERS):
+            return False
+
+        if any(token in cls._RETRYABLE_429_ERROR_TOKENS for token in semantic_tokens):
+            return True
+        if any(marker in content for marker in cls._RETRYABLE_429_TEXT_MARKERS):
+            return True
+        # Unknown 429 defaults to WAIT+retry.
+        return True
+
+    @staticmethod
+    def _enforce_role_alternation(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Merge consecutive same-role messages and drop trailing assistant messages.
+
+        Some providers (OpenAI-compat, Azure, vLLM, Ollama, etc.) reject requests
+        where the last message is 'assistant' (prefill not supported) or two
+        consecutive non-system messages share the same role.
+        """
+        if not messages:
+            return messages
+
+        merged: list[dict[str, Any]] = []
+        for msg in messages:
+            role = msg.get("role")
+            if (
+                merged
+                and role != "system"
+                and role not in ("tool",)
+                and merged[-1].get("role") == role
+                and role in ("user", "assistant")
+            ):
+                prev = merged[-1]
+                if role == "assistant":
+                    prev_has_tools = bool(prev.get("tool_calls"))
+                    curr_has_tools = bool(msg.get("tool_calls"))
+                    if curr_has_tools:
+                        merged[-1] = dict(msg)
+                        continue
+                    if prev_has_tools:
+                        continue
+                prev_content = prev.get("content") or ""
+                curr_content = msg.get("content") or ""
+                if isinstance(prev_content, str) and isinstance(curr_content, str):
+                    prev["content"] = (prev_content + "\n\n" + curr_content).strip()
+                else:
+                    merged[-1] = dict(msg)
+            else:
+                merged.append(dict(msg))
+
+        last_popped = None
+        while merged and merged[-1].get("role") == "assistant":
+            last_popped = merged.pop()
+
+        # If removing trailing assistant messages left only system messages,
+        # the request would be invalid for most providers (e.g. Zhipu/GLM
+        # error 1214).  Recover by converting the last popped assistant
+        # message to a user message so the LLM can still see the content.
+        if (
+            merged
+            and last_popped is not None
+            and not any(m.get("role") in ("user", "tool") for m in merged)
+        ):
+            recovered = dict(last_popped)
+            recovered["role"] = "user"
+            merged.append(recovered)
+
+        # Safety net: ensure the first non-system message is not a bare
+        # ``assistant`` message.  Providers like GLM reject system→assistant
+        # with error 1214.  This can happen when upstream truncation (e.g.
+        # _snip_history) drops the only user message.  Insert a synthetic
+        # user message to keep the sequence valid.
+        for i, msg in enumerate(merged):
+            if msg.get("role") != "system":
+                if msg.get("role") == "assistant" and not msg.get("tool_calls"):
+                    merged.insert(i, {"role": "user", "content": _SYNTHETIC_USER_CONTENT})
+                break
+
         return merged
 
-    async def _execute_tools(
-        self,
-        spec: AgentRunSpec,
-        tool_calls: list[ToolCallRequest],
-        external_lookup_counts: dict[str, int],
-    ) -> tuple[list[Any], list[dict[str, str]], BaseException | None]:
-        batches = self._partition_tool_batches(spec, tool_calls)
-        tool_results: list[tuple[Any, dict[str, str], BaseException | None]] = []
-        for batch in batches:
-            if spec.concurrent_tools and len(batch) > 1:
-                tool_results.extend(await asyncio.gather(*(
-                    self._run_tool(spec, tool_call, external_lookup_counts)
-                    for tool_call in batch
-                )))
+    @staticmethod
+    def _strip_image_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        """Replace image_url blocks with text placeholder. Returns None if no images found."""
+        found = False
+        result = []
+        for msg in messages:
+            content = msg.get("content")
+            if isinstance(content, list):
+                new_content = []
+                for b in content:
+                    if isinstance(b, dict) and b.get("type") == "image_url":
+                        path = (b.get("_meta") or {}).get("path", "")
+                        placeholder = image_placeholder_text(path, empty="[image omitted]")
+                        new_content.append({"type": "text", "text": placeholder})
+                        found = True
+                    else:
+                        new_content.append(b)
+                result.append({**msg, "content": new_content})
             else:
-                for tool_call in batch:
-                    tool_results.append(await self._run_tool(spec, tool_call, external_lookup_counts))
-
-        results: list[Any] = []
-        events: list[dict[str, str]] = []
-        fatal_error: BaseException | None = None
-        for result, event, error in tool_results:
-            results.append(result)
-            events.append(event)
-            if error is not None and fatal_error is None:
-                fatal_error = error
-        return results, events, fatal_error
-
-    async def _run_tool(
-        self,
-        spec: AgentRunSpec,
-        tool_call: ToolCallRequest,
-        external_lookup_counts: dict[str, int],
-    ) -> tuple[Any, dict[str, str], BaseException | None]:
-        _hint = "\n\n[Analyze the error above and try a different approach.]"
-        lookup_error = repeated_external_lookup_error(
-            tool_call.name,
-            tool_call.arguments,
-            external_lookup_counts,
-        )
-        if lookup_error:
-            event = {
-                "name": tool_call.name,
-                "status": "error",
-                "detail": "repeated external lookup blocked",
-            }
-            if spec.fail_on_tool_error:
-                return lookup_error + _hint, event, RuntimeError(lookup_error)
-            return lookup_error + _hint, event, None
-        prepare_call = getattr(spec.tools, "prepare_call", None)
-        tool, params, prep_error = None, tool_call.arguments, None
-        if callable(prepare_call):
-            try:
-                prepared = prepare_call(tool_call.name, tool_call.arguments)
-                if isinstance(prepared, tuple) and len(prepared) == 3:
-                    tool, params, prep_error = prepared
-            except Exception:
-                pass
-        if prep_error:
-            event = {
-                "name": tool_call.name,
-                "status": "error",
-                "detail": prep_error.split(": ", 1)[-1][:120],
-            }
-            return prep_error + _hint, event, RuntimeError(prep_error) if spec.fail_on_tool_error else None
-        try:
-            if tool is not None:
-                result = await tool.execute(**params)
-            else:
-                result = await spec.tools.execute(tool_call.name, params)
-        except asyncio.CancelledError:
-            raise
-        except BaseException as exc:
-            event = {
-                "name": tool_call.name,
-                "status": "error",
-                "detail": str(exc),
-            }
-            if spec.fail_on_tool_error:
-                return f"Error: {type(exc).__name__}: {exc}", event, exc
-            return f"Error: {type(exc).__name__}: {exc}", event, None
-
-        if isinstance(result, str) and result.startswith("Error"):
-            event = {
-                "name": tool_call.name,
-                "status": "error",
-                "detail": result.replace("\n", " ").strip()[:120],
-            }
-            if spec.fail_on_tool_error:
-                return result + _hint, event, RuntimeError(result)
-            return result + _hint, event, None
-
-        detail = "" if result is None else str(result)
-        detail = detail.replace("\n", " ").strip()
-        if not detail:
-            detail = "(empty)"
-        elif len(detail) > 120:
-            detail = detail[:120] + "..."
-        return result, {"name": tool_call.name, "status": "ok", "detail": detail}, None
-
-    async def _emit_checkpoint(
-        self,
-        spec: AgentRunSpec,
-        payload: dict[str, Any],
-    ) -> None:
-        callback = spec.checkpoint_callback
-        if callback is not None:
-            await callback(payload)
+                result.append(msg)
+        return result if found else None
 
     @staticmethod
-    def _append_final_message(messages: list[dict[str, Any]], content: str | None) -> None:
-        if not content:
-            return
-        if (
-            messages
-            and messages[-1].get("role") == "assistant"
-            and not messages[-1].get("tool_calls")
-        ):
-            if messages[-1].get("content") == content:
-                return
-            messages[-1] = build_assistant_message(content)
-            return
-        messages.append(build_assistant_message(content))
+    def _strip_image_content_inplace(messages: list[dict[str, Any]]) -> bool:
+        """Replace image_url blocks with text placeholder *in-place*.
 
-    def _normalize_tool_result(
-        self,
-        spec: AgentRunSpec,
-        tool_call_id: str,
-        tool_name: str,
-        result: Any,
-    ) -> Any:
-        result = ensure_nonempty_tool_result(tool_name, result)
+        Mutates the content lists of the original message dicts so that
+        callers holding references to those dicts also see the stripped
+        version.
+        """
+        found = False
+        for msg in messages:
+            content = msg.get("content")
+            if isinstance(content, list):
+                for i, b in enumerate(content):
+                    if isinstance(b, dict) and b.get("type") == "image_url":
+                        path = (b.get("_meta") or {}).get("path", "")
+                        placeholder = image_placeholder_text(path, empty="[image omitted]")
+                        content[i] = {"type": "text", "text": placeholder}
+                        found = True
+        return found
+
+    async def _safe_chat(self, **kwargs: Any) -> LLMResponse:
+        """Call chat() and convert unexpected exceptions to error responses."""
         try:
-            content = maybe_persist_tool_result(
-                spec.workspace,
-                spec.session_key,
-                tool_call_id,
-                result,
-                max_chars=spec.max_tool_result_chars,
-            )
+            return await self.chat(**kwargs)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
-            logger.warning(
-                "Tool result persist failed for {} in {}: {}; using raw result",
-                tool_call_id,
-                spec.session_key or "default",
-                exc,
-            )
-            content = result
-        if isinstance(content, str) and len(content) > spec.max_tool_result_chars:
-            return truncate_text(content, spec.max_tool_result_chars)
-        return content
+            return LLMResponse(content=f"Error calling LLM: {exc}", finish_reason="error")
 
-    def _apply_tool_result_budget(
+    async def chat_stream(
         self,
-        spec: AgentRunSpec,
         messages: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        updated = messages
-        for idx, message in enumerate(messages):
-            if message.get("role") != "tool":
-                continue
-            normalized = self._normalize_tool_result(
-                spec,
-                str(message.get("tool_call_id") or f"tool_{idx}"),
-                str(message.get("name") or "tool"),
-                message.get("content"),
-            )
-            if normalized != message.get("content"):
-                if updated is messages:
-                    updated = [dict(m) for m in messages]
-                updated[idx]["content"] = normalized
-        return updated
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        reasoning_effort: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        on_content_delta: Callable[[str], Awaitable[None]] | None = None,
+    ) -> LLMResponse:
+        """Stream a chat completion, calling *on_content_delta* for each text chunk.
 
-    def _snip_history(
+        Returns the same ``LLMResponse`` as :meth:`chat`.  The default
+        implementation falls back to a non-streaming call and delivers the
+        full content as a single delta.  Providers that support native
+        streaming should override this method.
+        """
+        response = await self.chat(
+            messages=messages, tools=tools, model=model,
+            max_tokens=max_tokens, temperature=temperature,
+            reasoning_effort=reasoning_effort, tool_choice=tool_choice,
+        )
+        if on_content_delta and response.content:
+            await on_content_delta(response.content)
+        return response
+
+    async def _safe_chat_stream(self, **kwargs: Any) -> LLMResponse:
+        """Call chat_stream() and convert unexpected exceptions to error responses."""
+        try:
+            return await self.chat_stream(**kwargs)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            return LLMResponse(content=f"Error calling LLM: {exc}", finish_reason="error")
+
+    async def chat_stream_with_retry(
         self,
-        spec: AgentRunSpec,
         messages: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        if not messages or not spec.context_window_tokens:
-            return messages
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        max_tokens: object = _SENTINEL,
+        temperature: object = _SENTINEL,
+        reasoning_effort: object = _SENTINEL,
+        tool_choice: str | dict[str, Any] | None = None,
+        on_content_delta: Callable[[str], Awaitable[None]] | None = None,
+        retry_mode: str = "standard",
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
+    ) -> LLMResponse:
+        """Call chat_stream() with retry on transient provider failures."""
+        if max_tokens is self._SENTINEL or max_tokens is None:
+            max_tokens = self.generation.max_tokens
+        if temperature is self._SENTINEL or temperature is None:
+            temperature = self.generation.temperature
+        if reasoning_effort is self._SENTINEL:
+            reasoning_effort = self.generation.reasoning_effort
 
-        provider_max_tokens = getattr(getattr(self.provider, "generation", None), "max_tokens", 4096)
-        max_output = spec.max_tokens if isinstance(spec.max_tokens, int) else (
-            provider_max_tokens if isinstance(provider_max_tokens, int) else 4096
+        kw: dict[str, Any] = dict(
+            messages=messages, tools=tools, model=model,
+            max_tokens=max_tokens, temperature=temperature,
+            reasoning_effort=reasoning_effort, tool_choice=tool_choice,
+            on_content_delta=on_content_delta,
         )
-        budget = spec.context_block_limit or (
-            spec.context_window_tokens - max_output - _SNIP_SAFETY_BUFFER
-        )
-        if budget <= 0:
-            return messages
-
-        estimate, _ = estimate_prompt_tokens_chain(
-            self.provider,
-            spec.model,
+        return await self._run_with_retry(
+            self._safe_chat_stream,
+            kw,
             messages,
-            spec.tools.get_definitions(),
+            retry_mode=retry_mode,
+            on_retry_wait=on_retry_wait,
         )
-        if estimate <= budget:
-            return messages
 
-        system_messages = [dict(msg) for msg in messages if msg.get("role") == "system"]
-        non_system = [dict(msg) for msg in messages if msg.get("role") != "system"]
-        if not non_system:
-            return messages
-
-        system_tokens = sum(estimate_message_tokens(msg) for msg in system_messages)
-        remaining_budget = max(128, budget - system_tokens)
-        kept: list[dict[str, Any]] = []
-        kept_tokens = 0
-        for message in reversed(non_system):
-            msg_tokens = estimate_message_tokens(message)
-            if kept and kept_tokens + msg_tokens > remaining_budget:
-                break
-            kept.append(message)
-            kept_tokens += msg_tokens
-        kept.reverse()
-
-        if kept:
-            for i, message in enumerate(kept):
-                if message.get("role") == "user":
-                    kept = kept[i:]
-                    break
-            start = find_legal_message_start(kept)
-            if start:
-                kept = kept[start:]
-        if not kept:
-            kept = non_system[-min(len(non_system), 4) :]
-            start = find_legal_message_start(kept)
-            if start:
-                kept = kept[start:]
-        return system_messages + kept
-
-    def _partition_tool_batches(
+    async def chat_with_retry(
         self,
-        spec: AgentRunSpec,
-        tool_calls: list[ToolCallRequest],
-    ) -> list[list[ToolCallRequest]]:
-        if not spec.concurrent_tools:
-            return [[tool_call] for tool_call in tool_calls]
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        max_tokens: object = _SENTINEL,
+        temperature: object = _SENTINEL,
+        reasoning_effort: object = _SENTINEL,
+        tool_choice: str | dict[str, Any] | None = None,
+        retry_mode: str = "standard",
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
+    ) -> LLMResponse:
+        """Call chat() with retry on transient provider failures.
 
-        batches: list[list[ToolCallRequest]] = []
-        current: list[ToolCallRequest] = []
-        for tool_call in tool_calls:
-            get_tool = getattr(spec.tools, "get", None)
-            tool = get_tool(tool_call.name) if callable(get_tool) else None
-            can_batch = bool(tool and getattr(tool, "concurrency_safe", False))
-            if can_batch:
-                current.append(tool_call)
+        Parameters default to ``self.generation`` when not explicitly passed,
+        so callers no longer need to thread temperature / max_tokens /
+        reasoning_effort through every layer. Explicit ``None`` is also
+        normalized to the provider's generation defaults so that downstream
+        ``_build_kwargs`` never sees ``None`` for ``max_tokens`` / ``temperature``
+        (which would crash ``max(1, max_tokens)``).
+        """
+        if max_tokens is self._SENTINEL or max_tokens is None:
+            max_tokens = self.generation.max_tokens
+        if temperature is self._SENTINEL or temperature is None:
+            temperature = self.generation.temperature
+        if reasoning_effort is self._SENTINEL:
+            reasoning_effort = self.generation.reasoning_effort
+
+        kw: dict[str, Any] = dict(
+            messages=messages, tools=tools, model=model,
+            max_tokens=max_tokens, temperature=temperature,
+            reasoning_effort=reasoning_effort, tool_choice=tool_choice,
+        )
+        return await self._run_with_retry(
+            self._safe_chat,
+            kw,
+            messages,
+            retry_mode=retry_mode,
+            on_retry_wait=on_retry_wait,
+        )
+
+    @classmethod
+    def _extract_retry_after(cls, content: str | None) -> float | None:
+        text = (content or "").lower()
+        patterns = (
+            r"retry after\s+(\d+(?:\.\d+)?)\s*(ms|milliseconds|s|sec|secs|seconds|m|min|minutes)?",
+            r"try again in\s+(\d+(?:\.\d+)?)\s*(ms|milliseconds|s|sec|secs|seconds|m|min|minutes)",
+            r"wait\s+(\d+(?:\.\d+)?)\s*(ms|milliseconds|s|sec|secs|seconds|m|min|minutes)\s*before retry",
+            r"retry[_-]?after[\"'\s:=]+(\d+(?:\.\d+)?)",
+        )
+        for idx, pattern in enumerate(patterns):
+            match = re.search(pattern, text)
+            if not match:
                 continue
-            if current:
-                batches.append(current)
-                current = []
-            batches.append([tool_call])
-        if current:
-            batches.append(current)
-        return batches
+            value = float(match.group(1))
+            unit = match.group(2) if idx < 3 else "s"
+            return cls._to_retry_seconds(value, unit)
+        return None
+
+    @classmethod
+    def _to_retry_seconds(cls, value: float, unit: str | None = None) -> float:
+        normalized_unit = (unit or "s").lower()
+        if normalized_unit in {"ms", "milliseconds"}:
+            return max(0.1, value / 1000.0)
+        if normalized_unit in {"m", "min", "minutes"}:
+            return max(0.1, value * 60.0)
+        return max(0.1, value)
+
+    @classmethod
+    def _extract_retry_after_from_headers(cls, headers: Any) -> float | None:
+        if not headers:
+            return None
+
+        def _header_value(name: str) -> Any:
+            if hasattr(headers, "get"):
+                value = headers.get(name) or headers.get(name.title())
+                if value is not None:
+                    return value
+            if isinstance(headers, dict):
+                for key, value in headers.items():
+                    if isinstance(key, str) and key.lower() == name.lower():
+                        return value
+            return None
+
+        try:
+            retry_ms = _header_value("retry-after-ms")
+            if retry_ms is not None:
+                value = float(retry_ms) / 1000.0
+                if value > 0:
+                    return value
+        except (TypeError, ValueError):
+            pass
+
+        retry_after = _header_value("retry-after")
+        if retry_after is None:
+            return None
+        retry_after_text = str(retry_after).strip()
+        if not retry_after_text:
+            return None
+        if re.fullmatch(r"\d+(?:\.\d+)?", retry_after_text):
+            return cls._to_retry_seconds(float(retry_after_text), "s")
+        try:
+            retry_at = parsedate_to_datetime(retry_after_text)
+        except Exception:
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        remaining = (retry_at - datetime.now(retry_at.tzinfo)).total_seconds()
+        return max(0.1, remaining)
+
+    @classmethod
+    def _extract_retry_after_from_response(cls, response: LLMResponse) -> float | None:
+        if response.error_retry_after_s is not None and response.error_retry_after_s > 0:
+            return response.error_retry_after_s
+        if response.retry_after is not None and response.retry_after > 0:
+            return response.retry_after
+        return cls._extract_retry_after(response.content)
+
+    async def _sleep_with_heartbeat(
+        self,
+        delay: float,
+        *,
+        attempt: int,
+        persistent: bool,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
+    ) -> None:
+        remaining = max(0.0, delay)
+        while remaining > 0:
+            if on_retry_wait:
+                kind = "persistent retry" if persistent else "retry"
+                await on_retry_wait(
+                    f"Model request failed, {kind} in {max(1, int(round(remaining)))}s "
+                    f"(attempt {attempt})."
+                )
+            chunk = min(remaining, self._RETRY_HEARTBEAT_CHUNK)
+            await asyncio.sleep(chunk)
+            remaining -= chunk
+
+    async def _run_with_retry(
+        self,
+        call: Callable[..., Awaitable[LLMResponse]],
+        kw: dict[str, Any],
+        original_messages: list[dict[str, Any]],
+        *,
+        retry_mode: str,
+        on_retry_wait: Callable[[str], Awaitable[None]] | None,
+    ) -> LLMResponse:
+        attempt = 0
+        delays = list(self._CHAT_RETRY_DELAYS)
+        persistent = retry_mode == "persistent"
+        last_response: LLMResponse | None = None
+        last_error_key: str | None = None
+        identical_error_count = 0
+        while True:
+            attempt += 1
+            response = await call(**kw)
+            if response.finish_reason != "error":
+                return response
+            last_response = response
+            error_key = ((response.content or "").strip().lower() or None)
+            if error_key and error_key == last_error_key:
+                identical_error_count += 1
+            else:
+                last_error_key = error_key
+                identical_error_count = 1 if error_key else 0
+
+            if not self._is_transient_response(response):
+                stripped = self._strip_image_content(original_messages)
+                if stripped is not None and stripped != kw["messages"]:
+                    logger.warning(
+                        "Non-transient LLM error with image content, retrying without images"
+                    )
+                    retry_kw = dict(kw)
+                    retry_kw["messages"] = stripped
+                    result = await call(**retry_kw)
+                    # Permanently strip images from the original messages so
+                    # subsequent iterations do not repeat the error-retry cycle.
+                    if result.finish_reason != "error":
+                        self._strip_image_content_inplace(original_messages)
+                    return result
+                return response
+
+            if persistent and identical_error_count >= self._PERSISTENT_IDENTICAL_ERROR_LIMIT:
+                logger.warning(
+                    "Stopping persistent retry after {} identical transient errors: {}",
+                    identical_error_count,
+                    (response.content or "")[:120].lower(),
+                )
+                if on_retry_wait:
+                    await on_retry_wait(
+                        f"Persistent retry stopped after {identical_error_count} identical errors."
+                    )
+                return response
+
+            if not persistent and attempt > len(delays):
+                logger.warning(
+                    "LLM request failed after {} retries, giving up: {}",
+                    attempt,
+                    (response.content or "")[:120].lower(),
+                )
+                if on_retry_wait:
+                    await on_retry_wait(
+                        f"Model request failed after {attempt} retries, giving up."
+                    )
+                break
+
+            base_delay = delays[min(attempt - 1, len(delays) - 1)]
+            delay = self._extract_retry_after_from_response(response) or base_delay
+            if persistent:
+                delay = min(delay, self._PERSISTENT_MAX_DELAY)
+
+            logger.warning(
+                "LLM transient error (attempt {}{}), retrying in {}s: {}",
+                attempt,
+                "+" if persistent and attempt > len(delays) else f"/{len(delays)}",
+                int(round(delay)),
+                (response.content or "")[:120].lower(),
+            )
+            await self._sleep_with_heartbeat(
+                delay,
+                attempt=attempt,
+                persistent=persistent,
+                on_retry_wait=on_retry_wait,
+            )
+
+        return last_response if last_response is not None else await call(**kw)
+
+    @abstractmethod
+    def get_default_model(self) -> str:
+        """Get the default model for this provider."""
+        pass

@@ -135,6 +135,9 @@ class ReadFileTool(_FsTool):
     _DEFAULT_LIMIT = 2000
     _MAX_PDF_PAGES = 20
 
+    parameters: dict[str, Any] # type: ignore[assignment]
+
+
     @property
     def name(self) -> str:
         return "read_file"
@@ -348,6 +351,8 @@ class ReadFileTool(_FsTool):
 )
 class WriteFileTool(_FsTool):
     """Write content to a file."""
+
+    parameters: dict[str, Any] # type: ignore[assignment]
 
     @property
     def name(self) -> str:
@@ -663,7 +668,7 @@ class EditFileTool(_FsTool):
     _MARKDOWN_EXTS = frozenset({".md", ".mdx", ".markdown"})
 
     # Type hint for Pylance: decorator injects this at runtime
-    parameters: dict[str, Any]  # type: ignore[assignment]
+    parameters: dict[str, Any] # type: ignore[assignment]
 
     @property
     def name(self) -> str:
@@ -851,6 +856,8 @@ class ListDirTool(_FsTool):
         "dist", "build", ".tox", ".mypy_cache", ".pytest_cache",
         ".ruff_cache", ".coverage", "htmlcov",
     }
+
+    parameters: dict[str, Any] # type: ignore[assignment]
 
     @property
     def name(self) -> str:
