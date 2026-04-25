@@ -7,7 +7,10 @@ import pytest
 from blackcat.agent.context import ContextManager
 from blackcat.agent.summarizer import Summarizer
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
-from tests.conftest import LLM_TEST_MODEL
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import LLM_TEST_MODEL
 
 
 @pytest.fixture

@@ -17,7 +17,9 @@ from loguru import logger
 
 from blackcat.agent.handler import MessageHandler
 from blackcat.agent.hook import AgentHook, AgentHookContext, CompositeHook
-from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
+from blackcat.agent.runner import AgentRunner, AgentRunSpec
+
+_MAX_INJECTIONS_PER_TURN = 10  # Default limit for mid-turn message injections
 from blackcat.agent.tools.lens import (
     LensCodeActionTool,
     LensCompletionTool,
