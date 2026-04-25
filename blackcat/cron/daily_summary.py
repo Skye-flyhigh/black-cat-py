@@ -9,8 +9,8 @@ from typing import Any
 
 from loguru import logger
 
-from blackcat.agent.memory import Journal
 from blackcat.agent.summarizer import Summarizer
+from blackcat.memory.memory import Journal
 from blackcat.session.manager import SessionManager
 from blackcat.utils.time import today_date
 

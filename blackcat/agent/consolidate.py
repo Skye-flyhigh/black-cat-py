@@ -14,7 +14,7 @@ from flask import render_template
 from loguru import logger
 from websockets import asyncio
 
-from blackcat.agent.memory import MemoryStore
+from blackcat.memory.memory import MemoryStore
 from blackcat.providers.base import LLMProvider
 from blackcat.session.manager import Session, SessionManager
 from blackcat.utils.formatting import truncate_text

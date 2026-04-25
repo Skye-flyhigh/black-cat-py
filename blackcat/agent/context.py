@@ -11,8 +11,8 @@ import tiktoken
 import tomli_w
 from loguru import logger
 
-from blackcat.agent.memory import Journal
 from blackcat.agent.skills import SkillsLoader
+from blackcat.memory.memory import Journal
 from blackcat.session.manager import Session, SessionManager
 from blackcat.utils.formatting import build_assistant_message
 from blackcat.utils.helpers import extract_system_message
@@ -95,7 +95,7 @@ IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST
         session_manager: SessionManager | None = None,
     ):
         self.workspace = workspace
-        self.journal = Journal(workspace)
+        self.journal = Journal(workspace) #FIXME: journaling is gone replaced by upstream memorystore
         self.skills = SkillsLoader(workspace)
         self.summarizer = summarizer
         self.sessions = session_manager or SessionManager(workspace)
@@ -480,7 +480,7 @@ You are within blackcat harness/structure.
         session_block = await self._build_session_block(author, channel, chat_id, history)
         blocks.append({"type": "text", "text": session_block})
 
-        # Dynamic: journal
+        # FIXME: Dynamic: journal
         journal_context = self.journal.get_memory_context()
         if journal_context:
             blocks.append({"type": "text", "text": f"# Journal\n\n{journal_context}"})
