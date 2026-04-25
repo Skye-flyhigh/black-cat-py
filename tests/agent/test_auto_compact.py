@@ -2,17 +2,17 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from nanobot.agent.loop import AgentLoop
-from nanobot.bus.events import InboundMessage
-from nanobot.bus.queue import MessageBus
-from nanobot.config.schema import AgentDefaults
-from nanobot.command import CommandContext
-from nanobot.providers.base import LLMResponse
+from blackcat.agent.loop import AgentLoop
+from blackcat.bus.events import InboundMessage
+from blackcat.bus.queue import MessageBus
+from blackcat.command import CommandContext
+from blackcat.config.schema import AgentDefaults
+from blackcat.providers.base import LLMResponse
 
 
 def _make_loop(tmp_path: Path, session_ttl_minutes: int = 15) -> AgentLoop:

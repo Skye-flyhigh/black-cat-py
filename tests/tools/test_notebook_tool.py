@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from nanobot.agent.tools.notebook import NotebookEditTool
+from blackcat.agent.tools.notebook import NotebookEditTool
 
 
 def _make_notebook(cells: list[dict] | None = None, nbformat: int = 4, nbformat_minor: int = 5) -> dict:

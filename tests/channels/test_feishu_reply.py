@@ -9,7 +9,7 @@ import pytest
 
 # Check optional Feishu dependencies before running tests
 try:
-    from nanobot.channels import feishu
+    from blackcat.channels import feishu
     FEISHU_AVAILABLE = getattr(feishu, "FEISHU_AVAILABLE", False)
 except ImportError:
     FEISHU_AVAILABLE = False
@@ -17,10 +17,9 @@ except ImportError:
 if not FEISHU_AVAILABLE:
     pytest.skip("Feishu dependencies not installed (lark-oapi)", allow_module_level=True)
 
-from nanobot.bus.events import OutboundMessage
-from nanobot.bus.queue import MessageBus
-from nanobot.channels.feishu import FeishuChannel, FeishuConfig
-
+from blackcat.bus.events import OutboundMessage
+from blackcat.bus.queue import MessageBus
+from blackcat.channels.feishu import FeishuChannel, FeishuConfig
 
 # ---------------------------------------------------------------------------
 # Helpers

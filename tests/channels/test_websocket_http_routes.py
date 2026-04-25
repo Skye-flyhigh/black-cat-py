@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from nanobot.channels.websocket import WebSocketChannel
-from nanobot.session.manager import Session, SessionManager
+from blackcat.channels.websocket import WebSocketChannel
+from blackcat.session.manager import Session, SessionManager
 
 _PORT = 29900
 

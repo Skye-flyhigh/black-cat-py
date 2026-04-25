@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from nanobot.agent.tools.cron import CronTool
-from nanobot.agent.tools.registry import ToolRegistry
+from blackcat.agent.tools.cron import CronTool
+from blackcat.agent.tools.registry import ToolRegistry
 
 
 class _SvcStub:

@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import websockets
-
-from nanobot.channels.websocket import WebSocketChannel
-from nanobot.bus.events import OutboundMessage
 from ws_test_client import WsTestClient, issue_token, issue_token_ok
+
+from blackcat.bus.events import OutboundMessage
+from blackcat.channels.websocket import WebSocketChannel
 
 
 def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:

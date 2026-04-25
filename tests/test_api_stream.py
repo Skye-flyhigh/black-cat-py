@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 
-from nanobot.api.server import (
-    _sse_chunk,
+from blackcat.api.server import (
     _SSE_DONE,
+    _sse_chunk,
     create_app,
 )
 
