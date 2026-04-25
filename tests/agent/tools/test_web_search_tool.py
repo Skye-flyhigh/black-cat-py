@@ -59,6 +59,8 @@ async def test_searxng_search(monkeypatch):
             "results": [{"title": "Result", "url": "https://example.com", "content": "SearXNG result"}]
         })
 
+    # Mock DNS validation to allow the fake domain
+    monkeypatch.setattr("blackcat.security.network.validate_url_target", lambda url: (True, ""))
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
     tool = _tool(provider="searxng", base_url="https://searx.example")
     result = await tool.execute(query="test")

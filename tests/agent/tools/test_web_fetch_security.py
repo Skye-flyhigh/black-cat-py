@@ -42,7 +42,7 @@ async def test_web_fetch_blocks_localhost():
 
 @pytest.mark.asyncio
 async def test_web_fetch_result_contains_untrusted_flag():
-    """When fetch succeeds, result JSON must include untrusted=True and the banner."""
+    """When fetch succeeds from unknown domain, result must include external marker."""
     tool = WebFetchTool()
 
     fake_html = "<html><head><title>Test</title></head><body><p>Hello world</p></body></html>"
@@ -65,7 +65,49 @@ async def test_web_fetch_result_contains_untrusted_flag():
 
     data = json.loads(result)
     assert data.get("untrusted") is True
-    assert "[External content" in data.get("text", "")
+    # Unknown domains get light wrapper with source marker
+    assert "external content from" in data.get("text", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_trusted_domain_minimal_wrapper():
+    """Trusted domains like docs.python.org get minimal wrapping."""
+    tool = WebFetchTool()
+
+    fake_html = "<html><head><title>Python Docs</title></head><body><p>Documentation</p></body></html>"
+
+    class FakeResponse:
+        status_code = 200
+        url = "https://docs.python.org/3/library/stdtypes.html"
+        text = fake_html
+        headers = {"content-type": "text/html"}
+        def raise_for_status(self): pass
+        def json(self): return {}
+
+    async def _fake_get(self, url, **kwargs):
+        return FakeResponse()
+
+    with patch("blackcat.security.network.socket.getaddrinfo", _fake_resolve_public), \
+         patch("httpx.AsyncClient.get", _fake_get):
+        result = await tool.execute(url="https://docs.python.org/3/library/stdtypes.html")
+
+    data = json.loads(result)
+    # Trusted domains get minimal source marker, not full warning
+    assert "<!-- source:" in data.get("text", "")
+    assert "UNTRUSTED" not in data.get("text", "")
+    assert "⚠️" not in data.get("text", "")
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_blocks_high_risk_domain():
+    """High-risk domains like pastebin are blocked at validation."""
+    tool = WebFetchTool()
+
+    result = await tool.execute(url="https://pastebin.com/raw/abc123")
+    data = json.loads(result)
+
+    assert "error" in data
+    assert "high-risk" in data["error"].lower()
 
 
 @pytest.mark.asyncio
