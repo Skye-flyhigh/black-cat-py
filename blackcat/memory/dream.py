@@ -4,9 +4,9 @@ from typing import Any
 from flask import render_template
 from loguru import logger
 
-from blackcat.agent.memory import MemoryStore
 from blackcat.agent.runner import AgentRunner, AgentRunSpec
 from blackcat.agent.tools.registry import ToolRegistry
+from blackcat.memory.memory import MemoryStore
 from blackcat.providers.base import LLMProvider
 from blackcat.utils.formatting import truncate_text
 

@@ -3,8 +3,8 @@
 from datetime import datetime
 
 import pytest
-
 from blackcat.agent.memory import MemoryStore
+
 from blackcat.utils.time import today_date
 
 
