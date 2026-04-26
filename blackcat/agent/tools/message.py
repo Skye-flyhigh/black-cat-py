@@ -4,7 +4,11 @@ from contextvars import ContextVar
 from typing import Any, Awaitable, Callable
 
 from blackcat.agent.tools.base import Tool, tool_parameters
-from blackcat.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
+from blackcat.agent.tools.schema import (
+    ArraySchema,
+    StringSchema,
+    tool_parameters_schema,
+)
 from blackcat.bus.events import OutboundMessage
 
 
@@ -15,7 +19,7 @@ from blackcat.bus.events import OutboundMessage
         chat_id=StringSchema("Optional: target chat/user ID"),
         media=ArraySchema(
             StringSchema(""),
-            description="Optional: list of file paths to attach (images, video, audio, documents)",
+            description="Optional: list of file paths to attach (images, audio, documents)",
         ),
         buttons=ArraySchema(
             ArraySchema(StringSchema("Button label")),
@@ -26,6 +30,9 @@ from blackcat.bus.events import OutboundMessage
 )
 class MessageTool(Tool):
     """Tool to send messages to users on chat channels."""
+
+    # Type hint for Pylance: decorator injects this at runtime
+    parameters: dict[str, Any]  # type: ignore[assignment]
 
     def __init__(
         self,
@@ -88,7 +95,7 @@ class MessageTool(Tool):
         buttons: list[list[str]] | None = None,
         **kwargs: Any
     ) -> str:
-        from blackcat.utils.helpers import strip_think
+        from blackcat.utils.formatting import strip_think
         content = strip_think(content)
 
         if buttons is not None:

@@ -6,7 +6,7 @@ from typing import Any
 
 from loguru import logger
 
-from blackcat.utils.helpers import stringify_text_blocks
+from blackcat.utils.formatting import stringify_text_blocks
 
 _MAX_REPEAT_EXTERNAL_LOOKUPS = 2
 
@@ -15,13 +15,14 @@ EMPTY_FINAL_RESPONSE_MESSAGE = (
     "Please try again or narrow the task."
 )
 
-FINALIZATION_RETRY_PROMPT = (
-    "Please provide your response to the user based on the conversation above."
-)
-
 LENGTH_RECOVERY_PROMPT = (
     "Output limit reached. Continue exactly where you left off "
     "— no recap, no apology. Break remaining work into smaller steps if needed."
+)
+
+FINALIZATION_RETRY_PROMPT = (
+    "You have already finished the tool work. Do not call any more tools. "
+    "Using only the conversation and tool results above, provide the final answer for the user now."
 )
 
 
@@ -54,11 +55,9 @@ def build_finalization_retry_message() -> dict[str, str]:
     """A short no-tools-allowed prompt for final answer recovery."""
     return {"role": "user", "content": FINALIZATION_RETRY_PROMPT}
 
-
 def build_length_recovery_message() -> dict[str, str]:
     """Prompt the model to continue after hitting output token limit."""
     return {"role": "user", "content": LENGTH_RECOVERY_PROMPT}
-
 
 def external_lookup_signature(tool_name: str, arguments: dict[str, Any]) -> str | None:
     """Stable signature for repeated external lookups we want to throttle."""

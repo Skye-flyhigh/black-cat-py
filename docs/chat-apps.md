@@ -170,7 +170,7 @@ blackcat gateway
 Install Matrix dependencies first:
 
 ```bash
-pip install blackcat-ai[matrix]
+pip install nanobot-ai[matrix]
 ```
 
 > [!NOTE]
@@ -580,7 +580,7 @@ blackcat gateway
 **1. Install the optional dependency**
 
 ```bash
-pip install blackcat-ai[wecom]
+pip install nanobot-ai[wecom]
 ```
 
 **2. Create a WeCom AI Bot**
@@ -619,7 +619,7 @@ blackcat gateway
 **1. Install the optional dependency**
 
 ```bash
-pip install blackcat-ai[msteams]
+pip install nanobot-ai[msteams]
 ```
 
 **2. Create a Teams / Azure bot app registration**

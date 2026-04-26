@@ -24,7 +24,7 @@ uv tool install blackcat-ai
 **Install from PyPI** (stable release)
 
 ```bash
-pip install blackcat-ai
+pip install nanobot-ai
 ```
 
 ### Update to latest version

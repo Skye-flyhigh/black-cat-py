@@ -20,7 +20,7 @@ class RunResult:
     messages: list[dict[str, Any]]
 
 
-class Nanobot:
+class Blackcat:
     """Programmatic facade for running the blackcat agent.
 
     Usage::
@@ -162,6 +162,11 @@ def _make_provider(config: Any) -> Any:
         )
     else:
         from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+
+        # Ollama cloud models (:cloud suffix) require an API key
+        if spec and spec.name == "ollama" and config._is_cloud_model(model):
+            if not p or not p.api_key:
+                raise ValueError(f"No API key configured for Ollama's cloud model {model}")
 
         provider = OpenAICompatProvider(
             api_key=p.api_key if p else None,

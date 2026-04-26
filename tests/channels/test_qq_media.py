@@ -1,7 +1,7 @@
 """Tests for QQ channel media support: helpers, send, inbound, and upload."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

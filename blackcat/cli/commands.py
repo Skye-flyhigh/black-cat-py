@@ -7,18 +7,7 @@ import signal
 import sys
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any
-
-# Force UTF-8 encoding for Windows console
-if sys.platform == "win32":
-    if sys.stdout.encoding != "utf-8":
-        os.environ["PYTHONIOENCODING"] = "utf-8"
-        # Re-open stdout/stderr with UTF-8 encoding
-        try:
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass
+from typing import Any, Callable
 
 import typer
 from loguru import logger
@@ -33,6 +22,26 @@ from rich.table import Table
 from rich.text import Text
 
 from blackcat import __logo__, __version__
+from blackcat.cli.stream import StreamRenderer, ThinkingSpinner
+from blackcat.config.paths import get_workspace_path, is_default_workspace
+from blackcat.config.schema import Config
+from blackcat.utils.helpers import sync_workspace_templates
+from blackcat.utils.restart import (
+    consume_restart_notice_from_env,
+    format_restart_completed_message,
+    should_show_cli_restart_notice,
+)
+
+# Force UTF-8 encoding for Windows console
+if sys.platform == "win32":
+    if sys.stdout.encoding != "utf-8":
+        os.environ["PYTHONIOENCODING"] = "utf-8"
+        # Re-open stdout/stderr with UTF-8 encoding
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 
 class SafeFileHistory(FileHistory):
@@ -46,15 +55,7 @@ class SafeFileHistory(FileHistory):
     def store_string(self, string: str) -> None:
         safe = string.encode("utf-8", errors="surrogateescape").decode("utf-8", errors="replace")
         super().store_string(safe)
-from blackcat.cli.stream import StreamRenderer, ThinkingSpinner
-from blackcat.config.paths import get_workspace_path, is_default_workspace
-from blackcat.config.schema import Config
-from blackcat.utils.helpers import sync_workspace_templates
-from blackcat.utils.restart import (
-    consume_restart_notice_from_env,
-    format_restart_completed_message,
-    should_show_cli_restart_notice,
-)
+
 
 app = typer.Typer(
     name="blackcat",
@@ -85,7 +86,6 @@ def _flush_pending_tty_input() -> None:
 
     try:
         import termios
-
         termios.tcflush(fd, termios.TCIFLUSH)
         return
     except Exception:
@@ -108,7 +108,6 @@ def _restore_terminal() -> None:
         return
     try:
         import termios
-
         termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _SAVED_TERM_ATTRS)
     except Exception:
         pass
@@ -121,7 +120,6 @@ def _init_prompt_session() -> None:
     # Save terminal state so we can restore it on exit
     try:
         import termios
-
         _SAVED_TERM_ATTRS = termios.tcgetattr(sys.stdin.fileno())
     except Exception:
         pass
@@ -274,15 +272,15 @@ def main(
 @app.command()
 def onboard(
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+    config_file: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
     wizard: bool = typer.Option(False, "--wizard", help="Use interactive wizard"),
 ):
     """Initialize blackcat configuration and workspace."""
     from blackcat.config.loader import get_config_path, load_config, save_config, set_config_path
     from blackcat.config.schema import Config
 
-    if config:
-        config_path = Path(config).expanduser().resolve()
+    if config_file:
+        config_path = Path(config_file).expanduser().resolve()
         set_config_path(config_path)
         console.print(f"[dim]Using config: {config_path}[/dim]")
     else:
@@ -351,9 +349,8 @@ def onboard(
 
     agent_cmd = 'blackcat agent -m "Hello!"'
     gateway_cmd = "blackcat gateway"
-    if config:
-        agent_cmd += f" --config {config_path}"
-        gateway_cmd += f" --config {config_path}"
+    agent_cmd += f" --config {config_path}"
+    gateway_cmd += f" --config {config_path}"
 
     console.print(f"\n{__logo__} blackcat is ready!")
     console.print("\nNext steps:")
@@ -365,7 +362,7 @@ def onboard(
         console.print("     Get one at: https://openrouter.ai/keys")
         console.print(f"  2. Chat: [cyan]{agent_cmd}[/cyan]")
     console.print(
-        "\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/blackcat#-chat-apps[/dim]"
+        "\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]"
     )
 
 
@@ -444,6 +441,8 @@ def _make_provider(config: Config):
     elif backend == "azure_openai":
         from blackcat.providers.azure_openai_provider import AzureOpenAIProvider
 
+        # Validation above ensures p is not None and has api_key/api_base
+        assert p is not None
         provider = AzureOpenAIProvider(
             api_key=p.api_key,
             api_base=p.api_base,
@@ -454,7 +453,6 @@ def _make_provider(config: Config):
         provider = GitHubCopilotProvider(default_model=model)
     elif backend == "anthropic":
         from blackcat.providers.anthropic_provider import AnthropicProvider
-
         provider = AnthropicProvider(
             api_key=p.api_key if p else None,
             api_base=config.get_api_base(model),
@@ -464,9 +462,18 @@ def _make_provider(config: Config):
     else:
         from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
+        api_base = config.get_api_base(model)
+
+        # Ollama cloud models (:cloud suffix) require an API key
+        if spec and spec.name == "ollama" and config._is_cloud_model(model):
+            if not p or not p.api_key:
+                console.print(f"[red]Error: Ollama cloud model {model} requires an API key.[/red]")
+                console.print("Set it in ~/.blackcat/config.json under providers.ollama section")
+                raise typer.Exit(1)
+
         provider = OpenAICompatProvider(
             api_key=p.api_key if p else None,
-            api_base=config.get_api_base(model),
+            api_base=api_base,
             default_model=model,
             extra_headers=p.extra_headers if p else None,
             spec=spec,
@@ -532,7 +539,6 @@ def _migrate_cron_store(config: "Config") -> None:
     if legacy_path.is_file() and not new_path.exists():
         new_path.parent.mkdir(parents=True, exist_ok=True)
         import shutil
-
         shutil.move(str(legacy_path), str(new_path))
 
 
@@ -942,7 +948,6 @@ def _run_gateway(
             console.print("\nShutting down...")
         except Exception:
             import traceback
-
             console.print("\n[red]Error: Gateway crashed unexpectedly[/red]")
             console.print(traceback.format_exc())
         finally:
@@ -971,7 +976,7 @@ def agent(
     message: str = typer.Option(None, "--message", "-m", help="Message to send to the agent"),
     session_id: str = typer.Option("cli:direct", "--session", "-s", help="Session ID"),
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
-    config: str | None = typer.Option(None, "--config", "-c", help="Config file path"),
+    config_file: str | None = typer.Option(None, "--config", "-c", help="Config file path"),
     markdown: bool = typer.Option(True, "--markdown/--no-markdown", help="Render assistant output as Markdown"),
     logs: bool = typer.Option(False, "--logs/--no-logs", help="Show blackcat runtime logs during chat"),
 ):
@@ -982,7 +987,7 @@ def agent(
     from blackcat.bus.queue import MessageBus
     from blackcat.cron.service import CronService
 
-    config = _load_runtime_config(config, workspace)
+    config = _load_runtime_config(config_file, workspace)
     sync_workspace_templates(config.workspace_path)
 
     bus = MessageBus()
@@ -1432,14 +1437,13 @@ provider_app = typer.Typer(help="Manage providers")
 app.add_typer(provider_app, name="provider")
 
 
-_LOGIN_HANDLERS: dict[str, callable] = {}
+_LOGIN_HANDLERS: dict[str, Callable] = {}
 
 
 def _register_login(name: str):
     def decorator(fn):
         _LOGIN_HANDLERS[name] = fn
         return fn
-
     return decorator
 
 
@@ -1470,7 +1474,6 @@ def provider_login(
 def _login_openai_codex() -> None:
     try:
         from oauth_cli_kit import get_token, login_oauth_interactive
-
         token = None
         try:
             token = get_token()

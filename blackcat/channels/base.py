@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from loguru import logger
 
 from blackcat.bus.events import InboundMessage, OutboundMessage
 from blackcat.bus.queue import MessageBus
+from blackcat.channels.utils import MEDIA_DIR
 
 
 class BaseChannel(ABC):
@@ -18,14 +20,37 @@ class BaseChannel(ABC):
 
     Each channel (Telegram, Discord, etc.) should implement this interface
     to integrate with the blackcat message bus.
+
+    Provides common functionality:
+    - Message validation before sending
+    - Typing indicator management (opt-in)
+    - Media file download helpers
+    - Permission checking
     """
 
     name: str = "base"
-    display_name: str = "Base"
-    transcription_provider: str = "groq"
-    transcription_api_key: str = ""
-    transcription_api_base: str = ""
-    transcription_language: str | None = None
+    display_name: str = "Base Channel"
+
+    # Subclasses can override this to enable typing indicators.
+    # Set to 0 to disable, or a positive number for the interval in seconds.
+    typing_interval: float = 0
+
+    @classmethod
+    def default_config(cls) -> dict:
+        """Return default configuration for this channel."""
+        return {}
+
+    async def login(self, force: bool = False) -> bool:
+        """
+        Perform channel-specific interactive login (e.g. QR code scan).
+
+        Args:
+            force: If True, ignore existing credentials and force re-authentication.
+
+        Returns True if already authenticated or login succeeds.
+        Override in subclasses that support interactive login.
+        """
+        return True
 
     def __init__(self, config: Any, bus: MessageBus):
         """
@@ -38,41 +63,15 @@ class BaseChannel(ABC):
         self.config = config
         self.bus = bus
         self._running = False
+        self._typing_tasks: dict[str, asyncio.Task] = {}
+        self.transcription_api_key: str | None = None
 
-    async def transcribe_audio(self, file_path: str | Path) -> str:
-        """Transcribe an audio file via Whisper (OpenAI or Groq). Returns empty string on failure."""
-        if not self.transcription_api_key:
-            return ""
-        try:
-            if self.transcription_provider == "openai":
-                from blackcat.providers.transcription import OpenAITranscriptionProvider
-                provider = OpenAITranscriptionProvider(
-                    api_key=self.transcription_api_key,
-                    api_base=self.transcription_api_base or None,
-                    language=self.transcription_language or None,
-                )
-            else:
-                from blackcat.providers.transcription import GroqTranscriptionProvider
-                provider = GroqTranscriptionProvider(
-                    api_key=self.transcription_api_key,
-                    api_base=self.transcription_api_base or None,
-                    language=self.transcription_language or None,
-                )
-            return await provider.transcribe(file_path)
-        except Exception as e:
-            logger.warning("{}: audio transcription failed: {}", self.name, e)
-            return ""
-
-    async def login(self, force: bool = False) -> bool:
-        """
-        Perform channel-specific interactive login (e.g. QR code scan).
-
-        Args:
-            force: If True, ignore existing credentials and force re-authentication.
-
-        Returns True if already authenticated or login succeeds.
-        Override in subclasses that support interactive login.
-        """
+    def _require_config(self, **fields: Any) -> bool:
+        """Check that required config fields are set. Logs error and returns False if any missing."""
+        for name, value in fields.items():
+            if not value:
+                logger.error("{} {} not configured", self.name, name)
+                return False
         return True
 
     @abstractmethod
@@ -92,53 +91,153 @@ class BaseChannel(ABC):
         """Stop the channel and clean up resources."""
         pass
 
-    @abstractmethod
     async def send(self, msg: OutboundMessage) -> None:
         """
         Send a message through this channel.
 
+        Validates the message before delegating to channel-specific implementation.
+        Stops any typing indicator for this chat before sending.
+
         Args:
             msg: The message to send.
+        """
+        # Stop typing indicator before sending (or on empty)
+        await self._stop_typing(msg.chat_id)
 
-        Implementations should raise on delivery failure so the channel manager
-        can apply any retry policy in one place.
+        if not msg.content or not msg.content.strip():
+            logger.warning("Skipping empty message to {} on {}", msg.chat_id, self.name)
+            return
+
+        await self._send_impl(msg)
+
+    @abstractmethod
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """
+        Channel-specific send implementation.
+
+        Called by send() after validation. Subclasses must implement this.
+
+        Args:
+            msg: The validated message to send.
         """
         pass
 
-    async def send_delta(self, chat_id: str, delta: str, metadata: dict[str, Any] | None = None) -> None:
-        """Deliver a streaming text chunk.
+    async def send_delta(self, chat_id: str, content: str, metadata: dict[str, Any]) -> None:
+        """
+        Send a streaming delta message.
 
-        Override in subclasses to enable streaming. Implementations should
-        raise on delivery failure so the channel manager can retry.
+        Override in subclasses that support streaming updates.
 
-        Streaming contract: ``_stream_delta`` is a chunk, ``_stream_end`` ends
-        the current segment, and stateful implementations must key buffers by
-        ``_stream_id`` rather than only by ``chat_id``.
+        Args:
+            chat_id: The chat ID to send to.
+            content: The delta content to send.
+            metadata: Additional metadata about the stream.
+        """
+        # Default: no-op, subclasses can override for streaming support
+        pass
+
+    async def _start_typing(self, chat_id: str) -> None:
+        """
+        Start showing a typing indicator for a chat.
+
+        Only works if typing_interval > 0 and _send_typing_indicator is implemented.
+        """
+        if self.typing_interval <= 0:
+            return
+
+        await self._stop_typing(chat_id)
+        self._typing_tasks[chat_id] = asyncio.create_task(self._typing_loop(chat_id))
+
+    async def _stop_typing(self, chat_id: str) -> None:
+        """Stop the typing indicator for a chat."""
+        task = self._typing_tasks.pop(chat_id, None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def _typing_loop(self, chat_id: str) -> None:
+        """Repeatedly send typing indicator until cancelled."""
+        try:
+            while self._running:
+                await self._send_typing_indicator(chat_id)
+                await asyncio.sleep(self.typing_interval)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug("Typing indicator stopped for {}: {}", chat_id, e)
+
+    async def _send_typing_indicator(self, chat_id: str) -> None:
+        """
+        Send a single typing indicator to the platform.
+
+        Subclasses should override this if they support typing indicators.
         """
         pass
 
-    @property
-    def supports_streaming(self) -> bool:
-        """True when config enables streaming AND this subclass implements send_delta."""
-        cfg = self.config
-        streaming = cfg.get("streaming", False) if isinstance(cfg, dict) else getattr(cfg, "streaming", False)
-        return bool(streaming) and type(self).send_delta is not BaseChannel.send_delta
+    def _stop_all_typing(self) -> None:
+        """Cancel all typing indicator tasks. Call this in stop()."""
+        for task in self._typing_tasks.values():
+            task.cancel()
+        self._typing_tasks.clear()
+
+
+    def _get_media_dir(self) -> Path:
+        """Get the media directory, creating it if needed."""
+        MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+        return MEDIA_DIR
+
+    async def _download_media(
+        self,
+        data: bytes,
+        filename: str,
+        file_id: str | None = None,
+    ) -> Path:
+        """
+        Save media data to the media directory.
+
+        Args:
+            data: The file content as bytes.
+            filename: Original filename (used for extension).
+            file_id: Optional unique ID to prefix the filename.
+
+        Returns:
+            Path to the saved file.
+        """
+        media_dir = self._get_media_dir()
+
+        # Sanitize filename
+        safe_name = filename.replace("/", "_").replace("\\", "_")
+        if file_id:
+            safe_name = f"{file_id[:16]}_{safe_name}"
+
+        file_path = media_dir / safe_name
+        file_path.write_bytes(data)
+
+        return file_path
+
 
     def is_allowed(self, sender_id: str) -> bool:
-        """Check if *sender_id* is permitted.  Empty list → deny all; ``"*"`` → allow all."""
-        if isinstance(self.config, dict):
-            if "allow_from" in self.config:
-                allow_list = self.config.get("allow_from")
-            else:
-                allow_list = self.config.get("allowFrom", [])
-        else:
-            allow_list = getattr(self.config, "allow_from", [])
+        """Check if *sender_id* is permitted.  Empty list -> deny all; ``"*"`` -> allow all."""
+        allow_list = getattr(self.config, "allow_from", [])
         if not allow_list:
             logger.warning("{}: allow_from is empty — all access denied", self.name)
             return False
         if "*" in allow_list:
+            logger.debug("{}: access granted to {} (wildcard)", self.name, sender_id)
             return True
-        return str(sender_id) in allow_list
+        sender_str = str(sender_id)
+        allowed = sender_str in allow_list or any(
+            p in allow_list for p in sender_str.split("|") if p
+        )
+        if allowed:
+            logger.debug("{}: access granted to {}", self.name, sender_id)
+        else:
+            logger.warning("{}: access denied to {} (not in allow_from)", self.name, sender_id)
+        return allowed
+
 
     async def _handle_message(
         self,
@@ -147,7 +246,6 @@ class BaseChannel(ABC):
         content: str,
         media: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
-        session_key: str | None = None,
     ) -> None:
         """
         Handle an incoming message from the chat platform.
@@ -158,21 +256,15 @@ class BaseChannel(ABC):
             sender_id: The sender's identifier.
             chat_id: The chat/channel identifier.
             content: Message text content.
-            media: Optional list of media URLs.
+            media: Optional list of media file paths.
             metadata: Optional channel-specific metadata.
-            session_key: Optional session key override (e.g. thread-scoped sessions).
         """
         if not self.is_allowed(sender_id):
             logger.warning(
-                "Access denied for sender {} on channel {}. "
-                "Add them to allowFrom list in config to grant access.",
-                sender_id, self.name,
+                f"Access denied for sender {sender_id} on channel {self.name}. "
+                f"Add them to allowFrom list in config to grant access."
             )
             return
-
-        meta = metadata or {}
-        if self.supports_streaming:
-            meta = {**meta, "_wants_stream": True}
 
         msg = InboundMessage(
             channel=self.name,
@@ -180,16 +272,10 @@ class BaseChannel(ABC):
             chat_id=str(chat_id),
             content=content,
             media=media or [],
-            metadata=meta,
-            session_key_override=session_key,
+            metadata=metadata or {},
         )
 
         await self.bus.publish_inbound(msg)
-
-    @classmethod
-    def default_config(cls) -> dict[str, Any]:
-        """Return default config for onboard. Override in plugins to auto-populate config.json."""
-        return {"enabled": False}
 
     @property
     def is_running(self) -> bool:

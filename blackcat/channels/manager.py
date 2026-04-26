@@ -12,7 +12,10 @@ from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
 from blackcat.config.schema import Config
-from blackcat.utils.restart import consume_restart_notice_from_env, format_restart_completed_message
+from blackcat.utils.restart import (
+    consume_restart_notice_from_env,
+    format_restart_completed_message,
+)
 
 if TYPE_CHECKING:
     from blackcat.session.manager import SessionManager

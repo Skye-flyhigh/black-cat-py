@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from blackcat.bus.events import InboundMessage, OutboundMessage
+from blackcat.bus.events import InboundMessage
 from blackcat.providers.base import LLMResponse
 
 

@@ -3,6 +3,7 @@
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in blackcat, please report it by:
+If you discover a security vulnerability in blackcat, please report it by:
 
 1. **DO NOT** open a public GitHub issue
 2. Create a private security advisory on GitHub or contact the repository maintainers (xubinrencs@gmail.com)
@@ -28,6 +29,7 @@ chmod 600 ~/.blackcat/config.json
 ```
 
 **Recommendations:**
+- Store API keys in `~/.blackcat/config.json` with file permissions set to `0600`
 - Store API keys in `~/.blackcat/config.json` with file permissions set to `0600`
 - Consider using environment variables for sensitive keys
 - Use OS keyring/credential manager for production deployments
@@ -68,6 +70,7 @@ The `exec` tool can execute shell commands. While dangerous command patterns are
 - ✅ Review all tool usage in agent logs
 - ✅ Understand what commands the agent is running
 - ✅ Use a dedicated user account with limited privileges
+- ✅ Never run blackcat as root
 - ✅ Never run blackcat as root
 - ❌ Don't disable security checks
 - ❌ Don't run on systems with sensitive data without careful review
@@ -125,6 +128,7 @@ pip-audit
 
 # Update to latest secure versions
 pip install --upgrade blackcat-ai
+pip install --upgrade blackcat-ai
 ```
 
 For Node.js dependencies (WhatsApp bridge):
@@ -134,8 +138,8 @@ npm audit
 npm audit fix
 ```
 
-**Important Notes:**
-- Keep `litellm` updated to the latest version for security fixes
+**Security History:**
+- **March 2026**: Removed `litellm` entirely due to supply chain attack (CVE-2024-6825, CVE-2025-0330, CVE-2025-0628, CVE-2025-11203). Migrated to native OpenAI and Anthropic SDKs. See [advisory](https://github.com/HKUDS/nanobot/discussions/2445) for details.
 - We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
 - Run `pip-audit` or `npm audit` regularly
 - Subscribe to security advisories for blackcat and its dependencies
@@ -148,11 +152,14 @@ For production use:
    ```bash
    # Run in a container or VM
    docker run --rm -it python:3.11
-   pip install blackcat-ai
+   pip install nanobot-ai
+   pip install nanobot-ai
    ```
 
 2. **Use a Dedicated User**
    ```bash
+   sudo useradd -m -s /bin/bash blackcat
+   sudo -u blackcat blackcat gateway
    sudo useradd -m -s /bin/bash blackcat
    sudo -u blackcat blackcat gateway
    ```
@@ -162,11 +169,15 @@ For production use:
    chmod 700 ~/.blackcat
    chmod 600 ~/.blackcat/config.json
    chmod 700 ~/.blackcat/whatsapp-auth
+   chmod 700 ~/.blackcat
+   chmod 600 ~/.blackcat/config.json
+   chmod 700 ~/.blackcat/whatsapp-auth
    ```
 
 4. **Enable Logging**
    ```bash
    # Configure log monitoring
+   tail -f ~/.blackcat/logs/blackcat.log
    tail -f ~/.blackcat/logs/blackcat.log
    ```
 
@@ -178,6 +189,7 @@ For production use:
 6. **Regular Updates**
    ```bash
    # Check for updates weekly
+   pip install --upgrade blackcat-ai
    pip install --upgrade blackcat-ai
    ```
 
@@ -201,6 +213,7 @@ For production use:
 - **Logs may contain sensitive information** - secure log files appropriately
 - **LLM providers see your prompts** - review their privacy policies
 - **Chat history is stored locally** - protect the `~/.blackcat` directory
+- **Chat history is stored locally** - protect the `~/.blackcat` directory
 - **API keys are in plain text** - use OS keyring for production
 
 ### 10. Incident Response
@@ -210,6 +223,7 @@ If you suspect a security breach:
 1. **Immediately revoke compromised API keys**
 2. **Review logs for unauthorized access**
    ```bash
+   grep "Access denied" ~/.blackcat/logs/blackcat.log
    grep "Access denied" ~/.blackcat/logs/blackcat.log
    ```
 3. **Check for unexpected file modifications**
@@ -253,6 +267,7 @@ If you suspect a security breach:
 ## Security Checklist
 
 Before deploying blackcat:
+Before deploying blackcat:
 
 - [ ] API keys stored securely (not in code)
 - [ ] Config file permissions set to 0600
@@ -271,6 +286,8 @@ Before deploying blackcat:
 **Last Updated**: 2026-04-05
 
 For the latest security updates and announcements, check:
+- GitHub Security Advisories: https://github.com/HKUDS/blackcat/security/advisories
+- Release Notes: https://github.com/HKUDS/blackcat/releases
 - GitHub Security Advisories: https://github.com/HKUDS/blackcat/security/advisories
 - Release Notes: https://github.com/HKUDS/blackcat/releases
 

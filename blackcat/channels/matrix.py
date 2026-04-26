@@ -38,7 +38,7 @@ try:
     from nio.exceptions import EncryptionError
 except ImportError as e:
     raise ImportError(
-        "Matrix dependencies not installed. Run: pip install blackcat-ai[matrix]"
+        "Matrix dependencies not installed. Run: pip install nanobot-ai[matrix]"
     ) from e
 
 from blackcat.bus.events import OutboundMessage
@@ -535,7 +535,7 @@ class MatrixChannel(BaseChannel):
                 return
 
             await self._stop_typing_keepalive(chat_id, clear_typing=True)
-            
+
             content = _build_matrix_text_content(
                 buf.text,
                 buf.event_id,
@@ -549,7 +549,7 @@ class MatrixChannel(BaseChannel):
             buf = _StreamBuf()
             self._stream_bufs[chat_id] = buf
         buf.text += delta
-    
+
         if not buf.text.strip():
             return
 

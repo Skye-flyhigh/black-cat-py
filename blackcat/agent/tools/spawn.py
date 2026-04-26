@@ -46,6 +46,23 @@ class SpawnTool(Tool):
             "and use a dedicated subdirectory when helpful."
         )
 
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+        "type": "object",
+        "properties": {
+            "task": {
+                "type": "string",
+                "description": "The task for the subagent to complete",
+            },
+            "label": {
+                "type": "string",
+                "description": "Optional short label for the task (for display)",
+            },
+        },
+        "required": ["task"],
+    }
+
     async def execute(self, task: str, label: str | None = None, **kwargs: Any) -> str:
         """Spawn a subagent to execute the given task."""
         return await self._manager.spawn(

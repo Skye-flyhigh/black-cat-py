@@ -13,7 +13,12 @@ from loguru import logger
 from blackcat.agent.hook import AgentHook, AgentHookContext
 from blackcat.agent.runner import AgentRunner, AgentRunSpec
 from blackcat.agent.skills import BUILTIN_SKILLS_DIR
-from blackcat.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from blackcat.agent.tools.filesystem import (
+    EditFileTool,
+    ListDirTool,
+    ReadFileTool,
+    WriteFileTool,
+)
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.agent.tools.search import GlobTool, GrepTool
 from blackcat.agent.tools.shell import ExecTool

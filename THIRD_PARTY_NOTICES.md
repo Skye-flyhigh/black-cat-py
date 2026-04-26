@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 The following third-party components are redistributed as part of the packaged
-blackcat Python distribution (`pip install blackcat-ai`).
+blackcat Python distribution (`pip install nanobot-ai`).
 
 ---
 

@@ -28,6 +28,6 @@ def _resolve_version() -> str:
 __version__ = _resolve_version()
 __logo__ = "🐈"
 
-from blackcat.blackcat import Nanobot, RunResult
+from blackcat.blackcat import Blackcat, RunResult
 
-__all__ = ["Nanobot", "RunResult"]
+__all__ = ["Blackcat", "RunResult"]

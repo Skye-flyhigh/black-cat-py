@@ -15,12 +15,9 @@ from blackcat.agent.hook import AgentHook, AgentHookContext
 from blackcat.agent.tools.ask import AskUserInterrupt
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from blackcat.utils.formatting import build_assistant_message
 from blackcat.utils.helpers import (
-    build_assistant_message,
-    estimate_message_tokens,
-    estimate_prompt_tokens_chain,
     find_legal_message_start,
-    maybe_persist_tool_result,
     truncate_text,
 )
 from blackcat.utils.prompt_templates import render_template
@@ -32,6 +29,8 @@ from blackcat.utils.runtime import (
     is_blank_text,
     repeated_external_lookup_error,
 )
+from blackcat.utils.tokens import estimate_message_tokens, estimate_prompt_tokens_chain
+from blackcat.utils.tools import maybe_persist_tool_result
 
 _DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
 _PERSISTED_MODEL_ERROR_PLACEHOLDER = "[Assistant reply unavailable due to model error.]"

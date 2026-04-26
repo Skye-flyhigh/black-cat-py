@@ -5,12 +5,12 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import makeWASocket, {
-    extractMessageContent as baileysExtractMessageContent,
-    DisconnectReason,
-    downloadMediaMessage,
-    fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore,
-    useMultiFileAuthState,
+  extractMessageContent as baileysExtractMessageContent,
+  DisconnectReason,
+  downloadMediaMessage,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
 
 import { Boom } from '@hapi/boom';
@@ -90,6 +90,7 @@ export class WhatsAppClient {
       version,
       logger,
       printQRInTerminal: false,
+      browser: ['blackcat', 'cli', VERSION],
       browser: ['blackcat', 'cli', VERSION],
       syncFullHistory: false,
       markOnlineOnConnect: false,

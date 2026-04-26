@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from blackcat.blackcat import Nanobot, RunResult
 
 
@@ -126,7 +127,6 @@ def test_workspace_override(tmp_path):
 
 def test_sdk_make_provider_uses_github_copilot_backend():
     from blackcat.blackcat import _make_provider
-
     from blackcat.config.schema import Config
 
     config = Config.model_validate(

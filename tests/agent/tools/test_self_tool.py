@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel
@@ -755,7 +755,6 @@ class TestCheckpointCallback:
     @pytest.mark.asyncio
     async def test_checkpoint_updates_phase_and_iteration(self):
         """The _on_checkpoint callback should update status.phase and iteration."""
-        import asyncio
 
         from blackcat.agent.subagent import SubagentStatus
 

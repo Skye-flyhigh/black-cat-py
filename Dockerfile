@@ -17,10 +17,13 @@ WORKDIR /app
 # Install Python dependencies first (cached layer)
 COPY pyproject.toml README.md LICENSE ./
 RUN mkdir -p blackcat bridge && touch blackcat/__init__.py && \
+RUN mkdir -p blackcat bridge && touch blackcat/__init__.py && \
     uv pip install --system --no-cache . && \
+    rm -rf blackcat bridge
     rm -rf blackcat bridge
 
 # Copy the full source and install
+COPY blackcat/ blackcat/
 COPY blackcat/ blackcat/
 COPY bridge/ bridge/
 RUN uv pip install --system --no-cache .

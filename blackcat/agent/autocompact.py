@@ -18,7 +18,7 @@ class AutoCompact:
     _RECENT_SUFFIX_MESSAGES = 8
 
     def __init__(self, sessions: SessionManager, consolidator: Consolidator,
-                 session_ttl_minutes: int = 0):
+                session_ttl_minutes: int = 0):
         self.sessions = sessions
         self.consolidator = consolidator
         self._ttl = session_ttl_minutes

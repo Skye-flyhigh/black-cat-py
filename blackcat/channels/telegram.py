@@ -21,7 +21,13 @@ from telegram import (
     Update,
 )
 from telegram.error import BadRequest, NetworkError, TimedOut
-from telegram.ext import Application, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 from telegram.request import HTTPXRequest
 
 from blackcat.bus.events import OutboundMessage

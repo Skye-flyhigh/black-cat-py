@@ -8,7 +8,6 @@
 - Stale detection with content-equality fallback
 """
 
-import os
 import time
 
 import pytest

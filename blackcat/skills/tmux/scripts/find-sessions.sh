@@ -10,7 +10,7 @@ List tmux sessions on a socket (default tmux socket if none provided).
 Options:
   -L, --socket       tmux socket name (passed to tmux -L)
   -S, --socket-path  tmux socket path (passed to tmux -S)
-  -A, --all          scan all sockets under NANOBOT_TMUX_SOCKET_DIR
+  -A, --all          scan all sockets under BLACKCAT_TMUX_SOCKET_DIR
   -q, --query        case-insensitive substring to filter session names
   -h, --help         show this help
 USAGE
@@ -20,7 +20,11 @@ socket_name=""
 socket_path=""
 query=""
 scan_all=false
+<<<<<<< HEAD
 socket_dir="${NANOBOT_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/blackcat-tmux-sockets}"
+=======
+socket_dir="${BLACKCAT_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/blackcat-tmux-sockets}"
+>>>>>>> 3bc777a1eadfcd7e0b5b2efe8e995f5fbd1da5a7
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

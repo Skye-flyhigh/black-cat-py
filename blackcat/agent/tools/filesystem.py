@@ -16,7 +16,7 @@ from blackcat.agent.tools.schema import (
     tool_parameters_schema,
 )
 from blackcat.config.paths import get_media_dir
-from blackcat.utils.helpers import build_image_content_blocks, detect_image_mime
+from blackcat.utils.media import build_image_content_blocks, detect_image_mime
 
 
 def _resolve_path(
@@ -32,7 +32,7 @@ def _resolve_path(
     resolved = p.resolve()
     if allowed_dir:
         media_path = get_media_dir().resolve()
-        all_dirs = [allowed_dir] + [media_path] + (extra_allowed_dirs or []) 
+        all_dirs = [allowed_dir] + [media_path] + (extra_allowed_dirs or [])
         if not any(_is_under(resolved, d) for d in all_dirs):
             raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
     return resolved
@@ -134,6 +134,9 @@ class ReadFileTool(_FsTool):
     _MAX_CHARS = 128_000
     _DEFAULT_LIMIT = 2000
     _MAX_PDF_PAGES = 20
+
+    parameters: dict[str, Any] # type: ignore[assignment]
+
 
     @property
     def name(self) -> str:
@@ -299,9 +302,9 @@ class ReadFileTool(_FsTool):
         parts: list[str] = []
         for i in range(start, end + 1):
             page = doc[i]
-            text = page.get_text().strip()
+            text: str = page.get_text()  # type: ignore[union-attr]
             if text:
-                parts.append(f"--- Page {i + 1} ---\n{text}")
+                parts.append(f"--- Page {i + 1} ---\n{text.strip()}")
         doc.close()
 
         if not parts:
@@ -348,6 +351,8 @@ class ReadFileTool(_FsTool):
 )
 class WriteFileTool(_FsTool):
     """Write content to a file."""
+
+    parameters: dict[str, Any] # type: ignore[assignment]
 
     @property
     def name(self) -> str:
@@ -662,6 +667,9 @@ class EditFileTool(_FsTool):
     _MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024  # 1 GiB
     _MARKDOWN_EXTS = frozenset({".md", ".mdx", ".markdown"})
 
+    # Type hint for Pylance: decorator injects this at runtime
+    parameters: dict[str, Any] # type: ignore[assignment]
+
     @property
     def name(self) -> str:
         return "edit_file"
@@ -848,6 +856,8 @@ class ListDirTool(_FsTool):
         "dist", "build", ".tox", ".mypy_cache", ".pytest_cache",
         ".ruff_cache", ".coverage", "htmlcov",
     }
+
+    parameters: dict[str, Any] # type: ignore[assignment]
 
     @property
     def name(self) -> str:

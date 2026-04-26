@@ -1874,7 +1874,11 @@ async def test_drain_injections_extracts_content_from_inbound_messages():
 @pytest.mark.asyncio
 async def test_drain_injections_passes_limit_to_callback_when_supported():
     """Limit-aware callbacks can preserve overflow in their own queue."""
-    from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import (
+        _MAX_INJECTIONS_PER_TURN,
+        AgentRunner,
+        AgentRunSpec,
+    )
     from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()

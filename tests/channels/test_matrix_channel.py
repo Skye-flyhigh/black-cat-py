@@ -1606,7 +1606,7 @@ async def test_send_delta_on_error_stops_typing(monkeypatch) -> None:
     assert "!room:matrix.org" in channel._stream_bufs
     assert channel._stream_bufs["!room:matrix.org"].text == "Hello"
     assert len(client.room_send_calls) == 1
-    
+
     assert len(client.typing_calls) == 1
 
 
