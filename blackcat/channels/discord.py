@@ -18,7 +18,8 @@ from blackcat.channels.base import BaseChannel
 from blackcat.command.builtin import build_help_text
 from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
-from blackcat.utils.helpers import safe_filename, split_message
+from blackcat.utils.formatting import split_message
+from blackcat.utils.helpers import safe_filename
 
 DISCORD_AVAILABLE = importlib.util.find_spec("discord") is not None
 if TYPE_CHECKING:
@@ -354,8 +355,8 @@ class DiscordChannel(BaseChannel):
         self._running = False
         await self._reset_runtime_state(close_client=True)
 
-    async def send(self, msg: OutboundMessage) -> None:
-        """Send a message through Discord using discord.py."""
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """Internal send implementation - called by BaseChannel.send() after validation."""
         client = self._client
         if client is None or not client.is_ready():
             logger.warning("Discord client not ready; dropping outbound message")
@@ -455,7 +456,7 @@ class DiscordChannel(BaseChannel):
         full_content = self._compose_inbound_content(content, attachment_markers)
         metadata = self._build_inbound_metadata(message)
 
-        await self._start_typing(message.channel)
+        await self._start_typing(str(message.channel.id))
 
         # Add read receipt reaction immediately, working emoji after delay
         try:
@@ -622,14 +623,18 @@ class DiscordChannel(BaseChannel):
 
         return True
 
-    async def _start_typing(self, channel: Messageable) -> None:
+    async def _start_typing(self, chat_id: str) -> None:
         """Start periodic typing indicator for a channel."""
-        channel_id = self._channel_key(channel)
-        await self._stop_typing(channel_id)
+        channel_id = self._channel_key(chat_id)
+        await self._stop_typing(chat_id)
 
         async def typing_loop() -> None:
             while self._running:
                 try:
+                    # Resolve the channel object from chat_id for typing context
+                    channel = await self._resolve_channel(chat_id)
+                    if channel is None:
+                        return
                     async with channel.typing():
                         await asyncio.sleep(TYPING_INTERVAL_S)
                 except asyncio.CancelledError:
@@ -640,9 +645,9 @@ class DiscordChannel(BaseChannel):
 
         self._typing_tasks[channel_id] = asyncio.create_task(typing_loop())
 
-    async def _stop_typing(self, channel_id: str) -> None:
+    async def _stop_typing(self, chat_id: str) -> None:
         """Stop typing indicator for a channel."""
-        task = self._typing_tasks.pop(self._channel_key(channel_id), None)
+        task = self._typing_tasks.pop(self._channel_key(chat_id), None)
         if task is None:
             return
         task.cancel()

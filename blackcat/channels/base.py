@@ -96,15 +96,20 @@ class BaseChannel(ABC):
         Send a message through this channel.
 
         Validates the message before delegating to channel-specific implementation.
-        Stops any typing indicator for this chat before sending.
+        Stops any typing indicator for this chat before sending (except for progress messages).
 
         Args:
             msg: The message to send.
         """
-        # Stop typing indicator before sending (or on empty)
-        await self._stop_typing(msg.chat_id)
+        # Stop typing indicator before sending (or on empty), but keep it active for progress messages
+        is_progress = bool((msg.metadata or {}).get("_progress"))
+        if not is_progress:
+            await self._stop_typing(msg.chat_id)
 
-        if not msg.content or not msg.content.strip():
+        # Allow media-only messages (empty content is OK if media is present)
+        has_content = bool(msg.content and msg.content.strip())
+        has_media = bool(msg.media)
+        if not has_content and not has_media:
             logger.warning("Skipping empty message to {} on {}", msg.chat_id, self.name)
             return
 
@@ -276,6 +281,13 @@ class BaseChannel(ABC):
         )
 
         await self.bus.publish_inbound(msg)
+
+    @property
+    def supports_streaming(self) -> bool:
+        """True when config enables streaming AND this subclass implements send_delta."""
+        cfg = self.config
+        streaming = cfg.get("streaming", False) if isinstance(cfg, dict) else getattr(cfg, "streaming", False)
+        return bool(streaming) and type(self).send_delta is not BaseChannel.send_delta
 
     @property
     def is_running(self) -> bool:

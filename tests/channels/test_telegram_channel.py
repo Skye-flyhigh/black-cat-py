@@ -798,7 +798,9 @@ async def test_group_policy_mention_ignores_unmentioned_group_message() -> None:
         handled.append(kwargs)
 
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     await channel._on_message(_make_telegram_update(text="hello everyone"), None)
 
@@ -820,7 +822,9 @@ async def test_group_policy_mention_accepts_text_mention_and_caches_bot_identity
         handled.append(kwargs)
 
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     mention = SimpleNamespace(type="mention", offset=0, length=13)
     await channel._on_message(_make_telegram_update(text="@blackcat_test hi", entities=[mention]), None)
@@ -844,7 +848,9 @@ async def test_group_policy_mention_accepts_caption_mention() -> None:
         handled.append(kwargs)
 
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     mention = SimpleNamespace(type="mention", offset=0, length=13)
     await channel._on_message(
@@ -870,7 +876,9 @@ async def test_group_policy_mention_accepts_reply_to_bot() -> None:
         handled.append(kwargs)
 
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     reply = SimpleNamespace(from_user=SimpleNamespace(id=999))
     await channel._on_message(_make_telegram_update(text="reply", reply_to_message=reply), None)
@@ -892,7 +900,9 @@ async def test_group_policy_open_accepts_plain_group_message() -> None:
         handled.append(kwargs)
 
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     await channel._on_message(_make_telegram_update(text="hello group"), None)
 
@@ -964,7 +974,9 @@ async def test_on_message_includes_reply_context() -> None:
     async def capture_handle(**kwargs) -> None:
         handled.append(kwargs)
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     reply = SimpleNamespace(text="Hello", message_id=2, from_user=SimpleNamespace(id=1))
     update = _make_telegram_update(text="translate this", reply_to_message=reply)
@@ -1085,7 +1097,9 @@ async def test_on_message_attaches_reply_to_media_when_available(monkeypatch, tm
     async def capture_handle(**kwargs) -> None:
         handled.append(kwargs)
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     reply_with_photo = SimpleNamespace(
         text=None,
@@ -1124,7 +1138,9 @@ async def test_on_message_reply_to_media_fallback_when_download_fails() -> None:
     async def capture_handle(**kwargs) -> None:
         handled.append(kwargs)
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     reply_with_photo = SimpleNamespace(
         text=None,
@@ -1168,7 +1184,9 @@ async def test_on_message_reply_to_caption_and_media(monkeypatch, tmp_path) -> N
     async def capture_handle(**kwargs) -> None:
         handled.append(kwargs)
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     reply_with_caption_and_photo = SimpleNamespace(
         text=None,
@@ -1289,7 +1307,9 @@ async def test_on_message_location_content() -> None:
     async def capture_handle(**kwargs) -> None:
         handled.append(kwargs)
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     location = SimpleNamespace(latitude=48.8566, longitude=2.3522)
     update = _make_telegram_update(location=location)
@@ -1311,7 +1331,9 @@ async def test_on_message_location_with_text() -> None:
     async def capture_handle(**kwargs) -> None:
         handled.append(kwargs)
     channel._handle_message = capture_handle
-    channel._start_typing = lambda _chat_id: None
+    async def _no_op_typing(_chat_id: str) -> None:
+        pass
+    channel._start_typing = _no_op_typing  # type: ignore[method-assign]
 
     location = SimpleNamespace(latitude=51.5074, longitude=-0.1278)
     update = _make_telegram_update(text="meet me here", location=location)
