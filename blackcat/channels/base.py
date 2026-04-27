@@ -12,6 +12,7 @@ from loguru import logger
 from blackcat.bus.events import InboundMessage, OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.utils import MEDIA_DIR
+from blackcat.providers.transcription import GroqTranscriptionProvider, OpenAITranscriptionProvider
 
 
 class BaseChannel(ABC):
@@ -226,7 +227,13 @@ class BaseChannel(ABC):
 
     def is_allowed(self, sender_id: str) -> bool:
         """Check if *sender_id* is permitted.  Empty list -> deny all; ``"*"`` -> allow all."""
-        allow_list = getattr(self.config, "allow_from", [])
+        # Support both snake_case and camelCase config keys (dict or object)
+        if isinstance(self.config, dict):
+            allow_list = self.config.get("allow_from") or self.config.get("allowFrom") or []
+        else:
+            allow_list = getattr(self.config, "allow_from", None)
+            if allow_list is None:
+                allow_list = getattr(self.config, "allowFrom", [])
         if not allow_list:
             logger.warning("{}: allow_from is empty — all access denied", self.name)
             return False
@@ -234,9 +241,7 @@ class BaseChannel(ABC):
             logger.debug("{}: access granted to {} (wildcard)", self.name, sender_id)
             return True
         sender_str = str(sender_id)
-        allowed = sender_str in allow_list or any(
-            p in allow_list for p in sender_str.split("|") if p
-        )
+        allowed = sender_str in allow_list
         if allowed:
             logger.debug("{}: access granted to {}", self.name, sender_id)
         else:
@@ -293,3 +298,17 @@ class BaseChannel(ABC):
     def is_running(self) -> bool:
         """Check if the channel is running."""
         return self._running
+
+    async def transcribe_audio(self, file_path: str) -> str:
+        """Transcribe an audio file using the configured transcription provider."""
+        provider = getattr(self, "transcription_provider", "groq")
+        api_key = getattr(self, "transcription_api_key", None)
+        api_base = getattr(self, "transcription_api_base", None)
+        language = getattr(self, "transcription_language", None)
+
+        if provider == "openai":
+            p = OpenAITranscriptionProvider(api_key=api_key, api_base=api_base, language=language)
+        else:
+            p = GroqTranscriptionProvider(api_key=api_key, api_base=api_base, language=language)
+
+        return await p.transcribe(file_path)

@@ -518,7 +518,7 @@ class DingTalkChannel(BaseChannel):
             {"mediaId": media_id, "fileName": filename, "fileType": file_type},
         )
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send a message through DingTalk."""
         token = await self._get_access_token()
         if not token:

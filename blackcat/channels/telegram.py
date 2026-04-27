@@ -429,7 +429,7 @@ class TelegramChannel(BaseChannel):
 
         # Cancel all typing indicators
         for chat_id in list(self._typing_tasks):
-            self._stop_typing(chat_id)
+            await self._stop_typing(chat_id)
 
         for task in self._media_group_tasks.values():
             task.cancel()
@@ -647,7 +647,7 @@ class TelegramChannel(BaseChannel):
                 return
             if stream_id is not None and buf.stream_id is not None and buf.stream_id != stream_id:
                 return
-            self._stop_typing(chat_id)
+            await self._stop_typing(chat_id)
             if reply_to_message_id := meta.get("message_id"):
                 try:
                     await self._remove_reaction(chat_id, int(reply_to_message_id))

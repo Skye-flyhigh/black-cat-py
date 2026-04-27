@@ -494,7 +494,7 @@ class MatrixChannel(BaseChannel):
             return fail
         return None
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send outbound content; clear typing for non-progress messages."""
         if not self.client:
             return
@@ -525,7 +525,7 @@ class MatrixChannel(BaseChannel):
             if not is_progress:
                 await self._stop_typing_keepalive(msg.chat_id, clear_typing=True)
 
-    async def send_delta(self, chat_id: str, delta: str, metadata: dict[str, Any] | None = None) -> None:
+    async def send_delta(self, chat_id: str, content: str, metadata: dict[str, Any] | None = None) -> None:
         meta = metadata or {}
         relates_to = self._build_thread_relates_to(metadata)
 
@@ -548,7 +548,7 @@ class MatrixChannel(BaseChannel):
         if buf is None:
             buf = _StreamBuf()
             self._stream_bufs[chat_id] = buf
-        buf.text += delta
+        buf.text += content
 
         if not buf.text.strip():
             return

@@ -1140,7 +1140,7 @@ class WebSocketChannel(BaseChannel):
             logger.error("websocket{}send failed: {}", label, e)
             raise
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         # Snapshot the subscriber set so ConnectionClosed cleanups mid-iteration are safe.
         conns = list(self._subs.get(msg.chat_id, ()))
         if not conns:

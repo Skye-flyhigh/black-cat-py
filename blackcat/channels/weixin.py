@@ -939,7 +939,7 @@ class WeixinChannel(BaseChannel):
         finally:
             pass
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         if not self._client or not self._token:
             logger.warning("WeChat client not initialized or not authenticated")
             return
@@ -1087,7 +1087,7 @@ class WeixinChannel(BaseChannel):
         task._typing_stop_event = stop_event  # type: ignore[attr-defined]
         self._typing_tasks[chat_id] = task
 
-    async def _stop_typing(self, chat_id: str, *, clear_remote: bool) -> None:
+    async def _stop_typing(self, chat_id: str, *, clear_remote: bool = True) -> None:
         """Stop typing indicator for a chat."""
         task = self._typing_tasks.pop(chat_id, None)
         if task and not task.done():

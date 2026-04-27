@@ -375,7 +375,7 @@ class DiscordChannel(BaseChannel):
                 await self._clear_reactions(msg.chat_id)
 
     async def send_delta(
-        self, chat_id: str, delta: str, metadata: dict[str, Any] | None = None
+        self, chat_id: str, content: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """Progressive Discord delivery: send once, then edit until the stream ends."""
         client = self._client
@@ -404,7 +404,7 @@ class DiscordChannel(BaseChannel):
         elif buf.stream_id is None:
             buf.stream_id = stream_id
 
-        buf.text += delta
+        buf.text += content
         if not buf.text.strip():
             return
 
