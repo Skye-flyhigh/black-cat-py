@@ -10,10 +10,11 @@ import platform
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from loguru import logger
+
 from blackcat.agent.skills import SkillsLoader
 from blackcat.memory.memory import MemoryStore
 from blackcat.session.manager import SessionManager
-from blackcat.utils.formatting import build_assistant_message
 from blackcat.utils.helpers import (
     current_time_str,
     detect_image_mime,
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
 
 
 
-class ContextManager:
+class ContextBuilder:
     """
     Assembles LLM context from identity, trust, skills, and memory.
 
@@ -35,12 +36,13 @@ class ContextManager:
     - build_system_prompt() - same signature
     - build_messages() - same signature
     - _merge_message_content() - same behavior
-    - add_tool_result() - same signature
-    - add_assistant_message() - same signature
 
     Black-cat extensions:
     - Trust system (get_trust_level, get_allowed_tools)
     - Lens LSP integration for code diagnostics
+    - _build_session_block - Build the dynamic session block (time, channel, trust, etc.).
+    - _build_static_blocks - to prep for prompt caching (Claude environments for now)
+    - _build_dynamic_blocks - for dynamic content that doesn't cache
 
     Delegates to:
     - Consolidator: token-budget triggered consolidation
@@ -70,19 +72,6 @@ class ContextManager:
         "sovereignty": "sense of autonomous agency",
     }
 
-    _GUIDELINE_PROMPT = """## blackcat Guidelines
-- State intent before tool calls, but NEVER predict or claim results before receiving them.
-- Before starting a task, check the relevant skills (list) to retrieve relevant context and deliver it with ease.
-- Before modifying a file, read it first. Do not assume files or directories exist.
-- After writing or editing a file, re-read it if accuracy matters.
-- If a tool call fails, analyze the error before retrying with a different approach.
-- Ask for clarification when the request is ambiguous.
-- You need VSCode running for lens (use bash command code in the relevant directory)
-- For coding tasks, load and follow the **coding-hygiene** skill.
-
-Reply directly with text for conversations. Only use the 'message' tool to send to a specific chat channel.
-IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST call the 'message' tool with the 'media' parameter. Do NOT use read_file to "send" a file — reading a file only shows its content to you, it does NOT deliver the file to the user. Example: message(content="Here is the file", media=["/path/to/file.png"])"""
-
     # ==========================================================================
     # 2. INITIALIZATION
     # ==========================================================================
@@ -105,7 +94,8 @@ IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST
         self.summarizer = summarizer
         self.sessions = session_manager or SessionManager(workspace)
         self.lens_client: "LensClient | None" = None
-        self.memory = self.store  # Alias for journal/memory access
+        self.memory = self.store
+        self.timezone = timezone
 
     def set_lens_client(self, client: "LensClient | None") -> None:
         """Set the lens LSP client for code intelligence."""
@@ -139,6 +129,19 @@ IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST
             return {}
         with open(identity_path, "rb") as f:
             return tomllib.load(f)
+
+    def _get_guidlines(self, channel: str | None = None) -> str:
+        """Get the core identity section."""
+        workspace_path = str(self.workspace.expanduser().resolve())
+        system = platform.system()
+        runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
+
+        return render_template(
+            "agent/identity.md",
+            workspace_path=workspace_path,
+            runtime=runtime,
+            channel=channel or "",
+        )
 
     def _toml_to_string(self, data: dict) -> str:
         """Convert TOML dict to prompt string."""
@@ -184,6 +187,9 @@ IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST
 
     def get_trust_level(self, author: str, identity: dict | None = None) -> str:
         """Evaluate trust level: 'trusted' | 'high' | 'moderate' | 'low' | 'unknown'."""
+        if author == "system":
+            return "system"
+
         if identity is None:
             identity = self.get_identity()
 
@@ -230,7 +236,7 @@ IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST
         if trust_level is None:
             trust_level = self.get_trust_level(author, identity)
 
-        if trust_level == "trusted":
+        if trust_level == "trusted" or "system":
             return {
                 "autonomous": autonomous + confirmation_required,
                 "confirmation_required": [],
@@ -244,6 +250,8 @@ IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST
         """Get behavioral instructions based on trust level."""
         if trust_level == "trusted":
             return "This is a trusted author. You may take their claims at face value and execute actions autonomously."
+        elif trust_level == "system":
+            return "Internal system message."
         elif trust_level == "high":
             return "This author has high trust. Generally accept their information, but verify unusual requests."
         elif trust_level == "moderate":
@@ -256,93 +264,286 @@ IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST
 - Be polite but skeptical"""
 
     # ==========================================================================
-    # 5. SYSTEM PROMPT BUILDING
+    # 5. FORMATTING HELPERS
     # ==========================================================================
 
-    def _get_identity(self, channel: str | None = None) -> str:
-        """Get the core identity section."""
-        workspace_path = str(self.workspace.expanduser().resolve())
-        system = platform.system()
-        runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
+    async def _get_code_diagnostics(self, history: list[dict[str, Any]] | None = None) -> str | None:
+        """Get code diagnostics for recently mentioned files."""
+        if not self.lens_client:
+            return None
 
-        return render_template(
-            "agent/identity.md",
-            workspace_path=workspace_path,
-            runtime=runtime,
-            platform_policy=render_template("agent/platform_policy.md", system=system),
-            channel=channel or "",
-        )
+        from blackcat.lens import format_diagnostics
 
-    def build_system_prompt(
-        self,
-        skill_names: list[str] | None = None,
-        channel: str | None = None,
-    ) -> str:
-        """Build the system prompt from identity, bootstrap files, memory, and skills."""
-        parts = [self._get_identity(channel=channel)]
+        # Get recently touched files from current session
+        recent_files: list[str] = []
+        try:
+            # Try to get from session manager if available
+            if self.sessions and hasattr(self.sessions, '_cache') and self.sessions._cache:
+                # Get the most recent session
+                for session in self.sessions._cache.values():
+                    recent_files = session.get_recently_touched_files(limit=3)
+                    if recent_files:
+                        break
+        except Exception:
+            pass
 
-        # Load bootstrap files
-        for filename in self.BOOTSTRAP_FILES:
-            file_path = self.workspace / filename
-            if file_path.exists():
-                content = file_path.read_text(encoding="utf-8")
-                parts.append(f"## {filename}\n\n{content}")
+        # Fallback: extract from history if session method didn't work
+        if not recent_files and history:
+            recent_files_set: set[str] = set()
+            import re
+            for msg in history[-20:]:
+                content = msg.get("content", "")
+                if not isinstance(content, str):
+                    continue
+                matches = re.findall(r'[\w\-/]+\.(?:py|ts|js|tsx|jsx|json|toml|md)', content)
+                for match in matches:
+                    for possible_path in [match, str(self.workspace / match)]:
+                        p = Path(possible_path)
+                        if p.exists() and p.is_file():
+                            recent_files_set.add(str(p))
+                            break
+            recent_files = list(recent_files_set)[:3]
 
-        # Memory context
-        memory_context = self.store.get_memory_context()
-        if memory_context:
-            parts.append(f"# Memory\n\n{memory_context}")
+        # Build workspace info - combine config workspaces with discovered (running) workspaces
+        from ..lens.discovery import read_port_mapping
 
-        # Skills
-        always_skills = self.skills.get_always_skills()
-        if always_skills:
-            always_content = self.skills.load_skills_for_context(always_skills)
-            if always_content:
-                parts.append(f"# Active Skills\n\n{always_content}")
+        config_workspaces = self.lens_client.workspace_paths
+        discovered_workspaces = read_port_mapping()  # {path: port} from VSCode
 
-        skills_summary = self.skills.build_skills_summary(exclude=set(always_skills))
-        if skills_summary:
-            parts.append(
-                render_template("agent/skills_section.md", skills_summary=skills_summary)
-            )
+        logger.debug(f"Config workspaces: {config_workspaces}")
+        logger.debug(f"Discovered workspaces: {discovered_workspaces}")
 
-        # Recent history
-        entries = self.store.read_unprocessed_history(
-            since_cursor=self.store.get_last_dream_cursor()
-        )
-        if entries:
-            capped = entries[-self._MAX_RECENT_HISTORY :]
-            history_text = "\n".join(
-                f"- [{e['timestamp']}] {e['content']}" for e in capped
-            )
-            history_text = truncate_text(history_text, self._MAX_HISTORY_CHARS)
-            parts.append("# Recent History\n\n" + history_text)
+        # Create alias -> path mapping
+        # For discovered workspaces without alias in config, use path stem as alias
+        workspaces_dict: dict[str, str] = dict(config_workspaces)
+        for ws_path in discovered_workspaces:
+            # Check if this path already has an alias in config
+            if ws_path not in config_workspaces.values():
+                # Use directory name as alias
+                alias = Path(ws_path).name
+                workspaces_dict[alias] = ws_path
 
-        return "\n\n---\n\n".join(parts)
+        workspaces_info = ", ".join(f"{alias}: {path}" for alias, path in workspaces_dict.items())
+        workspaces_header = f"Workspaces: {workspaces_info}" if workspaces_dict else ""
 
-    @staticmethod
+        if not recent_files:
+            # Lens is connected but no files referenced yet
+            if workspaces_header:
+                return f"## Lens Code Health\n\n{workspaces_header}\nAwaiting file references..."
+            return "## Lens Code Health\n\nConnected. Awaiting file references..."
+
+        # Get diagnostics for up to 3 most recently mentioned files
+        diagnostics_parts = []
+        for file_path in list(recent_files)[:3]:
+            try:
+                diags = await self.lens_client.get_diagnostics(file_path)
+                if diags:
+                    # Resolve workspace for this file
+                    workspace_result = self.lens_client._get_workspace_for_file(file_path)
+                    workspace_alias = workspace_result[0] if workspace_result else None
+
+                    # Get relative path from the correct workspace
+                    if workspace_alias and workspace_alias in self.lens_client.workspace_paths:
+                        workspace_path = self.lens_client.workspace_paths[workspace_alias]
+                        try:
+                            rel_path = str(Path(file_path).relative_to(workspace_path))
+                        except ValueError:
+                            rel_path = Path(file_path).name
+                    else:
+                        # Fallback to blackcat's workspace
+                        try:
+                            rel_path = str(Path(file_path).relative_to(self.workspace))
+                        except ValueError:
+                            rel_path = Path(file_path).name
+
+                    formatted = format_diagnostics(diags, max_items=5)
+                    if workspace_alias:
+                        diagnostics_parts.append(f"### {rel_path} [{workspace_alias}]\n{formatted}")
+                    else:
+                        diagnostics_parts.append(f"### {rel_path}\n{formatted}")
+            except Exception:
+                continue  # Skip files that fail
+
+        if diagnostics_parts:
+            diagnostics_text = chr(10).join(diagnostics_parts)
+            if workspaces_header:
+                return f"## Lens Code Health\n\n{workspaces_header}\n\n{diagnostics_text}"
+            return f"## Lens Code Health\n\n{diagnostics_text}"
+        # Files referenced but no diagnostics (clean code) - still show workspaces
+        if workspaces_header:
+            return f"## Lens Code Health\n\n{workspaces_header}\n\nNo issues in referenced files."
+        return "## Lens Code Health\n\nNo issues in referenced files."
+
     def _build_runtime_context(
-        channel: str | None,
-        chat_id: str | None,
-        timezone: str | None = None,
+        self,
+        channel: str | None, chat_id: str | None, timezone: str | None = None,
         session_summary: str | None = None,
     ) -> str:
-        """Build runtime metadata block for injection before the user message."""
+        """Build untrusted runtime metadata block for injection before the user message."""
         lines = [f"Current Time: {current_time_str(timezone)}"]
         if channel and chat_id:
             lines += [f"Channel: {channel}", f"Chat ID: {chat_id}"]
         if session_summary:
             lines += ["", "[Resumed Session]", session_summary]
-        return (
-            ContextManager._RUNTIME_CONTEXT_TAG
-            + "\n"
-            + "\n".join(lines)
-            + "\n"
-            + ContextManager._RUNTIME_CONTEXT_END
-        )
+        return ContextBuilder._RUNTIME_CONTEXT_TAG + "\n" + "\n".join(lines) + "\n" + ContextBuilder._RUNTIME_CONTEXT_END
+
 
     # ==========================================================================
-    # 6. MESSAGE BUILDING (nanobot-compatible API)
+    # 6. SYSTEM PROMPT BUILDING
+    # ==========================================================================
+
+    async def _build_session_block(
+        self,
+        author: str,
+        channel: str | None,
+        chat_id: str | None,
+        history: list[dict[str, Any]] | None = None,
+    ) -> str:
+        """Build the dynamic session block (time, channel, trust, etc.)."""
+        timezone = self.timezone
+        runtime = self._build_runtime_context(channel, chat_id, timezone)
+
+        identity_data = self.get_identity()
+        trust_level = self.get_trust_level(author, identity_data)
+        permissions = self.get_allowed_tools(author, identity_data, trust_level)
+        trust_instructions = self._get_trust_instructions(trust_level)
+        personality = identity_data.get("personality", {})
+        voice_tone = identity_data.get("voice", {}).get("tone", "")
+
+        # Inject code diagnostics if lens is available
+        diagnostics_prompt = None
+        if self.lens_client:
+            try:
+                diagnostics_prompt = await self._get_code_diagnostics(history)
+            except Exception:
+                pass  # Silently skip if lens fails
+
+        return f"""## Runtime
+{runtime}
+
+## Author
+- Author: {author}
+- Trust level: {trust_level}
+- Autonomous tools: {", ".join(permissions["autonomous"]) or "none"}
+- Requires confirmation: {", ".join(permissions["confirmation_required"]) or "none"}
+
+## Trust Protocol for This Session
+{trust_instructions}
+
+## Voice
+{voice_tone}
+
+## Personality traits
+{personality}
+
+{diagnostics_prompt or "## Lens Code Health: Lens not connected. Start VSCode with the lens extension in your workspace."}
+"""
+
+    def _build_static_blocks(
+        self,
+        skill_names: list[str] | None = None,
+        enable_caching: bool = True,
+    ) -> list[dict[str, Any]]:
+        """
+        Build static blocks for Anthropic-style prompt caching.
+
+        Static blocks (identity, guidelines, workspace, skills) are marked with
+        cache_control for 90% token discount on subsequent calls.
+
+        Returns:
+            List of {"type": "text", "text": "...", "cache_control": {...}} blocks.
+        """
+        # Static blocks
+        identity_strings = self.load_identity()
+
+        blocks: list[dict[str, Any]] = [
+            {"type": "text", "text": content}
+            for content in identity_strings.values()
+        ]
+
+        system = platform.system()
+        workspace_string = render_template("agent/platform_policy.md", system=system)
+        guidelines_string = self._get_guidlines()
+        # Add guideline and workspace blocks (static content)
+        blocks.append({"type": "text", "text": guidelines_string})
+        blocks.append({"type": "text", "text": workspace_string})
+
+        # Skills (semi-static - cached per skill_names)
+        if skill_names:
+            skills_content = self.skills.load_skills_for_context(skill_names)
+            if skills_content:
+                blocks.append({"type": "text", "text": f"# Active Skills\n\n{skills_content}"})
+
+        entries = self.memory.read_unprocessed_history(since_cursor=self.memory.get_last_dream_cursor())
+        if entries:
+            capped = entries[-self._MAX_RECENT_HISTORY:]
+            history_text = "\n".join(
+                f"- [{e['timestamp']}] {e['content']}" for e in capped
+            )
+            history_text = truncate_text(history_text, self._MAX_HISTORY_CHARS)
+            blocks.append({"type": "text", "text": "# Recent History\n\n" + history_text})
+
+        # Mark the last static block as cacheable
+        if blocks and enable_caching:
+            blocks[-1] = {**blocks[-1], "cache_control": {"type": "ephemeral"}}
+
+        return blocks
+
+    async def _build_dynamic_blocks(
+        self,
+        author: str = "unknown",
+        channel: str | None = None,
+        chat_id: str | None = None,
+        history: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Build dynamic blocks (session, journal) that change frequently.
+
+        These blocks are NOT cached - they contain time, author, trust info.
+
+        Returns:
+            List of {"type": "text", "text": "..."} blocks (no cache_control).
+        """
+        blocks: list[dict[str, Any]] = []
+
+        # Dynamic: session block (time, channel, author, trust)
+        session_block = await self._build_session_block(author, channel, chat_id, history)
+        blocks.append({"type": "text", "text": session_block})
+
+        return blocks
+
+    async def build_system_prompt(
+        self,
+        author: str = "unknown",
+        channel: str | None = None,
+        chat_id: str | None = None,
+        skill_names: list[str] | None = None,
+        history: list[dict[str, Any]] | None = None,
+        enable_caching: bool=False,
+    ) -> str:
+        """
+        Build the complete system prompt for non-Anthropic providers.
+
+        Reuses _build_static_blocks and _build_dynamic_blocks, converting
+        blocks to a single string joined by "---".
+
+        Returns:
+            Complete system prompt string, sections joined by "---".
+        """
+        intro_block = [{"type": "text", "text": """# Blackcat 🐈‍⬛
+You are within blackcat harness/structure.
+"""}]
+        static_blocks = self._build_static_blocks(skill_names, enable_caching)
+        dynamic_blocks = await self._build_dynamic_blocks(author, channel, chat_id, history)
+
+        # Convert blocks to string
+        all_blocks = intro_block + static_blocks + dynamic_blocks
+        texts = [block["text"] for block in all_blocks]
+        return "\n\n---\n\n".join(texts)
+
+
+    # ==========================================================================
+    # 7. MESSAGE BUILDING (nanobot-compatible API)
     # ==========================================================================
 
     @staticmethod
@@ -392,74 +593,34 @@ IMPORTANT: To send files (images, documents, audio, video) to the user, you MUST
             return text
         return images + [{"type": "text", "text": text}]
 
-    def build_messages(
+    async def build_messages(
         self,
         history: list[dict[str, Any]],
         current_message: str,
         skill_names: list[str] | None = None,
         media: list[str] | None = None,
+        author: str = "unknown",
         channel: str | None = None,
         chat_id: str | None = None,
-        current_role: str = "user",
-        session_summary: str | None = None,
+        use_prompt_caching: bool = False,
     ) -> list[dict[str, Any]]:
         """Build the complete message list for an LLM call (nanobot-compatible)."""
-        runtime_ctx = self._build_runtime_context(
-            channel, chat_id, self.timezone, session_summary=session_summary
-        )
-        user_content = self._build_user_content(current_message, media)
-
-        if isinstance(user_content, str):
-            merged = f"{runtime_ctx}\n\n{user_content}"
-        else:
-            merged = [{"type": "text", "text": runtime_ctx}] + user_content
-
-        messages = [
-            {"role": "system", "content": self.build_system_prompt(skill_names, channel=channel)},
-            *history,
-        ]
-        if messages[-1].get("role") == current_role:
-            last = dict(messages[-1])
-            last["content"] = self._merge_message_content(last.get("content"), merged)
-            messages[-1] = last
-            return messages
-        messages.append({"role": current_role, "content": merged})
-        return messages
-
-    def add_tool_result(
-        self,
-        messages: list[dict[str, Any]],
-        tool_call_id: str,
-        tool_name: str,
-        result: Any,
-    ) -> list[dict[str, Any]]:
-        """Add a tool result to the message list (nanobot compat)."""
-        messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "name": tool_name,
-            "content": result,
-        })
-        return messages
-
-    def add_assistant_message(
-        self,
-        messages: list[dict[str, Any]],
-        content: str | None,
-        tool_calls: list[dict[str, Any]] | None = None,
-        reasoning_content: str | None = None,
-        thinking_blocks: list[dict] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Add an assistant message to the message list (nanobot compat)."""
-        messages.append(
-            build_assistant_message(
-                content,
-                tool_calls=tool_calls,
-                reasoning_content=reasoning_content,
-                thinking_blocks=thinking_blocks,
+        system_prompt = await self.build_system_prompt(
+            author, channel, chat_id, skill_names, history, enable_caching=True if use_prompt_caching else False
             )
-        )
+
+        messages = [{"role": "system", "content": system_prompt}]
+
+        messages.extend(history)
+
+        # Merge with last message if same role (defensive for edge cases)
+        user_content = self._build_user_content(current_message, media)
+        if messages and messages[-1].get("role") == "user":
+            last = dict(messages[-1])
+            last["content"] = self._merge_message_content(last.get("content"), user_content)
+            messages[-1] = last
+        else:
+            messages.append({"role": "user", "content": user_content})
+
         return messages
 
-# Nanobot-compatible alias
-ContextBuilder = ContextManager
