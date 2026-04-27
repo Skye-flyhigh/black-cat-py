@@ -39,7 +39,7 @@ class Blackcat:
         config_path: str | Path | None = None,
         *,
         workspace: str | Path | None = None,
-    ) -> Nanobot:
+    ) -> Blackcat:
         """Create a Nanobot instance from a config file.
 
         Args:
@@ -84,7 +84,7 @@ class Blackcat:
             unified_session=defaults.unified_session,
             disabled_skills=defaults.disabled_skills,
             session_ttl_minutes=defaults.session_ttl_minutes,
-            tools_config=config.tools,
+            config=config,
         )
         return cls(loop)
 

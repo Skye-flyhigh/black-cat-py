@@ -7,6 +7,8 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
+from blackcat.blackcat import Blackcat, RunResult
+
 
 def _read_pyproject_version() -> str | None:
     """Read the source-tree version when package metadata is unavailable."""
@@ -26,8 +28,6 @@ def _resolve_version() -> str:
 
 
 __version__ = _resolve_version()
-__logo__ = "🐈"
-
-from blackcat.blackcat import Blackcat, RunResult
+__logo__ = "🐈‍⬛"
 
 __all__ = ["Blackcat", "RunResult"]
