@@ -6,7 +6,6 @@ import asyncio
 import os
 import sys
 
-from blackcat import __version__
 from blackcat.bus.events import OutboundMessage
 from blackcat.command.router import CommandContext, CommandRouter
 from blackcat.utils.helpers import build_status_content
@@ -72,6 +71,8 @@ async def cmd_status(ctx: CommandContext) -> OutboundMessage:
         task_count += loop.subagents.get_running_count_by_session(ctx.key)
     except Exception:
         pass
+    from blackcat import __version__
+
     return OutboundMessage(
         channel=ctx.msg.channel,
         chat_id=ctx.msg.chat_id,
