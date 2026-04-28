@@ -5,7 +5,7 @@ import { StreamErrorNotice } from "@/components/thread/StreamErrorNotice";
 import { ThreadComposer } from "@/components/thread/ThreadComposer";
 import { ThreadHeader } from "@/components/thread/ThreadHeader";
 import { ThreadViewport } from "@/components/thread/ThreadViewport";
-import { useNanobotStream } from "@/hooks/useNanobotStream";
+import { useBlackcatStream } from "@/hooks/useBlackcatStream";
 import { useSessionHistory } from "@/hooks/useSessions";
 import type { ChatSummary, UIMessage } from "@/lib/types";
 import { useClient } from "@/providers/ClientProvider";
@@ -55,7 +55,7 @@ export function ThreadShell({
     setMessages,
     streamError,
     dismissStreamError,
-  } = useNanobotStream(chatId, initial);
+  } = useBlackcatStream(chatId, initial);
   const showHeroComposer = messages.length === 0 && !loading;
 
   useEffect(() => {

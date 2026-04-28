@@ -5,7 +5,7 @@ import { ThreadShell } from "@/components/thread/ThreadShell";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useSessions } from "@/hooks/useSessions";
 import { useTheme } from "@/hooks/useTheme";
-import { NanobotClient } from "@/lib/blackcat-client";
+import { NanobotClient as BlackcatClient } from "@/lib/blackcat-client";
 import { deriveWsUrl, fetchBootstrap } from "@/lib/bootstrap";
 import type { ChatSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,7 @@ type BootState =
   | { status: "error"; message: string }
   | {
       status: "ready";
-      client: NanobotClient;
+      client: BlackcatClient;
       token: string;
       modelName: string | null;
     };
@@ -48,7 +48,7 @@ export default function App() {
         const boot = await fetchBootstrap();
         if (cancelled) return;
         const url = deriveWsUrl(boot.ws_path, boot.token);
-        const client = new NanobotClient({
+        const client = new BlackcatClient({
           url,
           onReauth: async () => {
             try {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Composer } from "@/components/Composer";
 import { MessageList } from "@/components/MessageList";
-import { useNanobotStream } from "@/hooks/useNanobotStream";
+import { useBlackcatStream } from "@/hooks/useBlackcatStream";
 import { useSessionHistory } from "@/hooks/useSessions";
 import type { ChatSummary } from "@/lib/types";
 import { useClient } from "@/providers/ClientProvider";
@@ -28,7 +28,7 @@ export function ChatPane({ session, onNewChat }: ChatPaneProps) {
   const pendingFirstRef = useRef<string | null>(null);
 
   const initial = useMemo(() => historical, [historical]);
-  const { messages, isStreaming, send, setMessages } = useNanobotStream(
+  const { messages, isStreaming, send, setMessages } = useBlackcatStream(
     chatId,
     initial,
   );

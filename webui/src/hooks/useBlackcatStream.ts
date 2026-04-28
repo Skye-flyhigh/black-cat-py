@@ -3,10 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { StreamError } from "@/lib/blackcat-client";
 import { toMediaAttachment } from "@/lib/media";
 import type {
-    InboundEvent,
-    OutboundMedia,
-    UIImage,
-    UIMessage,
+  InboundEvent,
+  OutboundMedia,
+  UIImage,
+  UIMessage,
 } from "@/lib/types";
 import { useClient } from "@/providers/ClientProvider";
 
@@ -34,7 +34,7 @@ export interface SendImage {
   preview: UIImage;
 }
 
-export function useNanobotStream(
+export function useBlackcatStream(
   chatId: string | null,
   initialMessages: UIMessage[] = [],
 ): {
@@ -56,7 +56,7 @@ export function useNanobotStream(
   const buffer = useRef<StreamBuffer | null>(null);
 
   useEffect(() => {
-    return client.onError((err) => setStreamError(err));
+    return client.onError((err: any) => setStreamError(err));
   }, [client]);
 
   const dismissStreamError = useCallback(() => setStreamError(null), []);

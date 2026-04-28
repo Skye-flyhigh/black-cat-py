@@ -1,29 +1,29 @@
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from "react";
-import {
-  ArrowUp,
-  ImageIcon,
-  Loader2,
-  Paperclip,
-  X,
+    ArrowUp,
+    ImageIcon,
+    Loader2,
+    Paperclip,
+    X,
 } from "lucide-react";
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import {
-  useAttachedImages,
-  type AttachedImage,
-  type AttachmentError,
-  MAX_IMAGES_PER_MESSAGE,
+    MAX_IMAGES_PER_MESSAGE,
+    useAttachedImages,
+    type AttachedImage,
+    type AttachmentError,
 } from "@/hooks/useAttachedImages";
+import type { SendImage } from "@/hooks/useBlackcatStream";
 import { useClipboardAndDrop } from "@/hooks/useClipboardAndDrop";
-import type { SendImage } from "@/hooks/useNanobotStream";
 import { cn } from "@/lib/utils";
 
 /** ``<input accept>``: aligned with the server's MIME whitelist. SVG is
