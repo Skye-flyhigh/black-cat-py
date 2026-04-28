@@ -15,6 +15,7 @@ from blackcat.agent.tools.ask import (
 from blackcat.agent.tools.message import MessageTool
 from blackcat.bus.events import OutboundMessage
 from blackcat.command import CommandContext
+from blackcat.config.schema import Config
 from blackcat.utils.document import extract_documents
 from blackcat.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
@@ -42,11 +43,12 @@ class MessageHandler:
     - Runtime checkpoint save/restore helpers
     """
 
-    __slots__ = ("_loop", "_msg")
+    __slots__ = ("_loop", "_msg", "config")
 
-    def __init__(self, loop: "AgentLoop", msg: "InboundMessage") -> None:
+    def __init__(self, loop: "AgentLoop", msg: "InboundMessage", config: Config) -> None:
         self._loop = loop
         self._msg = msg
+        self.config = config
 
     async def process(
         self,
@@ -100,7 +102,7 @@ class MessageHandler:
             return result
 
         # Token-budget consolidation
-        await loop.consolidator.maybe_consolidate_by_tokens(session, session_summary=pending)
+        await loop.consolidator.maybe_consolidate_by_tokens(session)
 
         # Set tool context for this turn
         loop._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
@@ -114,21 +116,26 @@ class MessageHandler:
 
         # Handle pending ask_user response
         pending_ask_id = pending_ask_user_id(history)
+        author = self.config.resolve_author(msg.sender_id, msg.channel)
         if pending_ask_id:
+            system_prompt = await loop.context.build_system_prompt(
+                author=author,
+                channel=msg.channel,
+            )
             initial_messages = ask_user_tool_result_messages(
-                loop.context.build_system_prompt(channel=msg.channel),
+                system_prompt,
                 history,
                 pending_ask_id,
                 msg.content,
             )
         else:
-            initial_messages = loop.context.build_messages(
+            initial_messages = await loop.context.build_messages(
                 history=history,
                 current_message=msg.content,
-                session_summary=pending,
                 media=msg.media if msg.media else None,
                 channel=msg.channel,
                 chat_id=msg.chat_id,
+                author=author,
             )
 
         # Build progress callback
@@ -252,7 +259,7 @@ class MessageHandler:
         session, pending = loop.auto_compact.prepare_session(session, key)
 
         # Token-budget consolidation
-        await loop.consolidator.maybe_consolidate_by_tokens(session, session_summary=pending)
+        await loop.consolidator.maybe_consolidate_by_tokens(session)
 
         # Persist subagent follow-ups before prompt assembly
         is_subagent = msg.sender_id == "subagent"
@@ -263,16 +270,15 @@ class MessageHandler:
         loop._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
 
         history = session.get_history(max_messages=0)
-        current_role = "assistant" if is_subagent else "user"
 
         # Subagent content is already in `history`; passing it again would double-project
-        messages = loop.context.build_messages(
+        # System messages use "system" as author since they're not from a user
+        messages = await loop.context.build_messages(
             history=history,
             current_message="" if is_subagent else msg.content,
             channel=channel,
             chat_id=chat_id,
-            session_summary=pending,
-            current_role=current_role,
+            author="system",
         )
 
         final_content, _, all_msgs, stop_reason, _ = await loop._run_agent_loop(
