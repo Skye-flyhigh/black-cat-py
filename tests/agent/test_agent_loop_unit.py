@@ -61,14 +61,14 @@ class FakeToolCall:
 def test_tool_hint_single():
     calls = [FakeToolCall(name="web_search", arguments={"query": "python async"})]
     result = AgentLoop._tool_hint(calls)
-    assert result == 'web_search("python async")'
+    assert result == 'search "python async"'
 
 
 def test_tool_hint_long_value_truncated():
     long_val = "a" * 50
     calls = [FakeToolCall(name="read_file", arguments={"path": long_val})]
     result = AgentLoop._tool_hint(calls)
-    assert "..." in result
+    assert "…" in result
     assert len(result) < 60
 
 
@@ -79,7 +79,7 @@ def test_tool_hint_multiple():
     ]
     result = AgentLoop._tool_hint(calls)
     assert "shell" in result
-    assert "read_file" in result
+    assert "read" in result
     assert ", " in result
 
 

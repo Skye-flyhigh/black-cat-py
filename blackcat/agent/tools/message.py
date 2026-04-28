@@ -4,7 +4,11 @@ from contextvars import ContextVar
 from typing import Any, Awaitable, Callable
 
 from blackcat.agent.tools.base import Tool, tool_parameters
-from blackcat.agent.tools.schema import ArraySchema, StringSchema, tool_parameters_schema
+from blackcat.agent.tools.schema import (
+    ArraySchema,
+    StringSchema,
+    tool_parameters_schema,
+)
 from blackcat.bus.events import OutboundMessage
 
 

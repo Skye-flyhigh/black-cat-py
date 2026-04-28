@@ -13,6 +13,7 @@ __all__ = [
     "AnthropicProvider",
     "OpenAICompatProvider",
     "OpenAICodexProvider",
+    "GitHubCopilotProvider",
     "AzureOpenAIProvider",
 ]
 
@@ -20,12 +21,14 @@ _LAZY_IMPORTS = {
     "AnthropicProvider": ".anthropic_provider",
     "OpenAICompatProvider": ".openai_compat_provider",
     "OpenAICodexProvider": ".openai_codex_provider",
+    "GitHubCopilotProvider": ".github_copilot_provider",
     "AzureOpenAIProvider": ".azure_openai_provider",
 }
 
 if TYPE_CHECKING:
     from blackcat.providers.anthropic_provider import AnthropicProvider
     from blackcat.providers.azure_openai_provider import AzureOpenAIProvider
+    from blackcat.providers.github_copilot_provider import GitHubCopilotProvider
     from blackcat.providers.openai_codex_provider import OpenAICodexProvider
     from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 

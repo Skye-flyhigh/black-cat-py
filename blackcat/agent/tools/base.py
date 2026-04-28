@@ -243,6 +243,10 @@ class Tool(ABC):
             },
         }
 
+    def set_context(self, _channel: str, _chat_id: str, *_args: Any, **_kwargs: Any) -> None:
+        """Set routing context for tools that need it (optional override)."""
+        pass
+
 
 def tool_parameters(schema: dict[str, Any]) -> Callable[[type[_ToolT]], type[_ToolT]]:
     """Class decorator: attach JSON Schema and inject a concrete ``parameters`` property.

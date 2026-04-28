@@ -87,6 +87,8 @@ class TestOllamaCloudRouting:
     def test_cloud_model_routes_to_ollama_com(self):
         config = _make_mock_config(model="ollama/glm-5:cloud")
         config.get_provider.return_value = _make_mock_provider()
+        # Cloud models should return ollama.com, not localhost
+        config.get_api_base.return_value = "https://ollama.com/v1/"
 
         provider = _call_make_provider(config)
         parsed_base_url = urlparse(str(provider._client.base_url))

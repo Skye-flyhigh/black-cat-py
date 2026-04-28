@@ -25,7 +25,7 @@ class Blackcat:
 
     Usage::
 
-        bot = Blackcat.from_config()
+        bot = Nanobot.from_config()
         result = await bot.run("Summarize this repo", hooks=[MyHook()])
         print(result.content)
     """
@@ -40,14 +40,14 @@ class Blackcat:
         *,
         workspace: str | Path | None = None,
     ) -> Blackcat:
-        """Create a Blackcat instance from a config file.
+        """Create a Nanobot instance from a config file.
 
         Args:
             config_path: Path to ``config.json``.  Defaults to
                 ``~/.blackcat/config.json``.
             workspace: Override the workspace directory from config.
         """
-        from blackcat.config.loader import load_config
+        from blackcat.config.loader import load_config, resolve_config_env_vars
         from blackcat.config.schema import Config
 
         resolved: Path | None = None
@@ -56,7 +56,7 @@ class Blackcat:
             if not resolved.exists():
                 raise FileNotFoundError(f"Config not found: {resolved}")
 
-        config: Config = load_config(resolved)
+        config: Config = resolve_config_env_vars(load_config(resolved))
         if workspace is not None:
             config.agents.defaults.workspace = str(
                 Path(workspace).expanduser().resolve()
@@ -75,9 +75,16 @@ class Blackcat:
             context_window_tokens=defaults.context_window_tokens,
             context_block_limit=defaults.context_block_limit,
             max_tool_result_chars=defaults.max_tool_result_chars,
+            provider_retry_mode=defaults.provider_retry_mode,
+            web_config=config.tools.web,
             exec_config=config.tools.exec,
             restrict_to_workspace=config.tools.restrict_to_workspace,
             mcp_servers=config.tools.mcp_servers,
+            timezone=defaults.timezone,
+            unified_session=defaults.unified_session,
+            disabled_skills=defaults.disabled_skills,
+            session_ttl_minutes=defaults.session_ttl_minutes,
+            config=config,
         )
         return cls(loop)
 
@@ -120,7 +127,6 @@ def _make_provider(config: Any) -> Any:
     p = config.get_provider(model)
     spec = find_by_name(provider_name) if provider_name else None
     backend = spec.backend if spec else "openai_compat"
-    api_base = config.get_api_base(model)
 
     if backend == "azure_openai":
         if not p or not p.api_key or not p.api_base:
@@ -150,22 +156,21 @@ def _make_provider(config: Any) -> Any:
 
         provider = AnthropicProvider(
             api_key=p.api_key if p else None,
-            api_base=api_base,
+            api_base=config.get_api_base(model),
             default_model=model,
             extra_headers=p.extra_headers if p else None,
         )
     else:
         from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
-        # Ollama cloud models (:cloud suffix) route to ollama.com and require an API key
-        if spec and spec.name == "ollama" and model.endswith(":cloud"):
+        # Ollama cloud models (:cloud suffix) require an API key
+        if spec and spec.name == "ollama" and config._is_cloud_model(model):
             if not p or not p.api_key:
                 raise ValueError(f"No API key configured for Ollama's cloud model {model}")
-            api_base = "https://ollama.com/v1/"
 
         provider = OpenAICompatProvider(
             api_key=p.api_key if p else None,
-            api_base=api_base,
+            api_base=config.get_api_base(model),
             default_model=model,
             extra_headers=p.extra_headers if p else None,
             spec=spec,

@@ -1,145 +1,372 @@
 """Tests for the heartbeat service."""
 
+import asyncio
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from blackcat.heartbeat.service import (
-    HEARTBEAT_OK_TOKEN,
-    HEARTBEAT_PROMPT,
-    HeartbeatService,
-    _is_heartbeat_empty,
-)
-
-# ── _is_heartbeat_empty ───────────────────────────────────────────
+from blackcat.heartbeat.service import HeartbeatService
 
 
-def test_empty_none():
-    assert _is_heartbeat_empty(None) is True
-
-
-def test_empty_blank():
-    assert _is_heartbeat_empty("") is True
-
-
-def test_empty_invalid_toml():
-    assert _is_heartbeat_empty("not valid toml {{{{") is True
-
-
-def test_empty_no_tasks_section():
-    content = "[heartbeat]\n# just a header\n"
-    assert _is_heartbeat_empty(content) is True
-
-
-def test_empty_tasks_sections_empty():
-    content = "[tasks.active]\n[tasks.list]\n"
-    assert _is_heartbeat_empty(content) is True
-
-
-def test_not_empty_has_active_task():
-    content = '[tasks.active]\ncheck_server = "Check server status"\n'
-    assert _is_heartbeat_empty(content) is False
-
-
-def test_not_empty_has_list_task():
-    content = '[tasks.list]\nreport = "Send daily report"\n'
-    assert _is_heartbeat_empty(content) is False
-
-
-def test_empty_only_completed():
-    """Completed tasks don't count as actionable."""
-    content = '[tasks.completed]\nold_task = "Already done"\n'
-    assert _is_heartbeat_empty(content) is True
-
-
-# ── HeartbeatService ───────────────────────────────────────────────
+# ── _decide (Phase 1) ───────────────────────────────────────────────
 
 
 def test_heartbeat_file_path(tmp_path):
-    svc = HeartbeatService(workspace=tmp_path)
-    assert svc.heartbeat_file == tmp_path / "HEARTBEAT.toml"
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=MagicMock(),
+        model="test-model",
+    )
+    assert svc.heartbeat_file == tmp_path / "HEARTBEAT.md"
 
 
 def test_read_heartbeat_file_missing(tmp_path):
-    svc = HeartbeatService(workspace=tmp_path)
-    assert svc._read_heartbeat_file() is None
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=MagicMock(),
+        model="test-model",
+    )
+    content = svc._read_heartbeat_file()
+    assert content is None
 
 
 def test_read_heartbeat_file_exists(tmp_path):
-    hb = tmp_path / "HEARTBEAT.toml"
-    hb.write_text('[tasks.active]\ncheck = "Do something"\n')
-    svc = HeartbeatService(workspace=tmp_path)
+    hb = tmp_path / "HEARTBEAT.md"
+    hb.write_text("# Active Tasks\n- Check server status\n")
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=MagicMock(),
+        model="test-model",
+    )
     content = svc._read_heartbeat_file()
-    assert "Do something" in content
+    assert "Check server status" in content
 
 
 @pytest.mark.asyncio
-async def test_tick_skips_empty_file(tmp_path):
-    """If HEARTBEAT.toml is empty, _tick should not call on_heartbeat."""
+async def test_decide_returns_skip_on_empty(tmp_path):
+    """Phase 1: LLM returns skip action."""
+    provider = MagicMock()
+    mock_response = MagicMock()
+    mock_response.should_execute_tools = False
+    mock_response.has_tool_calls = False
+    provider.chat_with_retry = AsyncMock(return_value=mock_response)
+
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=provider,
+        model="test-model",
+    )
+
+    action, tasks = await svc._decide("# No tasks")
+    assert action == "skip"
+    assert tasks == ""
+
+
+@pytest.mark.asyncio
+async def test_decide_returns_run_on_active_tasks(tmp_path):
+    """Phase 1: LLM returns run action with tasks."""
+    provider = MagicMock()
+    mock_response = MagicMock()
+    mock_response.should_execute_tools = True
+    mock_response.has_tool_calls = True
+    mock_response.tool_calls = [
+        MagicMock(arguments={"action": "run", "tasks": "Check server status"})
+    ]
+    provider.chat_with_retry = AsyncMock(return_value=mock_response)
+
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=provider,
+        model="test-model",
+    )
+
+    action, tasks = await svc._decide("# Active Tasks\n- Check server")
+    assert action == "run"
+    assert tasks == "Check server status"
+
+
+# ── _tick (Phase 2) ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_tick_skips_missing_file(tmp_path):
+    """If HEARTBEAT.md is missing, _tick should not call on_execute."""
     called = False
 
-    async def on_heartbeat(prompt):
+    async def on_execute(tasks):
         nonlocal called
         called = True
-        return HEARTBEAT_OK_TOKEN
+        return "done"
 
-    svc = HeartbeatService(workspace=tmp_path, on_heartbeat=on_heartbeat)
+    provider = MagicMock()
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=provider,
+        model="test-model",
+        on_execute=on_execute,
+    )
     await svc._tick()
     assert called is False
 
 
 @pytest.mark.asyncio
-async def test_tick_calls_on_heartbeat(tmp_path):
-    """If HEARTBEAT.toml has active tasks, _tick should call on_heartbeat."""
-    hb = tmp_path / "HEARTBEAT.toml"
-    hb.write_text('[tasks.active]\ncheck = "Check server status"\n')
+async def test_tick_skips_on_llm_skip(tmp_path):
+    """If LLM decides skip, _tick should not call on_execute."""
+    called = False
 
-    received_prompt = None
+    async def on_execute(tasks):
+        nonlocal called
+        called = True
+        return "done"
 
-    async def on_heartbeat(prompt):
-        nonlocal received_prompt
-        received_prompt = prompt
-        return HEARTBEAT_OK_TOKEN
+    provider = MagicMock()
+    mock_response = MagicMock()
+    mock_response.should_execute_tools = False
+    provider.chat_with_retry = AsyncMock(return_value=mock_response)
 
-    svc = HeartbeatService(workspace=tmp_path, on_heartbeat=on_heartbeat)
+    # Create file so _read_heartbeat_file returns content
+    hb = tmp_path / "HEARTBEAT.md"
+    hb.write_text("# Empty")
+
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=provider,
+        model="test-model",
+        on_execute=on_execute,
+    )
     await svc._tick()
-    assert received_prompt == HEARTBEAT_PROMPT
+    assert called is False
 
 
 @pytest.mark.asyncio
-async def test_trigger_now(tmp_path):
-    async def on_heartbeat(prompt):
-        return "Done something"
+async def test_tick_calls_on_execute_on_run(tmp_path):
+    """If LLM decides run, _tick should call on_execute."""
+    received_tasks = None
 
-    svc = HeartbeatService(workspace=tmp_path, on_heartbeat=on_heartbeat)
-    result = await svc.trigger_now()
-    assert result == "Done something"
+    async def on_execute(tasks):
+        nonlocal received_tasks
+        received_tasks = tasks
+        return "Completed: " + tasks
+
+    provider = MagicMock()
+    mock_response = MagicMock()
+    mock_response.should_execute_tools = True
+    mock_response.has_tool_calls = True
+    mock_response.tool_calls = [
+        MagicMock(arguments={"action": "run", "tasks": "Check server"})
+    ]
+    provider.chat_with_retry = AsyncMock(return_value=mock_response)
+
+    hb = tmp_path / "HEARTBEAT.md"
+    hb.write_text("# Active\n- Check server")
+
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=provider,
+        model="test-model",
+        on_execute=on_execute,
+    )
+    await svc._tick()
+    assert received_tasks == "Check server"
 
 
 @pytest.mark.asyncio
-async def test_trigger_now_no_callback(tmp_path):
-    svc = HeartbeatService(workspace=tmp_path, on_heartbeat=None)
-    result = await svc.trigger_now()
-    assert result is None
+async def test_tick_calls_on_notify_when_evaluation_passes(tmp_path):
+    """If on_execute returns and evaluation passes, on_notify should be called."""
+    notify_received = None
+
+    async def on_execute(tasks):
+        return "Response content"
+
+    async def on_notify(content):
+        nonlocal notify_received
+        notify_received = content
+
+    provider = MagicMock()
+    mock_response = MagicMock()
+    mock_response.should_execute_tools = True
+    mock_response.has_tool_calls = True
+    mock_response.tool_calls = [
+        MagicMock(arguments={"action": "run", "tasks": "Do task"})
+    ]
+    provider.chat_with_retry = AsyncMock(return_value=mock_response)
+
+    # Mock evaluate_response to return True (should notify)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "blackcat.utils.evaluator.evaluate_response",
+            AsyncMock(return_value=True),
+        )
+
+        hb = tmp_path / "HEARTBEAT.md"
+        hb.write_text("# Active\n- Do task")
+
+        svc = HeartbeatService(
+            workspace=tmp_path,
+            provider=provider,
+            model="test-model",
+            on_execute=on_execute,
+            on_notify=on_notify,
+        )
+        await svc._tick()
+        assert notify_received == "Response content"
+
+
+@pytest.mark.asyncio
+async def test_tick_skips_notify_when_evaluation_fails(tmp_path):
+    """If evaluation fails, on_notify should not be called."""
+    notify_called = False
+
+    async def on_execute(tasks):
+        return "Response content"
+
+    async def on_notify(content):
+        nonlocal notify_called
+        notify_called = True
+
+    provider = MagicMock()
+    mock_response = MagicMock()
+    mock_response.should_execute_tools = True
+    mock_response.has_tool_calls = True
+    mock_response.tool_calls = [
+        MagicMock(arguments={"action": "run", "tasks": "Do task"})
+    ]
+    provider.chat_with_retry = AsyncMock(return_value=mock_response)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "blackcat.utils.evaluator.evaluate_response",
+            AsyncMock(return_value=False),
+        )
+
+        hb = tmp_path / "HEARTBEAT.md"
+        hb.write_text("# Active\n- Do task")
+
+        svc = HeartbeatService(
+            workspace=tmp_path,
+            provider=provider,
+            model="test-model",
+            on_execute=on_execute,
+            on_notify=on_notify,
+        )
+        await svc._tick()
+        assert notify_called is False
+
+
+# ── start/stop ─────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_start_disabled(tmp_path):
-    svc = HeartbeatService(workspace=tmp_path, enabled=False)
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=MagicMock(),
+        model="test-model",
+        enabled=False,
+    )
     await svc.start()
     assert svc._task is None
 
 
+@pytest.mark.asyncio
+async def test_start_already_running(tmp_path):
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=MagicMock(),
+        model="test-model",
+        enabled=True,
+        interval_s=1,
+    )
+    await svc.start()
+    assert svc._task is not None
+
+    # Second start should set _task to None and return early
+    # (the warning is logged but we can't easily capture loguru logs)
+    initial_task = svc._task
+    await svc.start()
+    # Second start should not replace the task
+    assert svc._task is initial_task
+
+    svc.stop()
+
+
 def test_stop(tmp_path):
-    svc = HeartbeatService(workspace=tmp_path)
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=MagicMock(),
+        model="test-model",
+    )
     svc._running = True
+    # Don't create a real task outside of event loop - just test the flag
+    svc._task = None
     svc.stop()
     assert svc._running is False
     assert svc._task is None
 
 
-def test_heartbeat_ok_token():
-    """Verify the OK token matches what the service checks."""
-    response = "HEARTBEAT_OK"
-    normalized = response.upper().replace("_", "")
-    expected = HEARTBEAT_OK_TOKEN.replace("_", "")
-    assert expected in normalized
+# ── trigger_now ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_trigger_now_no_file(tmp_path):
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=MagicMock(),
+        model="test-model",
+    )
+    result = await svc.trigger_now()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_trigger_now_skips_on_llm_skip(tmp_path):
+    """trigger_now respects LLM skip decision."""
+    provider = MagicMock()
+    mock_response = MagicMock()
+    mock_response.should_execute_tools = False
+    provider.chat_with_retry = AsyncMock(return_value=mock_response)
+
+    hb = tmp_path / "HEARTBEAT.md"
+    hb.write_text("# Empty")
+
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=provider,
+        model="test-model",
+    )
+    result = await svc.trigger_now()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_trigger_now_executes_on_run(tmp_path):
+    """trigger_now executes tasks when LLM decides run."""
+    received_tasks = None
+
+    async def on_execute(tasks):
+        nonlocal received_tasks
+        received_tasks = tasks
+        return "Done: " + tasks
+
+    provider = MagicMock()
+    mock_response = MagicMock()
+    mock_response.should_execute_tools = True
+    mock_response.has_tool_calls = True
+    mock_response.tool_calls = [
+        MagicMock(arguments={"action": "run", "tasks": "Manual task"})
+    ]
+    provider.chat_with_retry = AsyncMock(return_value=mock_response)
+
+    hb = tmp_path / "HEARTBEAT.md"
+    hb.write_text("# Active\n- Manual task")
+
+    svc = HeartbeatService(
+        workspace=tmp_path,
+        provider=provider,
+        model="test-model",
+        on_execute=on_execute,
+    )
+    result = await svc.trigger_now()
+    assert received_tasks == "Manual task"
+    assert result == "Done: Manual task"

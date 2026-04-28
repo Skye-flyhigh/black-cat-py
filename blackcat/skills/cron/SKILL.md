@@ -7,10 +7,11 @@ description: Schedule reminders and recurring tasks.
 
 Use the `cron` tool to schedule reminders or recurring tasks.
 
-## Two Modes
+## Three Modes
 
 1. **Reminder** - message is sent directly to user
 2. **Task** - message is a task description, agent executes and sends result
+3. **One-time** - runs once at a specific time, then auto-deletes
 
 ## Examples
 
@@ -38,3 +39,9 @@ cron(action="remove", job_id="abc123")
 | every hour | every_seconds: 3600 |
 | every day at 8am | cron_expr: "0 8 * * *" |
 | weekdays at 5pm | cron_expr: "0 17 * * 1-5" |
+| 9am Vancouver time daily | cron_expr: "0 9 * * *", tz: "America/Vancouver" |
+| at a specific time | at: ISO datetime string (compute from current time) |
+
+## Timezone
+
+Use `tz` with `cron_expr` to schedule in a specific IANA timezone. Without `tz`, the server's local timezone is used.

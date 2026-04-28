@@ -12,7 +12,11 @@ from urllib.parse import quote, urlparse
 import httpx
 
 from blackcat.agent.tools.base import Tool, tool_parameters
-from blackcat.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
+from blackcat.agent.tools.schema import (
+    IntegerSchema,
+    StringSchema,
+    tool_parameters_schema,
+)
 from blackcat.config.schema import WebSearchConfig
 from blackcat.utils.media import build_image_content_blocks
 
@@ -254,6 +258,16 @@ class WebSearchTool(Tool):
     @property
     def read_only(self) -> bool:
         return True
+
+    @property
+    def exclusive(self) -> bool:
+        """DuckDuckGo and Brave without API key are exclusive (not concurrency-safe)."""
+        provider = (self.config.provider or "").strip().lower()
+        if provider == "duckduckgo":
+            return True
+        if provider == "brave" and not (self.config.api_key or os.environ.get("BRAVE_API_KEY", "")):
+            return True
+        return False
 
     async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
         # Validate query before dispatching to any provider

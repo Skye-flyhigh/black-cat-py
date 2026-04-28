@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -21,6 +23,7 @@ from blackcat.utils.helpers import safe_filename
 
 DISCORD_AVAILABLE = importlib.util.find_spec("discord") is not None
 if TYPE_CHECKING:
+    import aiohttp
     import discord
     from discord import app_commands
     from discord.abc import Messageable
@@ -35,17 +38,32 @@ MAX_MESSAGE_LEN = 2000  # Discord message character limit
 TYPING_INTERVAL_S = 8
 
 
+@dataclass
+class _StreamBuf:
+    """Per-chat streaming accumulator for progressive Discord message edits."""
+
+    text: str = ""
+    message: Any | None = None
+    last_edit: float = 0.0
+    stream_id: str | None = None
+
+
 class DiscordConfig(Base):
     """Discord channel configuration."""
 
     enabled: bool = False
     token: str = ""
     allow_from: list[str] = Field(default_factory=list)
+    allow_channels: list[str] = Field(default_factory=list)  # Allowed channel IDs (empty = all)
     intents: int = 37377
     group_policy: Literal["mention", "open"] = "mention"
     read_receipt_emoji: str = "👀"
     working_emoji: str = "🔧"
     working_emoji_delay: float = 2.0
+    streaming: bool = True
+    proxy: str | None = None
+    proxy_username: str | None = None
+    proxy_password: str | None = None
 
 
 if DISCORD_AVAILABLE:
@@ -53,8 +71,15 @@ if DISCORD_AVAILABLE:
     class DiscordBotClient(discord.Client):
         """discord.py client that forwards events to the channel."""
 
-        def __init__(self, channel: DiscordChannel, *, intents: discord.Intents) -> None:
-            super().__init__(intents=intents)
+        def __init__(
+            self,
+            channel: DiscordChannel,
+            *,
+            intents: discord.Intents,
+            proxy: str | None = None,
+            proxy_auth: aiohttp.BasicAuth | None = None,
+        ) -> None:
+            super().__init__(intents=intents, proxy=proxy, proxy_auth=proxy_auth)
             self._channel = channel
             self.tree = app_commands.CommandTree(self)
             self._register_app_commands()
@@ -111,13 +136,14 @@ if DISCORD_AVAILABLE:
 
         def _register_app_commands(self) -> None:
             commands = (
-                ("new", "Start a new conversation", "/new"),
+                ("new", "Stop current task and start a new conversation", "/new"),
                 ("stop", "Stop the current task", "/stop"),
                 ("restart", "Restart the bot", "/restart"),
                 ("status", "Show bot status", "/status"),
             )
 
             for name, description, command_text in commands:
+
                 @self.tree.command(name=name, description=description)
                 async def command_handler(
                     interaction: discord.Interaction,
@@ -159,18 +185,13 @@ if DISCORD_AVAILABLE:
                     logger.warning("Discord channel {} unavailable: {}", msg.chat_id, e)
                     return
 
-            # Type narrow to Messageable - only TextChannel, DMChannel, etc. support sending
-            if not isinstance(channel, (discord.TextChannel, discord.DMChannel, discord.Thread, discord.PartialMessageable)):
-                logger.warning("Discord channel {} is not a messageable channel", msg.chat_id)
-                return
-
-            reference, mention_settings = self._build_reply_context(channel, msg.reply_to)  # type: ignore[arg-type]
+            reference, mention_settings = self._build_reply_context(channel, msg.reply_to)
             sent_media = False
             failed_media: list[str] = []
 
             for index, media_path in enumerate(msg.media or []):
                 if await self._send_file(
-                    channel,  # type: ignore[arg-type]
+                    channel,
                     media_path,
                     reference=reference if index == 0 else None,
                     mention_settings=mention_settings,
@@ -179,7 +200,9 @@ if DISCORD_AVAILABLE:
                 else:
                     failed_media.append(Path(media_path).name)
 
-            for index, chunk in enumerate(self._build_chunks(msg.content or "", failed_media, sent_media)):
+            for index, chunk in enumerate(
+                self._build_chunks(msg.content or "", failed_media, sent_media)
+            ):
                 kwargs: dict[str, Any] = {"content": chunk}
                 if index == 0 and reference is not None and not sent_media:
                     kwargs["reference"] = reference
@@ -227,7 +250,7 @@ if DISCORD_AVAILABLE:
 
         @staticmethod
         def _build_reply_context(
-            channel: discord.TextChannel | discord.DMChannel | discord.Thread,
+            channel: Messageable,
             reply_to: str | None,
         ) -> tuple[discord.PartialMessage | None, discord.AllowedMentions]:
             """Build reply context for outbound messages."""
@@ -248,6 +271,7 @@ class DiscordChannel(BaseChannel):
 
     name = "discord"
     display_name = "Discord"
+    _STREAM_EDIT_INTERVAL = 0.8
 
     @classmethod
     def default_config(cls) -> dict[str, Any]:
@@ -269,11 +293,12 @@ class DiscordChannel(BaseChannel):
         self._bot_user_id: str | None = None
         self._pending_reactions: dict[str, Any] = {}  # chat_id -> message object
         self._working_emoji_tasks: dict[str, asyncio.Task[None]] = {}
+        self._stream_bufs: dict[str, _StreamBuf] = {}
 
     async def start(self) -> None:
         """Start the Discord client."""
         if not DISCORD_AVAILABLE:
-            logger.error("discord.py not installed. Run: pip install blackcat-ai[discord]")
+            logger.error("discord.py not installed. Run: pip install nanobot-ai[discord]")
             return
 
         if not self.config.token:
@@ -283,7 +308,29 @@ class DiscordChannel(BaseChannel):
         try:
             intents = discord.Intents.none()
             intents.value = self.config.intents
-            self._client = DiscordBotClient(self, intents=intents)
+
+            proxy_auth = None
+            has_user = bool(self.config.proxy_username)
+            has_pass = bool(self.config.proxy_password)
+            if has_user and has_pass:
+                import aiohttp
+
+                proxy_auth = aiohttp.BasicAuth(
+                    login=self.config.proxy_username,
+                    password=self.config.proxy_password,
+                )
+            elif has_user != has_pass:
+                logger.warning(
+                    "Discord proxy auth incomplete: both proxy_username and "
+                    "proxy_password must be set; ignoring partial credentials",
+                )
+
+            self._client = DiscordBotClient(
+                self,
+                intents=intents,
+                proxy=self.config.proxy,
+                proxy_auth=proxy_auth,
+            )
         except Exception as e:
             logger.error("Failed to initialize Discord client: {}", e)
             self._client = None
@@ -308,8 +355,8 @@ class DiscordChannel(BaseChannel):
         self._running = False
         await self._reset_runtime_state(close_client=True)
 
-    async def send(self, msg: OutboundMessage) -> None:
-        """Send a message through Discord using discord.py."""
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """Internal send implementation - called by BaseChannel.send() after validation."""
         client = self._client
         if client is None or not client.is_ready():
             logger.warning("Discord client not ready; dropping outbound message")
@@ -321,21 +368,81 @@ class DiscordChannel(BaseChannel):
             await client.send_outbound(msg)
         except Exception as e:
             logger.error("Error sending Discord message: {}", e)
+            raise
         finally:
             if not is_progress:
                 await self._stop_typing(msg.chat_id)
                 await self._clear_reactions(msg.chat_id)
 
-    async def _send_impl(self, msg: OutboundMessage) -> None:
-        """Channel-specific send implementation (called by base class send)."""
+    async def send_delta(
+        self, chat_id: str, content: str, metadata: dict[str, Any] | None = None
+    ) -> None:
+        """Progressive Discord delivery: send once, then edit until the stream ends."""
         client = self._client
         if client is None or not client.is_ready():
+            logger.warning("Discord client not ready; dropping stream delta")
             return
-        await client.send_outbound(msg)
+
+        meta = metadata or {}
+        stream_id = meta.get("_stream_id")
+
+        if meta.get("_stream_end"):
+            buf = self._stream_bufs.get(chat_id)
+            if not buf or buf.message is None or not buf.text:
+                return
+            if stream_id is not None and buf.stream_id is not None and buf.stream_id != stream_id:
+                return
+            await self._finalize_stream(chat_id, buf)
+            return
+
+        buf = self._stream_bufs.get(chat_id)
+        if buf is None or (
+            stream_id is not None and buf.stream_id is not None and buf.stream_id != stream_id
+        ):
+            buf = _StreamBuf(stream_id=stream_id)
+            self._stream_bufs[chat_id] = buf
+        elif buf.stream_id is None:
+            buf.stream_id = stream_id
+
+        buf.text += content
+        if not buf.text.strip():
+            return
+
+        target = await self._resolve_channel(chat_id)
+        if target is None:
+            logger.warning("Discord stream target {} unavailable", chat_id)
+            return
+
+        now = time.monotonic()
+        if buf.message is None:
+            try:
+                buf.message = await target.send(content=buf.text)
+                buf.last_edit = now
+            except Exception as e:
+                logger.warning("Discord stream initial send failed: {}", e)
+                raise
+            return
+
+        if (now - buf.last_edit) < self._STREAM_EDIT_INTERVAL:
+            return
+
+        try:
+            await buf.message.edit(content=DiscordBotClient._build_chunks(buf.text, [], False)[0])
+            buf.last_edit = now
+        except Exception as e:
+            logger.warning("Discord stream edit failed: {}", e)
+            raise
 
     async def _handle_discord_message(self, message: discord.Message) -> None:
-        """Handle incoming Discord messages from discord.py."""
-        if message.author.bot:
+        """Handle incoming Discord messages from discord.py.
+
+        Self-loop guard: only drop messages from this bot's own account. Messages
+        from other bots are allowed through so multi-agent setups (one bot asking
+        another for help, a bot mentioning another by @name, etc.) can work.
+        Bot-from-bot loops are still prevented per-instance because each bot
+        still ignores its own outbound messages. (#3217)
+        """
+        if self._bot_user_id is not None and str(message.author.id) == self._bot_user_id:
             return
 
         sender_id = str(message.author.id)
@@ -349,10 +456,9 @@ class DiscordChannel(BaseChannel):
         full_content = self._compose_inbound_content(content, attachment_markers)
         metadata = self._build_inbound_metadata(message)
 
-        await self._start_typing(message.channel)
+        await self._start_typing(str(message.channel.id))
 
         # Add read receipt reaction immediately, working emoji after delay
-        channel_id = self._channel_key(message.channel)
         try:
             await message.add_reaction(self.config.read_receipt_emoji)
             self._pending_reactions[channel_id] = message
@@ -386,6 +492,47 @@ class DiscordChannel(BaseChannel):
         """Backward-compatible alias for legacy tests/callers."""
         await self._handle_discord_message(message)
 
+    async def _resolve_channel(self, chat_id: str) -> Any | None:
+        """Resolve a Discord channel from cache first, then network fetch."""
+        client = self._client
+        if client is None or not client.is_ready():
+            return None
+        channel_id = int(chat_id)
+        channel = client.get_channel(channel_id)
+        if channel is not None:
+            return channel
+        try:
+            return await client.fetch_channel(channel_id)
+        except Exception as e:
+            logger.warning("Discord channel {} unavailable: {}", chat_id, e)
+            return None
+
+    async def _finalize_stream(self, chat_id: str, buf: _StreamBuf) -> None:
+        """Commit the final streamed content and flush overflow chunks."""
+        chunks = DiscordBotClient._build_chunks(buf.text, [], False)
+        if not chunks:
+            self._stream_bufs.pop(chat_id, None)
+            return
+
+        try:
+            await buf.message.edit(content=chunks[0])
+        except Exception as e:
+            logger.warning("Discord final stream edit failed: {}", e)
+            raise
+
+        target = getattr(buf.message, "channel", None) or await self._resolve_channel(chat_id)
+        if target is None:
+            logger.warning("Discord stream follow-up target {} unavailable", chat_id)
+            self._stream_bufs.pop(chat_id, None)
+            return
+
+        for extra_chunk in chunks[1:]:
+            await target.send(content=extra_chunk)
+
+        self._stream_bufs.pop(chat_id, None)
+        await self._stop_typing(chat_id)
+        await self._clear_reactions(chat_id)
+
     def _should_accept_inbound(
         self,
         message: discord.Message,
@@ -395,6 +542,12 @@ class DiscordChannel(BaseChannel):
         """Check if inbound Discord message should be processed."""
         if not self.is_allowed(sender_id):
             return False
+        # Channel-based filtering: only respond in allowed channels
+        allow_channels = self.config.allow_channels
+        if allow_channels:
+            channel_id = self._channel_key(message.channel)
+            if channel_id not in allow_channels:
+                return False
         if message.guild is not None and not self._should_respond_in_group(message, content):
             return False
         return True
@@ -436,7 +589,11 @@ class DiscordChannel(BaseChannel):
     @staticmethod
     def _build_inbound_metadata(message: discord.Message) -> dict[str, str | None]:
         """Build metadata for inbound Discord messages."""
-        reply_to = str(message.reference.message_id) if message.reference and message.reference.message_id else None
+        reply_to = (
+            str(message.reference.message_id)
+            if message.reference and message.reference.message_id
+            else None
+        )
         return {
             "message_id": str(message.id),
             "guild_id": str(message.guild.id) if message.guild else None,
@@ -451,7 +608,9 @@ class DiscordChannel(BaseChannel):
         if self.config.group_policy == "mention":
             bot_user_id = self._bot_user_id
             if bot_user_id is None:
-                logger.debug("Discord message in {} ignored (bot identity unavailable)", message.channel.id)
+                logger.debug(
+                    "Discord message in {} ignored (bot identity unavailable)", message.channel.id
+                )
                 return False
 
             if any(str(user.id) == bot_user_id for user in message.mentions):
@@ -464,14 +623,18 @@ class DiscordChannel(BaseChannel):
 
         return True
 
-    async def _start_typing(self, channel: Messageable) -> None:
+    async def _start_typing(self, chat_id: str) -> None:
         """Start periodic typing indicator for a channel."""
-        channel_id = self._channel_key(channel)
-        await self._stop_typing(channel_id)
+        channel_id = self._channel_key(chat_id)
+        await self._stop_typing(chat_id)
 
         async def typing_loop() -> None:
             while self._running:
                 try:
+                    # Resolve the channel object from chat_id for typing context
+                    channel = await self._resolve_channel(chat_id)
+                    if channel is None:
+                        return
                     async with channel.typing():
                         await asyncio.sleep(TYPING_INTERVAL_S)
                 except asyncio.CancelledError:
@@ -482,9 +645,9 @@ class DiscordChannel(BaseChannel):
 
         self._typing_tasks[channel_id] = asyncio.create_task(typing_loop())
 
-    async def _stop_typing(self, channel_id: str) -> None:
+    async def _stop_typing(self, chat_id: str) -> None:
         """Stop typing indicator for a channel."""
-        task = self._typing_tasks.pop(self._channel_key(channel_id), None)
+        task = self._typing_tasks.pop(self._channel_key(chat_id), None)
         if task is None:
             return
         task.cancel()
@@ -492,7 +655,6 @@ class DiscordChannel(BaseChannel):
             await task
         except asyncio.CancelledError:
             pass
-
 
     async def _clear_reactions(self, chat_id: str) -> None:
         """Remove all pending reactions after bot replies."""
@@ -520,6 +682,7 @@ class DiscordChannel(BaseChannel):
     async def _reset_runtime_state(self, close_client: bool) -> None:
         """Reset client and typing state."""
         await self._cancel_all_typing()
+        self._stream_bufs.clear()
         if close_client and self._client is not None and not self._client.is_closed():
             try:
                 await self._client.close()

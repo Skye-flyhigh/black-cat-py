@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -11,7 +12,23 @@ from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
 from blackcat.config.schema import Config
-from blackcat.utils.restart import consume_restart_notice_from_env, format_restart_completed_message
+from blackcat.utils.restart import (
+    consume_restart_notice_from_env,
+    format_restart_completed_message,
+)
+
+if TYPE_CHECKING:
+    from blackcat.session.manager import SessionManager
+
+
+def _default_webui_dist() -> Path | None:
+    """Return the absolute path to the bundled webui dist directory if it exists."""
+    try:
+        import blackcat.web as web_pkg  # type: ignore[import-not-found]
+    except ImportError:
+        return None
+    candidate = Path(web_pkg.__file__).resolve().parent / "dist"
+    return candidate if candidate.is_dir() else None
 
 # Retry delays for message sending (exponential backoff: 1s, 2s, 4s)
 _SEND_RETRY_DELAYS = (1, 2, 4)
@@ -27,9 +44,16 @@ class ChannelManager:
     - Route outbound messages
     """
 
-    def __init__(self, config: Config, bus: MessageBus):
+    def __init__(
+        self,
+        config: Config,
+        bus: MessageBus,
+        *,
+        session_manager: "SessionManager | None" = None,
+    ):
         self.config = config
         self.bus = bus
+        self._session_manager = session_manager
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
 
@@ -39,7 +63,10 @@ class ChannelManager:
         """Initialize channels discovered via pkgutil scan + entry_points plugins."""
         from blackcat.channels.registry import discover_all
 
-        groq_key = self.config.providers.groq.api_key
+        transcription_provider = self.config.channels.transcription_provider
+        transcription_key = self._resolve_transcription_key(transcription_provider)
+        transcription_base = self._resolve_transcription_base(transcription_provider)
+        transcription_language = self.config.channels.transcription_language
 
         for name, cls in discover_all().items():
             section = getattr(self.config.channels, name, None)
@@ -53,8 +80,19 @@ class ChannelManager:
             if not enabled:
                 continue
             try:
-                channel = cls(section, self.bus)
-                channel.transcription_api_key = groq_key
+                kwargs: dict[str, Any] = {}
+                # Only the WebSocket channel currently hosts the embedded webui
+                # surface; other channels stay oblivious to these knobs.
+                if cls.name == "websocket" and self._session_manager is not None:
+                    kwargs["session_manager"] = self._session_manager
+                    static_path = _default_webui_dist()
+                    if static_path is not None:
+                        kwargs["static_dist_path"] = static_path
+                channel = cls(section, self.bus, **kwargs)
+                channel.transcription_provider = transcription_provider
+                channel.transcription_api_key = transcription_key
+                channel.transcription_api_base = transcription_base
+                channel.transcription_language = transcription_language
                 self.channels[name] = channel
                 logger.info("{} channel enabled", cls.display_name)
             except Exception as e:
@@ -62,9 +100,35 @@ class ChannelManager:
 
         self._validate_allow_from()
 
+    def _resolve_transcription_key(self, provider: str) -> str:
+        """Pick the API key for the configured transcription provider."""
+        try:
+            if provider == "openai":
+                return self.config.providers.openai.api_key
+            return self.config.providers.groq.api_key
+        except AttributeError:
+            return ""
+
+    def _resolve_transcription_base(self, provider: str) -> str:
+        """Pick the API base URL for the configured transcription provider."""
+        try:
+            if provider == "openai":
+                return self.config.providers.openai.api_base or ""
+            return self.config.providers.groq.api_base or ""
+        except AttributeError:
+            return ""
+
     def _validate_allow_from(self) -> None:
         for name, ch in self.channels.items():
-            if getattr(ch.config, "allow_from", None) == []:
+            cfg = ch.config
+            if isinstance(cfg, dict):
+                if "allow_from" in cfg:
+                    allow = cfg.get("allow_from")
+                else:
+                    allow = cfg.get("allowFrom")
+            else:
+                allow = getattr(cfg, "allow_from", None)
+            if allow == []:
                 raise SystemExit(
                     f'Error: "{name}" has empty allowFrom (denies all). '
                     f'Set ["*"] to allow everyone, or add specific user IDs.'
@@ -158,6 +222,9 @@ class ChannelManager:
                         continue
                     if not msg.metadata.get("_tool_hint") and not self.config.channels.send_progress:
                         continue
+
+                if msg.metadata.get("_retry_wait"):
+                    continue
 
                 # Coalesce consecutive _stream_delta messages for the same (channel, chat_id)
                 # to reduce API calls and improve streaming latency

@@ -26,6 +26,7 @@ from blackcat.utils.helpers import (
     resolve_path,
     safe_filename,
     safe_json_dumps,
+    sync_workspace_templates,
     truncate_string,
 )
 
@@ -108,4 +109,5 @@ __all__ = [
     "repeated_external_lookup_error",
     # Tool result utilities
     "maybe_persist_tool_result",
+    "sync_workspace_templates",
 ]

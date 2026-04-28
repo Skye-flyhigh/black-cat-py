@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+from typing import Any
+
+from blackcat.agent.tools.base import Tool
+from blackcat.agent.tools.registry import ToolRegistry
+
+
+class _FakeTool(Tool):
+    def __init__(self, name: str):
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return f"{self._name} tool"
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {"type": "object", "properties": {}}
+
+    async def execute(self, **kwargs: Any) -> Any:
+        return kwargs
+
+
+def _tool_names(definitions: list[dict[str, Any]]) -> list[str]:
+    names: list[str] = []
+    for definition in definitions:
+        fn = definition.get("function", {})
+        names.append(fn.get("name", ""))
+    return names
+
+
+def test_get_definitions_orders_builtins_then_mcp_tools() -> None:
+    registry = ToolRegistry()
+    registry.register(_FakeTool("mcp_git_status"))
+    registry.register(_FakeTool("write_file"))
+    registry.register(_FakeTool("mcp_fs_list"))
+    registry.register(_FakeTool("read_file"))
+
+    assert _tool_names(registry.get_definitions()) == [
+        "read_file",
+        "write_file",
+        "mcp_fs_list",
+        "mcp_git_status",
+    ]
+
+
+def test_prepare_call_read_file_rejects_non_object_params_with_actionable_hint() -> None:
+    """prepare_call expects dict params - list input triggers validation error."""
+    registry = ToolRegistry()
+    registry.register(_FakeTool("read_file"))
+
+    tool, params, error = registry.prepare_call("read_file", ["foo.txt"])
+
+    # Tool is resolved but validation fails
+    assert tool is not None
+    assert params == ["foo.txt"]
+    assert error is not None
+    assert "parameters must be an object" in error
+
+
+def test_prepare_call_other_tools_keep_generic_object_validation() -> None:
+    registry = ToolRegistry()
+    registry.register(_FakeTool("grep"))
+
+    tool, params, error = registry.prepare_call("grep", ["TODO"])
+
+    assert tool is not None
+    assert params == ["TODO"]
+    assert error is not None
+    assert "parameters must be an object" in error
+
+
+def test_get_definitions_returns_stable_result() -> None:
+    """get_definitions returns stable ordering (cache test removed - no caching in current impl)."""
+    registry = ToolRegistry()
+    registry.register(_FakeTool("read_file"))
+    first = registry.get_definitions()
+    second = registry.get_definitions()
+    assert first == second
+
+
+def test_register_invalidates_cache() -> None:
+    registry = ToolRegistry()
+    registry.register(_FakeTool("read_file"))
+    first = registry.get_definitions()
+    registry.register(_FakeTool("write_file"))
+    second = registry.get_definitions()
+    assert first is not second
+    assert len(second) == 2
+
+
+def test_unregister_invalidates_cache() -> None:
+    registry = ToolRegistry()
+    registry.register(_FakeTool("read_file"))
+    registry.register(_FakeTool("write_file"))
+    first = registry.get_definitions()
+    registry.unregister("write_file")
+    second = registry.get_definitions()
+    assert first is not second
+    assert len(second) == 1

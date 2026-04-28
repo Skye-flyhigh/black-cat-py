@@ -12,7 +12,11 @@ from loguru import logger
 
 from blackcat.agent.tools.base import Tool, tool_parameters
 from blackcat.agent.tools.sandbox import wrap_command
-from blackcat.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
+from blackcat.agent.tools.schema import (
+    IntegerSchema,
+    StringSchema,
+    tool_parameters_schema,
+)
 from blackcat.config.paths import get_media_dir
 
 _IS_WINDOWS = sys.platform == "win32"

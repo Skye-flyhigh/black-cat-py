@@ -32,6 +32,15 @@ class CronPayload:
 
 
 @dataclass
+class CronRunRecord:
+    """A single execution record for a cron job."""
+    run_at_ms: int
+    status: Literal["ok", "error", "skipped"]
+    duration_ms: int = 0
+    error: str | None = None
+
+
+@dataclass
 class CronJobState:
     """Runtime state of a job."""
 
@@ -39,6 +48,7 @@ class CronJobState:
     last_run_at_ms: int | None = None
     last_status: Literal["ok", "error", "skipped"] | None = None
     last_error: str | None = None
+    run_history: list[CronRunRecord] = field(default_factory=list)
 
 
 @dataclass
@@ -55,6 +65,18 @@ class CronJob:
     updated_at_ms: int = 0
     delete_after_run: bool = False
     metadata: dict | None = None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict):
+        state_kwargs = dict(kwargs.get("state", {}))
+        state_kwargs["run_history"] = [
+            record if isinstance(record, CronRunRecord) else CronRunRecord(**record)
+            for record in state_kwargs.get("run_history", [])
+        ]
+        kwargs["schedule"] = CronSchedule(**kwargs.get("schedule", {"kind": "every"}))
+        kwargs["payload"] = CronPayload(**kwargs.get("payload", {}))
+        kwargs["state"] = CronJobState(**state_kwargs)
+        return cls(**kwargs)
 
 
 @dataclass

@@ -189,9 +189,13 @@ class CronTool(Tool):
         if every_seconds:
             schedule = CronSchedule(kind="every", every_ms=every_seconds * 1000)
         elif cron_expr:
-            schedule = CronSchedule(kind="cron", expr=cron_expr, tz=tz)
+            schedule = CronSchedule(kind="cron", expr=cron_expr, tz=tz or self._default_timezone)
         elif at:
+            from zoneinfo import ZoneInfo
             dt = datetime.fromisoformat(at)
+            # Apply default timezone if naive datetime
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=ZoneInfo(self._default_timezone))
             at_ms = int(dt.timestamp() * 1000)
             schedule = CronSchedule(kind="at", at_ms=at_ms)
             delete_after = True
@@ -212,7 +216,7 @@ class CronTool(Tool):
         metadata: dict | None,
     ) -> str:
         if not message and not tool_name:
-            return "Error: message or tool_name is required for add"
+            return "Error: action='add' requires a non-empty 'message' (or 'tool_name'). Retry including message='...' in your request."
 
         channel = self._channel.get()
         chat_id = self._chat_id.get()

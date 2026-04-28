@@ -319,7 +319,14 @@ async def test_subagent_registers_grep_and_glob(tmp_path: Path) -> None:
     mgr.runner.run = fake_run
     mgr._announce_result = AsyncMock()
 
-    await mgr._run_subagent("sub-1", "search task", "label", {"channel": "cli", "chat_id": "direct"})
+    from blackcat.agent.subagent import SubagentStatus
+    status = SubagentStatus(
+        task_id="sub-1",
+        label="label",
+        task_description="search task",
+        started_at=0.0,
+    )
+    await mgr._run_subagent("sub-1", "search task", "label", {"channel": "cli", "chat_id": "direct"}, status)
 
     assert "grep" in captured["tool_names"]
     assert "glob" in captured["tool_names"]

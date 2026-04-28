@@ -21,14 +21,21 @@ def _ollama_reachable() -> bool:
 
 @pytest.fixture(scope="session")
 def ollama_available():
-    """Skip test if Ollama is not reachable."""
-    if not _ollama_reachable():
-        pytest.skip("Ollama not running at localhost:11434")
+    """Return True if Ollama is reachable, False otherwise.
+
+    Tests should use this fixture and skip manually if needed.
+    """
+    return _ollama_reachable()
 
 
 @pytest.fixture(scope="session")
-def llm_provider():
-    """Default LLM provider for tests (Ollama via OpenAI-compatible API)."""
+def llm_provider(ollama_available):
+    """Default LLM provider for tests (Ollama via OpenAI-compatible API).
+
+    Skips if Ollama is not reachable.
+    """
+    if not ollama_available:
+        pytest.skip("Ollama not running at localhost:11434")
     return OpenAICompatProvider(
         api_key="ollama",
         api_base="http://localhost:11434/v1",

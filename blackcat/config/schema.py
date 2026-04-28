@@ -78,8 +78,7 @@ class AgentDefaults(Base):
     llm_timeout: int = 60  # Timeout for LLM API calls in seconds
     daily_summary_hour: int = 3  # Hour to run daily summary (0-23, default 3am)
     # Context management
-    memory_window: int = 50  # Max messages before triggering summarization
-    context_window_tokens: int | None = None
+    context_window_tokens: int = 65_536  # Token budget for context window
     context_block_limit: int | None = None
     max_tool_iterations: int = 200
     max_tool_result_chars: int = 16_000
@@ -260,7 +259,6 @@ class LensConfig(Base):
             return ws_config.diagnostics_source
         return self.diagnostics_source
 
-
 class MyToolConfig(Base):
     """Self-inspection tool configuration."""
 
@@ -273,10 +271,12 @@ class ToolsConfig(Base):
 
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    lens: LensConfig = Field(default_factory=LensConfig)
     my: MyToolConfig = Field(default_factory=MyToolConfig)
     restrict_to_workspace: bool = False  # restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
     lens: LensConfig = Field(default_factory=LensConfig)
+    ssrf_whitelist: list[str] = Field(default_factory=list)
 
 
 class AuthorIdentity(Base):
@@ -306,6 +306,16 @@ class Config(BaseSettings):
         """Get expanded workspace path."""
         return Path(self.agents.defaults.workspace).expanduser()
 
+    @staticmethod
+    def _is_cloud_model(model: str) -> bool:
+        """Check if model name ends with :cloud suffix (e.g., 'glm-5.1:cloud')."""
+        return model.lower().endswith(":cloud")
+
+    @staticmethod
+    def _strip_cloud_suffix(model: str) -> str:
+        """Remove :cloud suffix from model name for provider matching."""
+        return model[:-6] if model.lower().endswith(":cloud") else model
+
     def _match_provider(
         self, model: str | None = None
     ) -> tuple["ProviderConfig | None", str | None]:
@@ -320,7 +330,10 @@ class Config(BaseSettings):
                 return (p, spec.name) if p else (None, None)
             return None, None
 
-        model_lower = (model or self.agents.defaults.model).lower()
+        raw_model = model or self.agents.defaults.model
+        # Strip :cloud suffix for provider matching (cloud routing happens in get_api_base)
+        model_for_matching = self._strip_cloud_suffix(raw_model)
+        model_lower = model_for_matching.lower()
         model_normalized = model_lower.replace("-", "_")
         model_prefix = model_lower.split("/", 1)[0] if "/" in model_lower else ""
         normalized_prefix = model_prefix.replace("-", "_")
@@ -391,6 +404,11 @@ class Config(BaseSettings):
         from blackcat.providers.registry import find_by_name
 
         p, name = self._match_provider(model)
+
+        # Ollama cloud routing: models ending with :cloud use ollama.com
+        if name == "ollama" and model and self._is_cloud_model(model):
+            return "https://ollama.com/v1/"
+
         if p and p.api_base:
             return p.api_base
         if name:

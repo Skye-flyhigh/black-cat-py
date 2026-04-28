@@ -44,7 +44,8 @@ def test_is_allowed_exact_match():
 
 
 def test_is_allowed_pipe_separated():
-    ch = _make_channel(["alice"])
+    """Pipe-separated sender IDs require exact match (no special parsing)."""
+    ch = _make_channel(["alice|12345"])
     assert ch.is_allowed("alice|12345") is True
 
 
@@ -107,11 +108,12 @@ def test_resolve_path_relative_with_workspace(tmp_path):
 
 
 def test_sanitize_null_assistant_content():
+    """None content stays None (only empty strings are sanitized)."""
     from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
     messages = [{"role": "assistant", "content": None}]
     result = OpenAICompatProvider(api_key="test")._sanitize_empty_content(messages)
-    assert result[0]["content"] == "(empty)"
+    assert result[0]["content"] is None
 
 
 def test_sanitize_null_assistant_with_tool_calls():

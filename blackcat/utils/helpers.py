@@ -1,15 +1,140 @@
 """Utility functions for blackcat."""
 
+import base64
 import json
+import re
 import time
+from asyncio.log import logger
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import tiktoken
+
+
+def strip_think(text: str) -> str:
+    """Remove thinking blocks, unclosed trailing tags, and tokenizer-level
+    template leaks occasionally emitted by some models (notably Gemma 4's
+    Ollama renderer).
+
+    Covers:
+      1. Well-formed `<think>...</think>` and `<thought>...</thought>` blocks.
+      2. Streaming prefixes where the block is never closed.
+      3. *Malformed* opening tags missing the `>` — e.g. `<think广场…`. The
+         model sometimes emits the tag name directly followed by user-facing
+         content with no delimiter; without this step the literal `<think`
+         leaks into the rendered message.
+      4. Harmony-style channel markers like `<channel|>` / `<|channel|>`
+         **at the start of the text** — conservative to avoid eating
+         explanatory prose that mentions these tokens.
+      5. Orphan closing tags `</think>` / `</thought>` **at the very start
+         or end of the text** only, for the same reason.
+
+    Since this is also applied before persisting to history (memory.py),
+    the edge-only stripping of (4) and (5) is deliberate: stripping those
+    tokens mid-text would silently rewrite any message where a user or the
+    assistant discusses the tokens themselves.
+    """
+    # Well-formed blocks first.
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text)
+    text = re.sub(r"^\s*<think>[\s\S]*$", "", text)
+    text = re.sub(r"<thought>[\s\S]*?</thought>", "", text)
+    text = re.sub(r"^\s*<thought>[\s\S]*$", "", text)
+    # Malformed opening tags: `<think` / `<thought` where the next char is
+    # NOT one that could continue a valid tag / identifier name. Explicitly
+    # listing ASCII tag-name chars (letters, digits, `_`, `-`, `:`) plus
+    # `>` / `/` — we can't use `\w` here because in Python's default
+    # Unicode regex mode it matches CJK characters too, which would defeat
+    # the primary fix for `<think广场…` leaks.
+    text = re.sub(r"<think(?![A-Za-z0-9_\-:>/])", "", text)
+    text = re.sub(r"<thought(?![A-Za-z0-9_\-:>/])", "", text)
+    # Edge-only orphan closing tags (start or end of text).
+    text = re.sub(r"^\s*</think>\s*", "", text)
+    text = re.sub(r"\s*</think>\s*$", "", text)
+    text = re.sub(r"^\s*</thought>\s*", "", text)
+    text = re.sub(r"\s*</thought>\s*$", "", text)
+    # Edge-only channel markers (harmony / Gemma 4 variant leaks).
+    text = re.sub(r"^\s*<\|?channel\|?>\s*", "", text)
+    return text.strip()
+
+
+def detect_image_mime(data: bytes) -> str | None:
+    """Detect image MIME type from magic bytes, ignoring file extension."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def build_image_content_blocks(
+    raw: bytes, mime: str, path: str, label: str
+) -> list[dict[str, Any]]:
+    """Build native image blocks plus a short text label."""
+    b64 = base64.b64encode(raw).decode()
+    return [
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime};base64,{b64}"},
+            "_meta": {"path": path},
+        },
+        {"type": "text", "text": label},
+    ]
+
 
 def ensure_dir(path: Path) -> Path:
-    """Ensure a directory exists, creating it if necessary."""
+    """Ensure directory exists, return it."""
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def timestamp() -> str:
+    """Current ISO timestamp."""
+    return datetime.now().isoformat()
+
+
+def current_time_str(timezone: str | None = None) -> str:
+    """Return the current time string."""
+    from zoneinfo import ZoneInfo
+
+    try:
+        tz = ZoneInfo(timezone) if timezone else None
+    except (KeyError, Exception):
+        tz = None
+
+    now = datetime.now(tz=tz) if tz else datetime.now().astimezone()
+    offset = now.strftime("%z")
+    offset_fmt = f"{offset[:3]}:{offset[3:]}" if len(offset) == 5 else offset
+    tz_name = timezone or (time.strftime("%Z") or "UTC")
+    return f"{now.strftime('%Y-%m-%d %H:%M (%A)')} ({tz_name}, UTC{offset_fmt})"
+
+
+_UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*]')
+_TOOL_RESULT_PREVIEW_CHARS = 1200
+_TOOL_RESULTS_DIR = ".blackcat/tool-results"
+_TOOL_RESULT_RETENTION_SECS = 7 * 24 * 60 * 60
+_TOOL_RESULT_MAX_BUCKETS = 32
+
+
+def safe_filename(name: str) -> str:
+    """Replace unsafe path characters with underscores."""
+    return _UNSAFE_CHARS.sub("_", name).strip()
+
+
+def image_placeholder_text(path: str | None, *, empty: str = "[image]") -> str:
+    """Build an image placeholder string."""
+    return f"[image: {path}]" if path else empty
+
+
+def truncate_text(text: str, max_chars: int) -> str:
+    """Truncate text with a stable suffix."""
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "\n... (truncated)"
 
 
 def get_data_path() -> Path:
@@ -50,20 +175,12 @@ def get_skills_path(workspace: Path | None = None) -> Path:
     ws = workspace or get_workspace_path()
     return ensure_dir(ws / "skills")
 
+
 def truncate_string(s: str, max_len: int = 100, suffix: str = "...") -> str:
     """Truncate a string to max length, adding suffix if truncated."""
     if len(s) <= max_len:
         return s
     return s[: max_len - len(suffix)] + suffix
-
-
-def safe_filename(name: str) -> str:
-    """Convert a string to a safe filename."""
-    # Replace unsafe characters
-    unsafe = '<>:"/\\|?*'
-    for char in unsafe:
-        name = name.replace(char, "_")
-    return name.strip()
 
 
 def parse_session_key(key: str) -> tuple[str, str]:
@@ -80,6 +197,7 @@ def parse_session_key(key: str) -> tuple[str, str]:
     if len(parts) != 2:
         raise ValueError(f"Invalid session key: {key}")
     return parts[0], parts[1]
+
 
 def safe_json_dumps(obj: Any) -> str:
     """JSON-encode with ensure_ascii=False for clean Unicode output."""
@@ -99,6 +217,7 @@ def build_tool_call_dicts(tool_calls: list) -> list[dict[str, Any]]:
         }
         for tc in tool_calls
     ]
+
 
 def extract_system_message(
     messages: list[dict[str, Any]],
@@ -128,6 +247,7 @@ def resolve_path(
             raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
     return resolved
 
+
 def build_status_content(
     *,
     version: str,
@@ -137,6 +257,9 @@ def build_status_content(
     context_window_tokens: int,
     session_msg_count: int,
     context_tokens_estimate: int,
+    search_usage_text: str | None = None,
+    active_task_count: int = 0,
+    max_completion_tokens: int = 8192,
 ) -> str:
     """Build a human-readable runtime status snapshot."""
     uptime_s = int(time.time() - start_time)
@@ -148,45 +271,58 @@ def build_status_content(
     last_in = last_usage.get("prompt_tokens", 0)
     last_out = last_usage.get("completion_tokens", 0)
     cached = last_usage.get("cached_tokens", 0)
-    ctx_total = max(context_window_tokens, 0)
+    ctx_total = max(context_window_tokens or 0, 0)
     ctx_pct = int((context_tokens_estimate / ctx_total) * 100) if ctx_total > 0 else 0
     ctx_used_str = f"{context_tokens_estimate // 1000}k" if context_tokens_estimate >= 1000 else str(context_tokens_estimate)
     ctx_total_str = f"{ctx_total // 1024}k" if ctx_total > 0 else "n/a"
     token_line = f"\U0001f4ca Tokens: {last_in} in / {last_out} out"
     if cached and last_in:
         token_line += f" ({cached * 100 // last_in}% cached)"
-    return "\n".join([
+    lines = [
         f"\U0001f408 blackcat v{version}",
         f"\U0001f9e0 Model: {model}",
         token_line,
-        f"\U0001f4da Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}%)",
-        f"\U0001f4ac Session: {session_msg_count} messages",
-        f"\u23f1 Uptime: {uptime}",
-    ])
+        f"\U0001f4c8 Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}%)",
+        f"\u23f1\ufe0f Uptime: {uptime}",
+        f"\U0001f4ac Messages: {session_msg_count}",
+    ]
+    if search_usage_text:
+        lines.append(f"\U0001f50d Search: {search_usage_text}")
+    if active_task_count:
+        lines.append(f"\U0001f504 Active tasks: {active_task_count}")
+    return "\n".join(lines)
 
 
-def find_legal_message_start(messages: list[dict[str, Any]]) -> int:
-    """Find the first index whose tool results have matching assistant calls."""
-    declared: set[str] = set()
-    start = 0
+def find_legal_message_start(messages: list[dict[str, Any]]) -> int | None:
+    """Find the index of the first message that starts a legal turn.
+
+    Returns None if all messages are legal, or the index of the first message
+    that should be dropped to make the list legal.
+    """
+    if not messages:
+        return None
+
+    # If starts with user, already legal
+    if messages[0].get("role") == "user":
+        return None
+
+    # Find first user message
     for i, msg in enumerate(messages):
-        role = msg.get("role")
-        if role == "assistant":
-            for tc in msg.get("tool_calls") or []:
-                if isinstance(tc, dict) and tc.get("id"):
-                    declared.add(str(tc["id"]))
-        elif role == "tool":
-            tid = msg.get("tool_call_id")
-            if tid and str(tid) not in declared:
-                start = i + 1
-                declared.clear()
-                for prev in messages[start : i + 1]:
-                    if prev.get("role") == "assistant":
-                        for tc in prev.get("tool_calls") or []:
-                            if isinstance(tc, dict) and tc.get("id"):
-                                declared.add(str(tc["id"]))
-    return start
+        if msg.get("role") == "user":
+            return i
 
+    # No user messages found - return None to preserve assistant-only messages
+    # (e.g., for defensive handling of media kwargs on non-user rows)
+    return None
+
+
+def count_tokens(text: str, model: str = "gpt-4") -> int:
+    """Count tokens using tiktoken."""
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")
+    return len(encoding.encode(text))
 
 def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]:
     """Sync bundled templates to workspace. Only creates missing files."""
@@ -196,12 +332,10 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
         tpl = pkg_files("blackcat") / "templates"
     except Exception:
         return []
-
     if not tpl.is_dir():
         return []
 
     added: list[str] = []
-
     def _write(src, dest: Path):
         if dest.exists():
             return
@@ -213,7 +347,7 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
         if item.name.endswith(".md") and not item.name.startswith("."):
             _write(item, workspace / item.name)
     _write(tpl / "memory" / "MEMORY.md", workspace / "memory" / "MEMORY.md")
-    _write(None, workspace / "memory" / "HISTORY.md")
+    _write(None, workspace / "memory" / "history.jsonl")
     (workspace / "skills").mkdir(exist_ok=True)
 
     if added and not silent:
@@ -221,4 +355,21 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
 
         for name in added:
             Console().print(f"  [dim]Created {name}[/dim]")
+
+    # Initialize git for memory version control
+    try:
+        from blackcat.utils.gitstore import GitStore
+
+        gs = GitStore(
+            workspace,
+            tracked_files=[
+                "SOUL.md",
+                "USER.md",
+                "memory/MEMORY.md",
+            ],
+        )
+        gs.init()
+    except Exception:
+        logger.warning("Failed to initialize git store for {}", workspace)
+
     return added

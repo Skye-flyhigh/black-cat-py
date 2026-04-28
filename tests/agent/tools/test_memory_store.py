@@ -1,16 +1,16 @@
-"""Tests for MemoryStore (daily notes + long-term memory)."""
+"""Tests for Journal (daily notes + long-term memory)."""
 
 from datetime import datetime
 
 import pytest
 
-from blackcat.memory.memory import MemoryStore
+from blackcat.memory.memory import Journal
 from blackcat.utils.time import today_date
 
 
 @pytest.fixture
 def memory(tmp_path):
-    return MemoryStore(workspace=tmp_path)
+    return Journal(workspace=tmp_path)
 
 
 # ── Daily notes ────────────────────────────────────────────────────

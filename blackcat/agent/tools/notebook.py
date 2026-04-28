@@ -8,7 +8,11 @@ from typing import Any
 
 from blackcat.agent.tools.base import tool_parameters
 from blackcat.agent.tools.filesystem import _FsTool
-from blackcat.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
+from blackcat.agent.tools.schema import (
+    IntegerSchema,
+    StringSchema,
+    tool_parameters_schema,
+)
 
 
 def _new_cell(source: str, cell_type: str = "code", generate_id: bool = False) -> dict:

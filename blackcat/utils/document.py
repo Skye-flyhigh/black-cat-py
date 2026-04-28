@@ -3,11 +3,7 @@
 import mimetypes
 from pathlib import Path
 
-from docx import Document as DocxDocument
 from loguru import logger
-from openpyxl import load_workbook
-from pptx import Presentation as PptxPresentation
-from pypdf import PdfReader
 
 from blackcat.utils.media import detect_image_mime
 
@@ -53,12 +49,17 @@ def extract_text(path: Path) -> str | None:
         Extracted text as string, None for unsupported types,
         or error string for failures.
     """
+    if not isinstance(path, Path):
+        path = Path(path)
+
     if not path.exists():
         return f"[error: file not found: {path}]"
 
     ext = path.suffix.lower()
 
-    # Document formats
+    # Document formats -- each branch lazily imports its parser so that
+    # startup does not pay the ~25 MB cost of loading openpyxl /
+    # python-docx / python-pptx / pypdf up front (see issue #3422).
     if ext == ".pdf":
         return _extract_pdf(path)
     elif ext == ".docx":
@@ -80,6 +81,10 @@ def extract_text(path: Path) -> str | None:
 def _extract_pdf(path: Path) -> str:
     """Extract text from PDF using pypdf."""
     try:
+        from pypdf import PdfReader
+    except ImportError:
+        return "[error: pypdf not installed]"
+    try:
         reader = PdfReader(path)
         pages: list[str] = []
         for i, page in enumerate(reader.pages, 1):
@@ -94,6 +99,10 @@ def _extract_pdf(path: Path) -> str:
 def _extract_docx(path: Path) -> str:
     """Extract text from DOCX using python-docx."""
     try:
+        from docx import Document as DocxDocument
+    except ImportError:
+        return "[error: python-docx not installed]"
+    try:
         doc = DocxDocument(str(path))
         paragraphs: list[str] = [p.text for p in doc.paragraphs if p.text.strip()]
         return _truncate("\n\n".join(paragraphs), _MAX_TEXT_LENGTH)
@@ -104,6 +113,10 @@ def _extract_docx(path: Path) -> str:
 
 def _extract_xlsx(path: Path) -> str:
     """Extract text from XLSX using openpyxl."""
+    try:
+        from openpyxl import load_workbook
+    except ImportError:
+        return "[error: openpyxl not installed]"
     try:
         wb = load_workbook(path, read_only=True, data_only=True)
         try:
@@ -127,6 +140,10 @@ def _extract_xlsx(path: Path) -> str:
 
 def _extract_pptx(path: Path) -> str:
     """Extract text from PPTX using python-pptx."""
+    try:
+        from pptx import Presentation as PptxPresentation
+    except ImportError:
+        return "[error: python-pptx not installed]"
     try:
         prs = PptxPresentation(str(path))
         slides: list[str] = []
@@ -245,9 +262,7 @@ def extract_documents(
         if size > max_file_size:
             logger.warning(
                 "Skipping oversized file for extraction: {} ({:.1f} MB > {} MB limit)",
-                p.name,
-                size / (1024 * 1024),
-                max_file_size // (1024 * 1024),
+                p.name, size / (1024 * 1024), max_file_size // (1024 * 1024),
             )
             continue
 
