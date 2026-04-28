@@ -23,7 +23,6 @@ from blackcat.utils.helpers import (
 from blackcat.utils.prompt_templates import render_template
 
 if TYPE_CHECKING:
-    from blackcat.agent.summarizer import Summarizer
     from blackcat.lens import LensClient
 
 
@@ -79,7 +78,6 @@ class ContextBuilder:
     def __init__(
         self,
         workspace: Path,
-        summarizer: "Summarizer | None" = None,
         session_manager: SessionManager | None = None,
         timezone: str | None = None,
         disabled_skills: list[str] | None = None,
@@ -91,7 +89,6 @@ class ContextBuilder:
             workspace,
             disabled_skills=set(disabled_skills) if disabled_skills else None,
         )
-        self.summarizer = summarizer
         self.sessions = session_manager or SessionManager(workspace)
         self.lens_client: "LensClient | None" = None
         self.memory = self.store
