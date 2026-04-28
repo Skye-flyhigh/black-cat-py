@@ -78,8 +78,7 @@ class AgentDefaults(Base):
     llm_timeout: int = 60  # Timeout for LLM API calls in seconds
     daily_summary_hour: int = 3  # Hour to run daily summary (0-23, default 3am)
     # Context management
-    memory_window: int = 50  # Max messages before triggering summarization
-    context_window_tokens: int | None = None
+    context_window_tokens: int = 65_536  # Token budget for context window
     context_block_limit: int | None = None
     max_tool_iterations: int = 200
     max_tool_result_chars: int = 16_000

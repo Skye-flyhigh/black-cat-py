@@ -169,4 +169,15 @@ def _migrate_config(data: dict) -> dict:
         else:
             tools.pop("mySet", None)
 
+    # Migrate legacy memoryWindow → contextWindowTokens
+    # Old config used memoryWindow (message count), new uses contextWindowTokens (token budget)
+    agents = data.get("agents", {})
+    defaults = agents.get("defaults", {})
+    if "memoryWindow" in defaults:
+        # Remove legacy key
+        defaults.pop("memoryWindow")
+        # Set default context window tokens if not already set
+        if "contextWindowTokens" not in defaults:
+            defaults["contextWindowTokens"] = 65_536
+
     return data

@@ -19,7 +19,7 @@ def test_source_checkout_import_uses_pyproject_version_without_metadata() -> Non
 
         sys.path.insert(0, {str(repo_root)!r})
         fake = types.ModuleType("blackcat.blackcat")
-        fake.Nanobot = object
+        fake.Blackcat = object
         fake.RunResult = object
         sys.modules["blackcat.blackcat"] = fake
 

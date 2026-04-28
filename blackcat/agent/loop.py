@@ -121,15 +121,21 @@ class _LoopHook(AgentHook):
                     context.response.content if context.response else None
                 )
                 if thought:
-                    await self._on_progress(thought)
+                    try:
+                        await self._on_progress(thought)
+                    except Exception as e:
+                        logger.warning("on_progress callback failed: {}", e)
             tool_hint = self._loop._strip_think(self._loop._tool_hint(context.tool_calls))
             tool_events = [build_tool_event_start_payload(tc) for tc in context.tool_calls]
-            await invoke_on_progress(
-                self._on_progress,
-                tool_hint,
-                tool_hint=True,
-                tool_events=tool_events,
-            )
+            try:
+                await invoke_on_progress(
+                    self._on_progress,
+                    tool_hint,
+                    tool_hint=True,
+                    tool_events=tool_events,
+                )
+            except Exception as e:
+                logger.warning("on_progress callback failed: {}", e)
         for tc in context.tool_calls:
             args_str = json.dumps(tc.arguments, ensure_ascii=False)
             logger.info("Tool call: {}({})", tc.name, args_str[:200])
@@ -144,12 +150,15 @@ class _LoopHook(AgentHook):
         ):
             tool_events = build_tool_event_finish_payloads(context)
             if tool_events:
-                await invoke_on_progress(
-                    self._on_progress,
-                    "",
-                    tool_hint=False,
-                    tool_events=tool_events,
-                )
+                try:
+                    await invoke_on_progress(
+                        self._on_progress,
+                        "",
+                        tool_hint=False,
+                        tool_events=tool_events,
+                    )
+                except Exception as e:
+                    logger.warning("on_progress callback failed: {}", e)
         u = context.usage or {}
         logger.debug(
             "LLM usage: prompt={} completion={} cached={}",

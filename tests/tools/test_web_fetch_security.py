@@ -30,12 +30,13 @@ async def test_web_fetch_blocks_private_ip():
 
 
 @pytest.mark.asyncio
-async def test_web_fetch_blocks_localhost():
+async def test_web_fetch_blocks_private_internal_ip():
+    """web_fetch should block private/internal IPs (localhost is allowed for LSP bridges)."""
     tool = WebFetchTool()
-    def _resolve_localhost(hostname, port, family=0, type_=0):
-        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0))]
-    with patch("blackcat.security.network.socket.getaddrinfo", _resolve_localhost):
-        result = await tool.execute(url="http://localhost/admin")
+    def _resolve_private(hostname, port, family=0, type_=0):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0))]
+    with patch("blackcat.security.network.socket.getaddrinfo", _resolve_private):
+        result = await tool.execute(url="http://internal-service/admin")
     data = json.loads(result)
     assert "error" in data
 
@@ -47,25 +48,44 @@ async def test_web_fetch_result_contains_untrusted_flag():
 
     fake_html = "<html><head><title>Test</title></head><body><p>Hello world</p></body></html>"
 
-
     class FakeResponse:
         status_code = 200
         url = "https://example.com/page"
         text = fake_html
         headers = {"content-type": "text/html"}
-        def raise_for_status(self): pass
-        def json(self): return {}
 
-    async def _fake_get(self, url, **kwargs):
-        return FakeResponse()
+        def raise_for_status(self):
+            pass
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def stream(self, method, url, headers=None):
+            # Stream returns context manager for image detection
+            raise AttributeError("No image content-type")
+
+        async def get(self, url, headers=None):
+            return FakeResponse()
+
+    # Mock Jina to fail so it falls back to readability
+    async def _fake_jina(url, max_chars):
+        return None
 
     with patch("blackcat.security.network.socket.getaddrinfo", _fake_resolve_public), \
-         patch("httpx.AsyncClient.get", _fake_get):
+         patch("httpx.AsyncClient", FakeClient), \
+         patch.object(tool, "_fetch_jina", _fake_jina):
         result = await tool.execute(url="https://example.com/page")
 
     data = json.loads(result)
     assert data.get("untrusted") is True
-    assert "[External content" in data.get("text", "")
+    assert "external content" in data.get("text", "").lower()
 
 
 @pytest.mark.asyncio
@@ -74,7 +94,7 @@ async def test_web_fetch_blocks_private_redirect_before_returning_image(monkeypa
 
     class FakeStreamResponse:
         headers = {"content-type": "image/png"}
-        url = "http://127.0.0.1/secret.png"
+        url = "http://10.0.0.1/secret.png"  # Private IP that should be blocked
         content = b"\x89PNG\r\n\x1a\n"
 
         async def __aenter__(self):

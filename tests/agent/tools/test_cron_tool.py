@@ -270,7 +270,7 @@ async def test_add_job_missing_message(cron_tool):
     """Add job without message fails."""
     cron_tool.set_context("cli", "test-user")
     result = await cron_tool.execute(action="add", every_seconds=60)
-    assert "message or tool_name is required" in result
+    assert "action='add' requires a non-empty" in result
 
 
 @pytest.mark.asyncio

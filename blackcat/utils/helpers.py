@@ -271,7 +271,7 @@ def build_status_content(
     last_in = last_usage.get("prompt_tokens", 0)
     last_out = last_usage.get("completion_tokens", 0)
     cached = last_usage.get("cached_tokens", 0)
-    ctx_total = max(context_window_tokens, 0)
+    ctx_total = max(context_window_tokens or 0, 0)
     ctx_pct = int((context_tokens_estimate / ctx_total) * 100) if ctx_total > 0 else 0
     ctx_used_str = f"{context_tokens_estimate // 1000}k" if context_tokens_estimate >= 1000 else str(context_tokens_estimate)
     ctx_total_str = f"{ctx_total // 1024}k" if ctx_total > 0 else "n/a"
@@ -311,8 +311,9 @@ def find_legal_message_start(messages: list[dict[str, Any]]) -> int | None:
         if msg.get("role") == "user":
             return i
 
-    # No user messages found - drop everything
-    return len(messages)
+    # No user messages found - return None to preserve assistant-only messages
+    # (e.g., for defensive handling of media kwargs on non-user rows)
+    return None
 
 
 def count_tokens(text: str, model: str = "gpt-4") -> int:

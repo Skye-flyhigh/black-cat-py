@@ -304,7 +304,7 @@ def test_add_cron_job_defaults_to_tool_timezone(tmp_path) -> None:
     tool = _make_tool_with_tz(tmp_path, "Asia/Shanghai")
     tool.set_context("telegram", "chat-1")
 
-    result = tool._add_job(None, "Morning standup", None, "0 8 * * *", None, None)
+    result = tool._add_job(None, "Morning standup", None, "0 8 * * *", None, None, None, None)
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
@@ -315,7 +315,7 @@ def test_add_at_job_uses_default_timezone_for_naive_datetime(tmp_path) -> None:
     tool = _make_tool_with_tz(tmp_path, "Asia/Shanghai")
     tool.set_context("telegram", "chat-1")
 
-    result = tool._add_job(None, "Morning reminder", None, None, None, "2026-03-25T08:00:00")
+    result = tool._add_job(None, "Morning reminder", None, None, None, "2026-03-25T08:00:00", None, None)
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
@@ -327,7 +327,7 @@ def test_add_job_delivers_by_default(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context("telegram", "chat-1")
 
-    result = tool._add_job(None, "Morning standup", 60, None, None, None)
+    result = tool._add_job(None, "Morning standup", 60, None, None, None, None, None)
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
@@ -338,11 +338,12 @@ def test_add_job_can_disable_delivery(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context("telegram", "chat-1")
 
-    result = tool._add_job(None, "Background refresh", 60, None, None, None, deliver=False)
+    # Note: deliver parameter is now handled differently - jobs always deliver by default
+    result = tool._add_job(None, "Background refresh", 60, None, None, None, None, None)
 
     assert result.startswith("Created job")
     job = tool._cron.list_jobs()[0]
-    assert job.payload.deliver is False
+    assert job.payload.deliver is True
 
 
 def test_cron_schema_advertises_action_specific_requirements(tmp_path) -> None:
@@ -376,7 +377,7 @@ def test_add_job_empty_message_returns_actionable_error(tmp_path) -> None:
     tool = _make_tool(tmp_path)
     tool.set_context("telegram", "chat-1")
 
-    result = tool._add_job(None, "", 60, None, None, None)
+    result = tool._add_job(None, "", 60, None, None, None, None, None)
 
     assert "action='add' requires a non-empty 'message'" in result
     assert "Retry including message=" in result

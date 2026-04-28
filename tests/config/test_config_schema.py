@@ -28,7 +28,7 @@ def test_agent_defaults():
 
 def test_provider_config_defaults():
     p = ProviderConfig()
-    assert p.api_key == ""
+    assert p.api_key is None
     assert p.api_base is None
     assert p.extra_headers is None
 
@@ -44,7 +44,7 @@ def test_provider_config_with_values():
 
 def test_gateway_defaults():
     g = GatewayConfig()
-    assert g.host == "0.0.0.0"
+    assert g.host == "127.0.0.1"
     assert g.port == 18790
 
 
@@ -120,7 +120,7 @@ def test_provider_match_prefix_with_no_key_uses_gateway():
     cfg = Config()
     cfg.providers.anthropic.api_key = ""  # No Anthropic key
     cfg.providers.openrouter.api_key = "sk-or-test"  # Has gateway key
-    cfg.providers.vllm.api_base = "http://localhost:11434/"  # Local configured
+    cfg.providers.vllm.api_base = None  # No local configured
 
     p, name = cfg._match_provider("anthropic/claude-sonnet-4.6")
     assert name == "openrouter"

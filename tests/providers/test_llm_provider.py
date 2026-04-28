@@ -10,12 +10,24 @@ Run explicitly:
 import pytest
 
 from blackcat.providers.base import LLMResponse, ToolCallRequest
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+
+LLM_TEST_MODEL = "ministral-3:8b"
 
 
 @pytest.fixture
-def provider(ollama_available, llm_provider):
-    """OpenAICompatProvider connected to local Ollama."""
-    return llm_provider
+def provider(ollama_available):
+    """OpenAICompatProvider connected to local Ollama.
+
+    Skips if Ollama is not reachable.
+    """
+    if not ollama_available:
+        pytest.skip("Ollama not running at localhost:11434")
+    return OpenAICompatProvider(
+        api_key="ollama",
+        api_base="http://localhost:11434/v1",
+        default_model=LLM_TEST_MODEL,
+    )
 
 
 # ── Basic completion ──────────────────────────────────────────────

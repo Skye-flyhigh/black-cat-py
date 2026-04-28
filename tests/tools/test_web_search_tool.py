@@ -71,12 +71,18 @@ async def test_tavily_search(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_searxng_search(monkeypatch):
+    import socket
+
+    def _fake_resolve(hostname, port, family=0, type_=0):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+
     async def mock_get(self, url, **kw):
         assert "searx.example" in url
         return _response(json={
             "results": [{"title": "Result", "url": "https://example.com", "content": "SearXNG result"}]
         })
 
+    monkeypatch.setattr("blackcat.security.network.socket.getaddrinfo", _fake_resolve)
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
     tool = _tool(provider="searxng", base_url="https://searx.example")
     result = await tool.execute(query="test")

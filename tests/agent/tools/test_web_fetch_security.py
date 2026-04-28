@@ -30,12 +30,13 @@ async def test_web_fetch_blocks_private_ip():
 
 
 @pytest.mark.asyncio
-async def test_web_fetch_blocks_localhost():
+async def test_web_fetch_blocks_private_internal_ip():
+    """web_fetch should block private/internal IPs (localhost is allowed for LSP bridges)."""
     tool = WebFetchTool()
-    def _resolve_localhost(hostname, port, family=0, type_=0):
-        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0))]
-    with patch("blackcat.security.network.socket.getaddrinfo", _resolve_localhost):
-        result = await tool.execute(url="http://localhost/admin")
+    def _resolve_private(hostname, port, family=0, type_=0):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0))]
+    with patch("blackcat.security.network.socket.getaddrinfo", _resolve_private):
+        result = await tool.execute(url="http://internal-service/admin")
     data = json.loads(result)
     assert "error" in data
 
@@ -116,7 +117,7 @@ async def test_web_fetch_blocks_private_redirect_before_returning_image(monkeypa
 
     class FakeStreamResponse:
         headers = {"content-type": "image/png"}
-        url = "http://127.0.0.1/secret.png"
+        url = "http://10.0.0.1/secret.png"  # Private IP that should be blocked
         content = b"\x89PNG\r\n\x1a\n"
 
         async def __aenter__(self):

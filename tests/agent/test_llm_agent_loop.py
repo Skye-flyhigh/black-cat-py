@@ -45,7 +45,8 @@ def agent(ollama_available, llm_provider, tmp_path):
         workspace=workspace,
         model=LLM_TEST_MODEL,
         max_iterations=5,
-        llm_timeout=60,
+        provider_retry_mode="standard",
+        unified_session=False,
     )
     return loop
 
@@ -64,26 +65,26 @@ async def test_run_agent_loop_simple_response(provider):
     agent.model = LLM_TEST_MODEL
     agent.max_iterations = 3
     agent.tools = tools
-    agent.llm_timeout = 60
-    agent.reasoning_effort = None
     agent._extra_hooks = []
     agent.runner = AgentRunner(provider)
     agent.max_tool_result_chars = 50000
-    agent.context_window_tokens = None
+    agent.context_window_tokens = 65_536
     agent.context_block_limit = None
     agent.workspace = None
+    agent.provider_retry_mode = "standard"
+    agent._unified_session = False
 
     # Bypass the full context manager — just raw messages
-    from blackcat.agent.context import ContextManager
+    from blackcat.agent.context import ContextBuilder
 
-    agent.context = ContextManager.__new__(ContextManager)
+    agent.context = ContextBuilder.__new__(ContextBuilder)
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant. Reply very briefly."},
         {"role": "user", "content": "What is 2 + 2? Reply with just the number."},
     ]
 
-    content, tools_used, _ = await agent._run_agent_loop(messages)
+    content, tools_used, _, _, _ = await agent._run_agent_loop(messages)
     assert content is not None
     assert "4" in content
     assert tools_used == []
@@ -105,26 +106,26 @@ async def test_run_agent_loop_with_read_file(provider, tmp_path):
     agent.model = LLM_TEST_MODEL
     agent.max_iterations = 5
     agent.tools = tools
-    agent.llm_timeout = 60
-    agent.reasoning_effort = None
     agent._extra_hooks = []
     agent.runner = AgentRunner(provider)
     agent.max_tool_result_chars = 50000
-    agent.context_window_tokens = None
+    agent.context_window_tokens = 65_536
     agent.context_block_limit = None
     agent.workspace = workspace
+    agent.provider_retry_mode = "standard"
+    agent._unified_session = False
 
-    from blackcat.agent.context import ContextManager
+    from blackcat.agent.context import ContextBuilder
 
-    agent.context = ContextManager.__new__(ContextManager)
+    agent.context = ContextBuilder.__new__(ContextBuilder)
 
     messages = [
         {"role": "system", "content": "You have a read_file tool. Use it when asked to read files. Be brief."},
         {"role": "user", "content": "Read secret.txt and tell me the answer."},
     ]
 
-    content, tools_used, _ = await agent._run_agent_loop(messages)
-    assert any(t["name"] == "read_file" for t in tools_used)
+    content, tools_used, _, _, _ = await agent._run_agent_loop(messages)
+    assert "read_file" in tools_used
     assert content is not None
     # The model read the file — that's what we're testing.
     # Whether it reports "42" or refuses on principle is model behavior.
@@ -146,26 +147,26 @@ async def test_run_agent_loop_with_write_file(provider, tmp_path):
     agent.model = LLM_TEST_MODEL
     agent.max_iterations = 5
     agent.tools = tools
-    agent.llm_timeout = 60
-    agent.reasoning_effort = None
     agent._extra_hooks = []
     agent.runner = AgentRunner(provider)
     agent.max_tool_result_chars = 50000
-    agent.context_window_tokens = None
+    agent.context_window_tokens = 65_536
     agent.context_block_limit = None
     agent.workspace = workspace
+    agent.provider_retry_mode = "standard"
+    agent._unified_session = False
 
-    from blackcat.agent.context import ContextManager
+    from blackcat.agent.context import ContextBuilder
 
-    agent.context = ContextManager.__new__(ContextManager)
+    agent.context = ContextBuilder.__new__(ContextBuilder)
 
     messages = [
         {"role": "system", "content": "You have a write_file tool. Use it to write files. Be brief."},
         {"role": "user", "content": "Write the text 'hello world' to a file called output.txt"},
     ]
 
-    content, tools_used, _ = await agent._run_agent_loop(messages)
-    assert any(t["name"] == "write_file" for t in tools_used)
+    content, tools_used, _, _, _ = await agent._run_agent_loop(messages)
+    assert "write_file" in tools_used
     assert (workspace / "output.txt").exists()
     assert "hello world" in (workspace / "output.txt").read_text()
 
@@ -217,6 +218,8 @@ async def test_process_direct_preserves_session(agent):
 @pytest.mark.asyncio
 async def test_process_message_returns_outbound(agent):
     """MessageHandler.process should return an OutboundMessage or send via bus."""
+    from blackcat.config.schema import Config
+
     msg = InboundMessage(
         channel="test",
         sender_id="user1",
@@ -224,7 +227,7 @@ async def test_process_message_returns_outbound(agent):
         content="Say the word 'pong'. Nothing else.",
     )
 
-    handler = MessageHandler(agent, msg)
+    handler = MessageHandler(agent, msg, Config())
     response = await handler.process()
 
     # Either direct response or message tool was used
@@ -263,7 +266,8 @@ def test_tool_hint():
 
     calls = [ToolCallRequest(id="1", name="web_search", arguments={"query": "test"})]
     hint = AgentLoop._tool_hint(calls)
-    assert 'web_search("test")' in hint
+    # New format: search "test" (see tool_hints.py)
+    assert 'search "test"' in hint
 
 
 def test_tool_hint_truncates():
@@ -272,7 +276,8 @@ def test_tool_hint_truncates():
     long_query = "a" * 100
     calls = [ToolCallRequest(id="1", name="search", arguments={"query": long_query})]
     hint = AgentLoop._tool_hint(calls)
-    assert '...")' in hint
+    # New format uses unicode ellipsis and no trailing quote
+    assert "…" in hint or "..." in hint
 
 
 def test_tool_hint_no_args():

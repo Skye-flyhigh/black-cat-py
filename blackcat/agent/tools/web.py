@@ -259,6 +259,16 @@ class WebSearchTool(Tool):
     def read_only(self) -> bool:
         return True
 
+    @property
+    def exclusive(self) -> bool:
+        """DuckDuckGo and Brave without API key are exclusive (not concurrency-safe)."""
+        provider = (self.config.provider or "").strip().lower()
+        if provider == "duckduckgo":
+            return True
+        if provider == "brave" and not (self.config.api_key or os.environ.get("BRAVE_API_KEY", "")):
+            return True
+        return False
+
     async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
         # Validate query before dispatching to any provider
         is_valid, error_msg = _validate_query(query)

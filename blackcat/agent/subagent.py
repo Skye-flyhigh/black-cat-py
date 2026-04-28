@@ -292,7 +292,7 @@ class SubagentManager:
         from blackcat.agent.context import ContextBuilder
         from blackcat.agent.skills import SkillsLoader
 
-        time_ctx = ContextBuilder._build_runtime_context(None, None)
+        time_ctx = ContextBuilder._build_runtime_context(None, channel=None, chat_id=None)
         skills_summary = SkillsLoader(
             self.workspace,
             disabled_skills=self.disabled_skills,
