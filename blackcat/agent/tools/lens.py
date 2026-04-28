@@ -49,9 +49,11 @@ class LensDefinitionTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -121,9 +123,11 @@ class LensReferencesTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -194,9 +198,11 @@ class LensHoverTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -236,7 +242,11 @@ class LensWorkspaceSymbolTool(Tool):
                 "query": {
                     "type": "string",
                     "description": "Symbol name to search for (e.g., 'AgentLoop', 'build_messages')",
-                }
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config (e.g., 'black-cat-py')",
+                },
             },
             "required": ["query"],
         }
@@ -244,9 +254,11 @@ class LensWorkspaceSymbolTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(self, query: str, **kwargs: Any) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        query = kwargs["query"]
+        workspace = kwargs.get("workspace")
         try:
-            symbols = await self.client.get_workspace_symbols(query)
+            symbols = await self.client.get_workspace_symbols(query, workspace)
 
             if not symbols:
                 return f"No symbols found matching '{query}'"
@@ -308,7 +320,9 @@ class LensDocumentSymbolTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(self, file_path: str, workspace: str | None = None, **kwargs: Any) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -381,9 +395,11 @@ class LensCompletionTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -463,9 +479,12 @@ class LensRenameTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, new_name: str, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        new_name = kwargs["new_name"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -549,16 +568,13 @@ class LensCodeActionTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self,
-        file_path: str,
-        start_line: int,
-        start_character: int,
-        end_line: int,
-        end_character: int,
-        workspace: str | None = None,
-        **kwargs: Any,
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        start_line = kwargs["start_line"]
+        start_character = kwargs["start_character"]
+        end_line = kwargs["end_line"]
+        end_character = kwargs["end_character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -634,9 +650,11 @@ class LensFormatTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, tab_size: int = 4, insert_spaces: bool = True, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        tab_size = kwargs.get("tab_size", 4)
+        insert_spaces = kwargs.get("insert_spaces", True)
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -708,9 +726,11 @@ class LensSignatureHelpTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -756,3 +776,86 @@ class LensSignatureHelpTool(Tool):
             if "ConnectError" in str(type(e)):
                 return "Error: VS Code extension not running."
             return f"Error getting signature help: {str(e)}"
+
+
+class LensDiagnosticsTool(Tool):
+    """Get diagnostics (errors, warnings) for a file."""
+
+    @property
+    def name(self) -> str:
+        return "lens_diagnostics"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Get diagnostics (errors, warnings, hints) for a file. "
+            "Use this to check code health and see issues like type errors, missing imports, "
+            "or linting problems. "
+            "Source defaults to config.tools.lens.diagnostics_source ('vscode' or 'cli'). "
+            "CLI gives fresh results but may fail on large/broken codebases; "
+            "VSCode is faster but may be stale for TypeScript."
+        )
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to check",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace name from config (e.g., 'black-cat-py')",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["cli", "vscode"],
+                    "description": "Source: 'cli' (fresh, slower) or 'vscode' (cached, faster)",
+                },
+            },
+            "required": ["file_path"],
+        }
+
+    def __init__(self, client: LensClient, default_source: str = "cli"):
+        self.client = client
+        self.default_source = default_source
+
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        workspace = kwargs.get("workspace")
+        source = kwargs.get("source")
+        """Get diagnostics for a file.
+
+        Args:
+            file_path: Path to file (relative to workspace or absolute)
+            workspace: Workspace alias from config
+            source: "cli" (fresh, bypasses VSCode) or "vscode" (cached, faster).
+                    Defaults to per-workspace override or global config.
+        """
+        # Determine source: explicit > per-workspace override > global default
+        if source:
+            actual_source = source
+        elif workspace:
+            actual_source = self.client.get_diagnostics_source(workspace)
+        else:
+            actual_source = self.default_source
+
+        try:
+            full_path = self.client.resolve_path(file_path, workspace)
+            diagnostics = await self.client.get_diagnostics(
+                str(full_path), workspace, source=actual_source
+            )
+
+            if not diagnostics:
+                return f"No diagnostics for {file_path}"
+
+            from blackcat.lens.formatting import format_diagnostics
+
+            return format_diagnostics(diagnostics)
+
+        except Exception as e:
+            if "ConnectError" in str(type(e)):
+                return "Error: VS Code extension not running."
+            return f"Error getting diagnostics: {str(e)}"

@@ -2,10 +2,9 @@
 
 Black Cat is a **local-first autonomous cognitive agent**. Not a chatbot — a continuously running artificial cognition with self-reflection, persistent memory, trust-based behavior, and multi-channel communication.
 
-Built on lightweigth [nanobot](https://github.com/HKUDS/blackcat), extended with consciousness architecture and code intelligence.
+Built on lightweight [nanobot](https://github.com/HKUDS/blackcat), extended with consciousness architecture and code intelligence.
 
-
-![Black Cat](blackcat.png)
+![Black Cat](images/blackcat.png)
 
 ## 📢 News
 
@@ -56,7 +55,8 @@ MCPs used for the blackcat:
 ├─────────────────────────────────────────────────────────────────┤
 │                       Message Bus                               │
 ├──────────┬──────────┬──────────┬──────────┬──────────┬─────────┤
-│ Telegram │ Discord  │ WhatsApp │  Email   │   CLI   │         │
+│ Telegram │ Discord  │ WhatsApp │  Email   │   CLI   │ WebSocket│
+│ WebUI    │  Feishu  │ MS Teams │          │         │         │
 └──────────┴──────────┴──────────┴──────────┴──────────┴─────────┘
 ```
 
@@ -82,7 +82,7 @@ The cat knows who to trust. Every message author is evaluated:
                                                └─────────────────┘
 ```
 
-**Trust Levels:** as a auth mechanism
+**Trust Levels:** as an auth mechanism
 | Level | Score | Behavior |
 |-------|-------|----------|
 | **trusted** | ≥ 0.9 | Full autonomy, shares freely, executes without confirmation |
@@ -174,7 +174,7 @@ blackcat agent -m "Hello, who are you?"
 # Interactive mode
 blackcat agent
 
-# Gateway (Telegram, Discord, etc.)
+# Gateway (Telegram, Discord, WebSocket, etc.)
 blackcat gateway
 ```
 
@@ -235,6 +235,10 @@ modify_soul = true
 | **WhatsApp** | QR scan via bridge | `channels.whatsapp` |
 | **Slack** | App + Bot tokens (Socket Mode) | `channels.slack` |
 | **Email** | IMAP/SMTP credentials | `channels.email` |
+| **WebSocket** | Browser real-time connection | `channels.websocket` |
+| **WebUI** | Built-in web interface | `channels.webui` |
+| **Feishu** | Enterprise messaging | `channels.feishu` |
+| **MS Teams** | App + Bot tokens | `channels.teams` |
 
 <details>
 <summary><b>Telegram Setup</b></summary>
@@ -298,6 +302,31 @@ modify_soul = true
 
 </details>
 
+<details>
+<summary><b>WebSocket / WebUI Setup</b></summary>
+
+The WebSocket channel provides real-time browser communication for the built-in WebUI:
+
+```json
+{
+  "channels": {
+    "websocket": {
+      "enabled": true,
+      "port": 8765
+    }
+  }
+}
+```
+
+The WebUI supports:
+- Image uploads in the composer
+- Video media attachments
+- Real-time message streaming
+
+Security: media batches are scrubbed, nosniff headers enforced.
+
+</details>
+
 ---
 
 ## Providers
@@ -309,12 +338,50 @@ Black Cat uses **native SDKs** for LLM providers (LiteLLM removed due to supply 
 | **OpenAI** | `openai` native SDK | GPT-4, GPT-5, o1, o3 |
 | **Anthropic** | `anthropic` native SDK | Claude Opus, Sonnet, Haiku |
 | **OpenRouter** | OpenAI-compatible | All models (Claude, GPT, Llama, etc.) |
-| **Ollama** | OpenAI-compatible API | Local models (llama, mistral, etc.) |
+| **Ollama** | OpenAI-compatible API | Local models (llama, mistral, kimi, etc.) |
 | **vLLM** | OpenAI-compatible API | Self-hosted |
 | **Azure OpenAI** | Direct HTTP API | GPT deployments |
 | **OpenAI Codex** | OAuth + Responses API | Code generation |
+| **DeepSeek** | Native SDK | DeepSeek-V3, R1 with thinking toggle |
 
 **Recommended for development**: `ministral-3:8b` via local Ollama — free, capable, fast.
+
+---
+
+## Tools
+
+The agent loop can invoke tools during execution:
+
+| Tool | Purpose |
+|------|---------|
+| `read_file` | Read file contents |
+| `write_file` | Create or overwrite files |
+| `edit_file` | Partial text replacement |
+| `exec` | Run shell commands |
+| `web_search` | Search the web |
+| `web_fetch` | Fetch and extract page content |
+| `ask_user` | Structured user interaction with options |
+| `cron` | Schedule reminders and recurring tasks |
+| `message` | Send messages to channels |
+| `spawn` | Launch subagents for parallel tasks |
+| `lens_*` | Code intelligence via VS Code LSP |
+| `skills` | Skills management |
+
+### ask_user Tool
+
+The `ask_user` tool provides structured interaction with inline keyboard buttons:
+
+```python
+# Example: ask_user with options
+{
+  "question": "Which model should I use?",
+  "options": ["fast", "balanced", "powerful"]
+}
+```
+
+- Falls back to inline text when keyboards are disabled
+- Callback data capped at Telegram's 64-byte limit
+- Options rendered without buttons for CLI compatibility
 
 ---
 
@@ -337,18 +404,24 @@ Black Cat uses **native SDKs** for LLM providers (LiteLLM removed due to supply 
 ```
 blackcat/
 ├── agent/           # Core agent logic
-│   ├── loop.py      # Agent loop (LLM ↔ tools)
-│   ├── context.py   # Context manager (trust, tokens, identity)
-│   ├── memory.py    # Persistent memory
-│   ├── skills.py    # Skills loader
-│   └── tools/       # Built-in tools
-├── channels/        # Telegram, Discord, WhatsApp, etc.
-├── providers/       # LLM provider adapters
-├── config/          # Pydantic schema
-├── bus/             # Message routing
-├── cron/            # Scheduled tasks
-├── session/         # Conversation persistence
-└── cli/             # CLI commands
+│   ├── loop.py      # Agent loop (LLM ↔ tools) with hook system
+│   ├── context.py   # Context builder with prompt caching
+│   ├── handler.py   # Message handling pipeline
+│   ├── runner.py    # Tool execution runner
+│   ├── hook.py      # Agent lifecycle hooks (CompositeHook)
+│   ├── consolidate.py  # Session summarization & compaction
+│   ├── dream.py     # Dream processing for memory consolidation
+│   └── tools/       # Built-in tools (web, exec, cron, lens, etc.)
+├── channels/        # Telegram, Discord, WhatsApp, WebSocket, WebUI, etc.
+├── providers/       # Native LLM SDKs (OpenAI, Anthropic, DeepSeek, Ollama)
+├── config/          # Pydantic schema with env var resolution & migration
+├── bus/             # Message bus for event routing
+├── cron/            # Scheduled tasks with cron expressions
+├── session/         # Conversation persistence & history management
+├── memory/          # Dream memory & embedding provider
+├── security/        # SSRF protection & network security
+├── utils/           # Helpers (token counting, document extraction)
+└── cli/             # CLI commands (onboard, agent, gateway, status)
 ```
 
 ---
@@ -369,14 +442,47 @@ Black Cat integrates with VS Code via the **lens** extension for Language Server
     "lens": {
       "enabled": true,
       "port": 8765,
+      "diagnostics_source": "cli",
       "workspaces": {
-        "black-cat-py": "/cat/flap/to/the/black-cat-py",
-        "telos": "/path/to/telos"
+        "black-cat-py": "/path/to/black-cat-py",
+        "telos": "/path/to/telos",
+        "Nomad's Map": {
+          "path": "/path/to/NomadsMap",
+          "diagnostics_source": "vscode"
+        }
       }
     }
   }
 }
 ```
+
+#### `diagnostics_source` Configuration
+
+Controls how `lens_diagnostics` gets type errors and warnings:
+
+| Value | Behavior | Use When |
+|-------|----------|----------|
+| `"cli"` | Runs `pyright`/`tsc` directly (fresh results) | Default. Healthy codebases, Python, small TypeScript |
+| `"vscode"` | Uses VSCode extension (faster, may be stale) | Large/complex TypeScript where `tsc --noEmit` is slow or fails |
+
+**Per-workspace override**: Use object syntax to override for specific workspaces:
+
+```json
+"workspaces": {
+  "healthy-project": "/path/to/healthy",
+  "broken-project": {
+    "path": "/path/to/broken",
+    "diagnostics_source": "vscode"
+  }
+}
+```
+
+**Why two modes?**
+
+- **CLI** gives fresh results by running type checkers directly — works great for healthy codebases
+- **VSCode** uses the extension's cached diagnostics — faster but may be stale, useful as fallback for broken setups
+
+**Default**: `"cli"` — fresh results work for most projects.
 
 ### How It Works
 
@@ -386,6 +492,7 @@ Black Cat integrates with VS Code via the **lens** extension for Language Server
 
 | Tool | Purpose |
 |------|---------|
+| `lens_diagnostics` | Get errors/warnings for a file |
 | `lens_definition` | Go to symbol definition |
 | `lens_references` | Find all references |
 | `lens_hover` | Get type information |
@@ -416,19 +523,27 @@ Cat: [calls lens_rename] "Preview: 3 files affected, 12 edits total"
 
 | System | Status | Notes |
 |--------|--------|-------|
-| Agent loop | ✅ Working | LLM ↔ tool execution cycle |
-| Multi-channel | ✅ Working | Telegram, Discord, WhatsApp, Slack, Email |
-| Multi-provider | ✅ Working | Native SDKs (OpenAI, Anthropic) + OpenAI-compatible (Ollama, vLLM) |
+| Agent loop | ✅ Working | LLM ↔ tool execution cycle with hook system |
+| Multi-channel | ✅ Working | Telegram, Discord, WhatsApp, Slack, Email, WebSocket, WebUI, Feishu, MS Teams |
+| Multi-provider | ✅ Working | Native SDKs (OpenAI, Anthropic, DeepSeek) + OpenAI-compatible (Ollama, vLLM) |
 | Trust system | ✅ Working | Author resolution, trust levels, behavioral enforcement |
-| Context manager | 🔶 Basic | Identity assembly, token management, trust instructions, compaction |
-| Summariser | 🔶 Basic | Provides summary for compaction |
+| Context builder | ✅ Working | Identity assembly, token management, trust instructions, auto-compaction |
+| Consolidate | ✅ Working | Token-budget aware consolidation with raw archive fallback |
 | Skills | ✅ Working | Pluggable SKILL.md files |
-| Memory | 🔶 Basic | MCP-based ([mnemo-mcp](https://github.com/Skye-flyhigh/mnemo-mcp)), semantic recall with decay |
+| Memory | ✅ Working | MCP-based ([mnemo-mcp](https://github.com/Skye-flyhigh/mnemo-mcp)), semantic recall with decay |
 | Lens (LSP) | ✅ Working | VS Code extension for code intelligence |
-| Memory decay | ❌ Not yet | Weight-based decay with tag tiers |
+| ask_user tool | ✅ Working | Structured interaction with inline keyboard buttons |
+| Media uploads | ✅ Working | Image and video in composer and Telegram |
+| Progress events | ✅ Working | Structured `_tool_events` metadata during execution |
+| Hook system | ✅ Working | CompositeHook for extensible agent lifecycle events |
+| Subagents | ✅ Working | Parallel task execution with spawn tool |
+| Cron scheduling | ✅ Working | Recurring and one-shot tasks with timezone support |
+| Web search | ✅ Working | Multi-provider (Brave, DuckDuckGo, Tavily, SearXNG, Jina, Kagi) |
+| Web fetch | ✅ Working | SSRF protection, untrusted content marking |
+| Long term memory | ✅ Working | Organic memory store (with decay) across agents managed by [menmo-mcp](https://github.com/Skye-flyhigh/mnemo-mcp) |
 | Contextual state | ❌ Not yet | Dynamic trait modulation |
-| Reflection | ❌ Not yet | Self-reflection, decision memory |
-| Telos | 🔶 Basic | Task planning via [telos-mcp(https://github.com/Skye-flyhigh/telos-mcp)] |
+| Dream | ✅ Working | Self-reflection, decision memory to update base documents |
+| Telos | ✅ Working | Task planning via [telos-mcp](https://github.com/Skye-flyhigh/telos-mcp) |
 
 ---
 

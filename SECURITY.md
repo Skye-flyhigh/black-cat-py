@@ -3,9 +3,10 @@
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in blackcat, please report it by:
+If you discover a security vulnerability in blackcat, please report it by:
 
 1. **DO NOT** open a public GitHub issue
-2. Create a private security advisory on GitHub or contact the repository maintainers
+2. Create a private security advisory on GitHub or contact the repository maintainers (xubinrencs@gmail.com)
 3. Include:
    - Description of the vulnerability
    - Steps to reproduce
@@ -28,6 +29,7 @@ chmod 600 ~/.blackcat/config.json
 ```
 
 **Recommendations:**
+- Store API keys in `~/.blackcat/config.json` with file permissions set to `0600`
 - Store API keys in `~/.blackcat/config.json` with file permissions set to `0600`
 - Consider using environment variables for sensitive keys
 - Use OS keyring/credential manager for production deployments
@@ -55,7 +57,7 @@ chmod 600 ~/.blackcat/config.json
 ```
 
 **Security Notes:**
-- Empty `allowFrom` list will **ALLOW ALL** users (open by default for personal use)
+- In `v0.1.4.post3` and earlier, an empty `allowFrom` allowed all users. Since `v0.1.4.post4`, empty `allowFrom` denies all access by default — set `["*"]` to explicitly allow everyone.
 - Get your Telegram user ID from `@userinfobot`
 - Use full phone numbers with country code for WhatsApp
 - Review access logs regularly for unauthorized access attempts
@@ -64,12 +66,27 @@ chmod 600 ~/.blackcat/config.json
 
 The `exec` tool can execute shell commands. While dangerous command patterns are blocked, you should:
 
+- ✅ **Enable the bwrap sandbox** (`"tools.exec.sandbox": "bwrap"`) for kernel-level isolation (Linux only)
 - ✅ Review all tool usage in agent logs
 - ✅ Understand what commands the agent is running
 - ✅ Use a dedicated user account with limited privileges
 - ✅ Never run blackcat as root
+- ✅ Never run blackcat as root
 - ❌ Don't disable security checks
 - ❌ Don't run on systems with sensitive data without careful review
+
+**Exec sandbox (bwrap):**
+
+On Linux, set `"tools.exec.sandbox": "bwrap"` to wrap every shell command in a [bubblewrap](https://github.com/containers/bubblewrap) sandbox. This uses Linux kernel namespaces to restrict what the process can see:
+
+- Workspace directory → **read-write** (agent works normally)
+- Media directory → **read-only** (can read uploaded attachments)
+- System directories (`/usr`, `/bin`, `/lib`) → **read-only** (commands still work)
+- Config files and API keys (`~/.blackcat/config.json`) → **hidden** (masked by tmpfs)
+
+Requires `bwrap` installed (`apt install bubblewrap`). Pre-installed in the official Docker image. **Not available on macOS or Windows** — bubblewrap depends on Linux kernel namespaces.
+
+Enabling the sandbox also automatically activates `restrictToWorkspace` for file tools.
 
 **Blocked patterns:**
 - `rm -rf /` - Root filesystem deletion
@@ -82,6 +99,7 @@ The `exec` tool can execute shell commands. While dangerous command patterns are
 
 File operations have path traversal protection, but:
 
+- ✅ Enable `restrictToWorkspace` or the bwrap sandbox to confine file access
 - ✅ Run blackcat with a dedicated user account
 - ✅ Use filesystem permissions to protect sensitive directories
 - ✅ Regularly audit file operations in logs
@@ -95,8 +113,8 @@ File operations have path traversal protection, but:
 - Consider using a firewall to restrict outbound connections if needed
 
 **WhatsApp Bridge:**
-- The bridge runs on `localhost:3001` by default
-- If exposing to network, use proper authentication and TLS
+- The bridge binds to `127.0.0.1:3001` (localhost only, not accessible from external network)
+- Set `bridgeToken` in config to enable shared-secret authentication between Python and Node.js
 - Keep authentication data in `~/.blackcat/whatsapp-auth` secure (mode 0700)
 
 ### 6. Dependency Security
@@ -110,6 +128,7 @@ pip-audit
 
 # Update to latest secure versions
 pip install --upgrade blackcat-ai
+pip install --upgrade blackcat-ai
 ```
 
 For Node.js dependencies (WhatsApp bridge):
@@ -122,6 +141,8 @@ npm audit fix
 **Security History:**
 - **March 2026**: Removed `litellm` entirely due to supply chain attack (CVE-2024-6825, CVE-2025-0330, CVE-2025-0628, CVE-2025-11203). Migrated to native OpenAI and Anthropic SDKs. See [advisory](https://github.com/HKUDS/nanobot/discussions/2445) for details.
 - We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
+- Run `pip-audit` or `npm audit` regularly
+- Subscribe to security advisories for blackcat and its dependencies
 
 ### 7. Production Deployment
 
@@ -131,11 +152,14 @@ For production use:
    ```bash
    # Run in a container or VM
    docker run --rm -it python:3.11
-   pip install blackcat-ai
+   pip install nanobot-ai
+   pip install nanobot-ai
    ```
 
 2. **Use a Dedicated User**
    ```bash
+   sudo useradd -m -s /bin/bash blackcat
+   sudo -u blackcat blackcat gateway
    sudo useradd -m -s /bin/bash blackcat
    sudo -u blackcat blackcat gateway
    ```
@@ -145,11 +169,15 @@ For production use:
    chmod 700 ~/.blackcat
    chmod 600 ~/.blackcat/config.json
    chmod 700 ~/.blackcat/whatsapp-auth
+   chmod 700 ~/.blackcat
+   chmod 600 ~/.blackcat/config.json
+   chmod 700 ~/.blackcat/whatsapp-auth
    ```
 
 4. **Enable Logging**
    ```bash
    # Configure log monitoring
+   tail -f ~/.blackcat/logs/blackcat.log
    tail -f ~/.blackcat/logs/blackcat.log
    ```
 
@@ -161,6 +189,7 @@ For production use:
 6. **Regular Updates**
    ```bash
    # Check for updates weekly
+   pip install --upgrade blackcat-ai
    pip install --upgrade blackcat-ai
    ```
 
@@ -184,6 +213,7 @@ For production use:
 - **Logs may contain sensitive information** - secure log files appropriately
 - **LLM providers see your prompts** - review their privacy policies
 - **Chat history is stored locally** - protect the `~/.blackcat` directory
+- **Chat history is stored locally** - protect the `~/.blackcat` directory
 - **API keys are in plain text** - use OS keyring for production
 
 ### 10. Incident Response
@@ -193,6 +223,7 @@ If you suspect a security breach:
 1. **Immediately revoke compromised API keys**
 2. **Review logs for unauthorized access**
    ```bash
+   grep "Access denied" ~/.blackcat/logs/blackcat.log
    grep "Access denied" ~/.blackcat/logs/blackcat.log
    ```
 3. **Check for unexpected file modifications**
@@ -210,9 +241,8 @@ If you suspect a security breach:
 - Input length limits on HTTP requests
 
 ✅ **Authentication**
-- Allow-list based access control
+- Allow-list based access control — in `v0.1.4.post3` and earlier empty `allowFrom` allowed all; since `v0.1.4.post4` it denies all (`["*"]` explicitly allows all)
 - Failed authentication attempt logging
-- Open by default (configure allowFrom for production use)
 
 ✅ **Resource Protection**
 - Command execution timeouts (60s default)
@@ -222,7 +252,7 @@ If you suspect a security breach:
 ✅ **Secure Communication**
 - HTTPS for all external API calls
 - TLS for Telegram API
-- WebSocket security for WhatsApp bridge
+- WhatsApp bridge: localhost-only binding + optional token auth
 
 ## Known Limitations
 
@@ -231,17 +261,19 @@ If you suspect a security breach:
 1. **No Rate Limiting** - Users can send unlimited messages (add your own if needed)
 2. **Plain Text Config** - API keys stored in plain text (use keyring for production)
 3. **No Session Management** - No automatic session expiry
-4. **Limited Command Filtering** - Only blocks obvious dangerous patterns
+4. **Limited Command Filtering** - Only blocks obvious dangerous patterns (enable the bwrap sandbox for kernel-level isolation on Linux)
 5. **No Audit Trail** - Limited security event logging (enhance as needed)
 
 ## Security Checklist
 
+Before deploying blackcat:
 Before deploying blackcat:
 
 - [ ] API keys stored securely (not in code)
 - [ ] Config file permissions set to 0600
 - [ ] `allowFrom` lists configured for all channels
 - [ ] Running as non-root user
+- [ ] Exec sandbox enabled (`"tools.exec.sandbox": "bwrap"`) on Linux deployments
 - [ ] File system permissions properly restricted
 - [ ] Dependencies updated to latest secure versions
 - [ ] Logs monitored for security events
@@ -251,9 +283,11 @@ Before deploying blackcat:
 
 ## Updates
 
-**Last Updated**: 2026-03-27
+**Last Updated**: 2026-04-05
 
 For the latest security updates and announcements, check:
+- GitHub Security Advisories: https://github.com/HKUDS/blackcat/security/advisories
+- Release Notes: https://github.com/HKUDS/blackcat/releases
 - GitHub Security Advisories: https://github.com/HKUDS/blackcat/security/advisories
 - Release Notes: https://github.com/HKUDS/blackcat/releases
 

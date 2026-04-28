@@ -20,7 +20,11 @@ socket_name=""
 socket_path=""
 query=""
 scan_all=false
+<<<<<<< HEAD
+socket_dir="${NANOBOT_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/blackcat-tmux-sockets}"
+=======
 socket_dir="${BLACKCAT_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/blackcat-tmux-sockets}"
+>>>>>>> 3bc777a1eadfcd7e0b5b2efe8e995f5fbd1da5a7
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

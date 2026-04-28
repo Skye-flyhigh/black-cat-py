@@ -1,14 +1,6 @@
-"""
-Base channel class - the abstract interface all channels inherit from.
+"""Base channel interface for chat platforms."""
 
-This module provides:
-- BaseChannel: Abstract class with shared state and behavior
-- Typing indicator management (start/stop/loop)
-- Message validation and permission checking
-- Media download helpers
-
-For pure functions and constants, see utils.py.
-"""
+from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
@@ -20,6 +12,7 @@ from loguru import logger
 from blackcat.bus.events import InboundMessage, OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.utils import MEDIA_DIR
+from blackcat.providers.transcription import GroqTranscriptionProvider, OpenAITranscriptionProvider
 
 
 class BaseChannel(ABC):
@@ -104,15 +97,20 @@ class BaseChannel(ABC):
         Send a message through this channel.
 
         Validates the message before delegating to channel-specific implementation.
-        Stops any typing indicator for this chat before sending.
+        Stops any typing indicator for this chat before sending (except for progress messages).
 
         Args:
             msg: The message to send.
         """
-        # Stop typing indicator before sending (or on empty)
-        await self._stop_typing(msg.chat_id)
+        # Stop typing indicator before sending (or on empty), but keep it active for progress messages
+        is_progress = bool((msg.metadata or {}).get("_progress"))
+        if not is_progress:
+            await self._stop_typing(msg.chat_id)
 
-        if not msg.content or not msg.content.strip():
+        # Allow media-only messages (empty content is OK if media is present)
+        has_content = bool(msg.content and msg.content.strip())
+        has_media = bool(msg.media)
+        if not has_content and not has_media:
             logger.warning("Skipping empty message to {} on {}", msg.chat_id, self.name)
             return
 
@@ -229,7 +227,13 @@ class BaseChannel(ABC):
 
     def is_allowed(self, sender_id: str) -> bool:
         """Check if *sender_id* is permitted.  Empty list -> deny all; ``"*"`` -> allow all."""
-        allow_list = getattr(self.config, "allow_from", [])
+        # Support both snake_case and camelCase config keys (dict or object)
+        if isinstance(self.config, dict):
+            allow_list = self.config.get("allow_from") or self.config.get("allowFrom") or []
+        else:
+            allow_list = getattr(self.config, "allow_from", None)
+            if allow_list is None:
+                allow_list = getattr(self.config, "allowFrom", [])
         if not allow_list:
             logger.warning("{}: allow_from is empty — all access denied", self.name)
             return False
@@ -237,9 +241,7 @@ class BaseChannel(ABC):
             logger.debug("{}: access granted to {} (wildcard)", self.name, sender_id)
             return True
         sender_str = str(sender_id)
-        allowed = sender_str in allow_list or any(
-            p in allow_list for p in sender_str.split("|") if p
-        )
+        allowed = sender_str in allow_list
         if allowed:
             logger.debug("{}: access granted to {}", self.name, sender_id)
         else:
@@ -286,6 +288,27 @@ class BaseChannel(ABC):
         await self.bus.publish_inbound(msg)
 
     @property
+    def supports_streaming(self) -> bool:
+        """True when config enables streaming AND this subclass implements send_delta."""
+        cfg = self.config
+        streaming = cfg.get("streaming", False) if isinstance(cfg, dict) else getattr(cfg, "streaming", False)
+        return bool(streaming) and type(self).send_delta is not BaseChannel.send_delta
+
+    @property
     def is_running(self) -> bool:
         """Check if the channel is running."""
         return self._running
+
+    async def transcribe_audio(self, file_path: str) -> str:
+        """Transcribe an audio file using the configured transcription provider."""
+        provider = getattr(self, "transcription_provider", "groq")
+        api_key = getattr(self, "transcription_api_key", None)
+        api_base = getattr(self, "transcription_api_base", None)
+        language = getattr(self, "transcription_language", None)
+
+        if provider == "openai":
+            p = OpenAITranscriptionProvider(api_key=api_key, api_base=api_base, language=language)
+        else:
+            p = GroqTranscriptionProvider(api_key=api_key, api_base=api_base, language=language)
+
+        return await p.transcribe(file_path)

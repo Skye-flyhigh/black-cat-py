@@ -7,7 +7,30 @@ import signal
 import sys
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable
+
+import typer
+from loguru import logger
+from prompt_toolkit import PromptSession, print_formatted_text
+from prompt_toolkit.application import run_in_terminal
+from prompt_toolkit.formatted_text import ANSI, HTML
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.patch_stdout import patch_stdout
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.table import Table
+from rich.text import Text
+
+from blackcat import __logo__, __version__
+from blackcat.cli.stream import StreamRenderer, ThinkingSpinner
+from blackcat.config.paths import get_workspace_path, is_default_workspace
+from blackcat.config.schema import Config
+from blackcat.utils.helpers import sync_workspace_templates
+from blackcat.utils.restart import (
+    consume_restart_notice_from_env,
+    format_restart_completed_message,
+    should_show_cli_restart_notice,
+)
 
 # Force UTF-8 encoding for Windows console
 if sys.platform == "win32":
@@ -20,28 +43,19 @@ if sys.platform == "win32":
         except Exception:
             pass
 
-import typer
-from prompt_toolkit import PromptSession, print_formatted_text
-from prompt_toolkit.application import run_in_terminal
-from prompt_toolkit.formatted_text import ANSI, HTML
-from prompt_toolkit.history import FileHistory
-from prompt_toolkit.patch_stdout import patch_stdout
-from rich.console import Console
-from rich.markdown import Markdown
-from rich.table import Table
-from rich.text import Text
 
-from blackcat import __logo__, __version__
-from blackcat.bus.queue import MessageBus
-from blackcat.cli.stream import StreamRenderer, ThinkingSpinner
-from blackcat.config.paths import get_workspace_path, is_default_workspace
-from blackcat.config.schema import Config
-from blackcat.utils.helpers import sync_workspace_templates
-from blackcat.utils.restart import (
-    consume_restart_notice_from_env,
-    format_restart_completed_message,
-    should_show_cli_restart_notice,
-)
+class SafeFileHistory(FileHistory):
+    """FileHistory subclass that sanitizes surrogate characters on write.
+
+    On Windows, special Unicode input (emoji, mixed-script) can produce
+    surrogate characters that crash prompt_toolkit's file write.
+    See issue #2846.
+    """
+
+    def store_string(self, string: str) -> None:
+        safe = string.encode("utf-8", errors="surrogateescape").decode("utf-8", errors="replace")
+        super().store_string(safe)
+
 
 app = typer.Typer(
     name="blackcat",
@@ -116,9 +130,9 @@ def _init_prompt_session() -> None:
     history_file.parent.mkdir(parents=True, exist_ok=True)
 
     _PROMPT_SESSION = PromptSession(
-        history=FileHistory(str(history_file)),
+        history=SafeFileHistory(str(history_file)),
         enable_open_in_editor=False,
-        multiline=False,   # Enter submits (single line mode)
+        multiline=False,  # Enter submits (single line mode)
     )
 
 
@@ -128,15 +142,9 @@ def _make_console() -> Console:
 
 def _render_interactive_ansi(render_fn) -> str:
     """Render Rich output to ANSI so prompt_toolkit can print it safely."""
-    from typing import cast
-
-    color_system_val = console.color_system or "standard"
-    # Cast to the literal type that Console expects
-    color_system_literal = cast("Literal['auto', 'standard', '256', 'truecolor', 'windows']", color_system_val)
-
     ansi_console = Console(
-        force_terminal=True,
-        color_system=color_system_literal,
+        force_terminal=sys.stdout.isatty(),
+        color_system=console.color_system or "standard",
         width=console.width,
     )
     with ansi_console.capture() as capture:
@@ -202,12 +210,16 @@ async def _print_interactive_response(
 
 def _print_cli_progress_line(text: str, thinking: ThinkingSpinner | None) -> None:
     """Print a CLI progress line, pausing the spinner if needed."""
+    if not text.strip():
+        return
     with thinking.pause() if thinking else nullcontext():
         console.print(f"  [dim]↳ {text}[/dim]")
 
 
 async def _print_interactive_progress_line(text: str, thinking: ThinkingSpinner | None) -> None:
     """Print an interactive progress line, pausing the spinner if needed."""
+    if not text.strip():
+        return
     with thinking.pause() if thinking else nullcontext():
         await _print_interactive_line(text)
 
@@ -236,7 +248,6 @@ async def _read_interactive_input_async() -> str:
         raise KeyboardInterrupt from exc
 
 
-
 def version_callback(value: bool):
     if value:
         console.print(f"{__logo__} blackcat v{__version__}")
@@ -260,16 +271,16 @@ def main(
 
 @app.command()
 def onboard(
-    workspace: Path | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
-    config_path_arg: Path | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+    workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
+    config_file: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
     wizard: bool = typer.Option(False, "--wizard", help="Use interactive wizard"),
 ):
     """Initialize blackcat configuration and workspace."""
     from blackcat.config.loader import get_config_path, load_config, save_config, set_config_path
     from blackcat.config.schema import Config
 
-    if config_path_arg:
-        config_path = config_path_arg.expanduser().resolve()
+    if config_file:
+        config_path = Path(config_file).expanduser().resolve()
         set_config_path(config_path)
         console.print(f"[dim]Using config: {config_path}[/dim]")
     else:
@@ -277,30 +288,36 @@ def onboard(
 
     def _apply_workspace_override(loaded: Config) -> Config:
         if workspace:
-            loaded.agents.defaults.workspace = str(workspace)
+            loaded.agents.defaults.workspace = workspace
         return loaded
 
     # Create or update config
     if config_path.exists():
         if wizard:
-            config_obj = _apply_workspace_override(load_config(config_path))
+            config = _apply_workspace_override(load_config(config_path))
         else:
             console.print(f"[yellow]Config already exists at {config_path}[/yellow]")
-            console.print("  [bold]y[/bold] = overwrite with defaults (existing values will be lost)")
-            console.print("  [bold]N[/bold] = refresh config, keeping existing values and adding new fields")
+            console.print(
+                "  [bold]y[/bold] = overwrite with defaults (existing values will be lost)"
+            )
+            console.print(
+                "  [bold]N[/bold] = refresh config, keeping existing values and adding new fields"
+            )
             if typer.confirm("Overwrite?"):
-                config_obj = _apply_workspace_override(Config())
-                save_config(config_obj, config_path)
+                config = _apply_workspace_override(Config())
+                save_config(config, config_path)
                 console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
             else:
-                config_obj = _apply_workspace_override(load_config(config_path))
-                save_config(config_obj, config_path)
-                console.print(f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)")
+                config = _apply_workspace_override(load_config(config_path))
+                save_config(config, config_path)
+                console.print(
+                    f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)"
+                )
     else:
-        config_obj = _apply_workspace_override(Config())
+        config = _apply_workspace_override(Config())
         # In wizard mode, don't save yet - the wizard will handle saving if should_save=True
         if not wizard:
-            save_config(config_obj, config_path)
+            save_config(config, config_path)
             console.print(f"[green]✓[/green] Created config at {config_path}")
 
     # Run interactive wizard if enabled
@@ -308,13 +325,13 @@ def onboard(
         from blackcat.cli.onboard import run_onboard
 
         try:
-            result = run_onboard(initial_config=config_obj)
+            result = run_onboard(initial_config=config)
             if not result.should_save:
                 console.print("[yellow]Configuration discarded. No changes were saved.[/yellow]")
                 return
 
-            config_obj = result.config
-            save_config(config_obj, config_path)
+            config = result.config
+            save_config(config, config_path)
             console.print(f"[green]✓[/green] Config saved at {config_path}")
         except Exception as e:
             console.print(f"[red]✗[/red] Error during configuration: {e}")
@@ -323,7 +340,7 @@ def onboard(
     _onboard_plugins(config_path)
 
     # Create workspace, preferring the configured workspace path.
-    workspace_path = get_workspace_path(str(config_obj.workspace_path))
+    workspace_path = get_workspace_path(config.workspace_path)
     if not workspace_path.exists():
         workspace_path.mkdir(parents=True, exist_ok=True)
         console.print(f"[green]✓[/green] Created workspace at {workspace_path}")
@@ -332,9 +349,8 @@ def onboard(
 
     agent_cmd = 'blackcat agent -m "Hello!"'
     gateway_cmd = "blackcat gateway"
-    if config_path_arg:
-        agent_cmd += f" --config {config_path}"
-        gateway_cmd += f" --config {config_path}"
+    agent_cmd += f" --config {config_path}"
+    gateway_cmd += f" --config {config_path}"
 
     console.print(f"\n{__logo__} blackcat is ready!")
     console.print("\nNext steps:")
@@ -345,7 +361,9 @@ def onboard(
         console.print(f"  1. Add your API key to [cyan]{config_path}[/cyan]")
         console.print("     Get one at: https://openrouter.ai/keys")
         console.print(f"  2. Chat: [cyan]{agent_cmd}[/cyan]")
-    console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/blackcat#-chat-apps[/dim]")
+    console.print(
+        "\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]"
+    )
 
 
 def _merge_missing_defaults(existing: Any, defaults: Any) -> Any:
@@ -418,12 +436,13 @@ def _make_provider(config: Config):
     # --- instantiation by backend ---
     if backend == "openai_codex":
         from blackcat.providers.openai_codex_provider import OpenAICodexProvider
+
         provider = OpenAICodexProvider(default_model=model)
     elif backend == "azure_openai":
         from blackcat.providers.azure_openai_provider import AzureOpenAIProvider
-        if not p or not p.api_key or not p.api_base:
-            console.print("[red]Error: Azure OpenAI requires api_key and api_base.[/red]")
-            raise typer.Exit(1)
+
+        # Validation above ensures p is not None and has api_key/api_base
+        assert p is not None
         provider = AzureOpenAIProvider(
             api_key=p.api_key,
             api_base=p.api_base,
@@ -442,9 +461,19 @@ def _make_provider(config: Config):
         )
     else:
         from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+
+        api_base = config.get_api_base(model)
+
+        # Ollama cloud models (:cloud suffix) require an API key
+        if spec and spec.name == "ollama" and config._is_cloud_model(model):
+            if not p or not p.api_key:
+                console.print(f"[red]Error: Ollama cloud model {model} requires an API key.[/red]")
+                console.print("Set it in ~/.blackcat/config.json under providers.ollama section")
+                raise typer.Exit(1)
+
         provider = OpenAICompatProvider(
             api_key=p.api_key if p else None,
-            api_base=config.get_api_base(model),
+            api_base=api_base,
             default_model=model,
             extra_headers=p.extra_headers if p else None,
             spec=spec,
@@ -461,7 +490,7 @@ def _make_provider(config: Config):
 
 def _load_runtime_config(config: str | None = None, workspace: str | None = None) -> Config:
     """Load config and optionally override the active workspace."""
-    from blackcat.config.loader import load_config, set_config_path
+    from blackcat.config.loader import load_config, resolve_config_env_vars, set_config_path
 
     config_path = None
     if config:
@@ -472,7 +501,11 @@ def _load_runtime_config(config: str | None = None, workspace: str | None = None
         set_config_path(config_path)
         console.print(f"[dim]Using config: {config_path}[/dim]")
 
-    loaded = load_config(config_path)
+    try:
+        loaded = resolve_config_env_vars(load_config(config_path))
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
     _warn_deprecated_config_keys(config_path)
     if workspace:
         loaded.agents.defaults.workspace = workspace
@@ -560,14 +593,18 @@ def serve(
         context_window_tokens=runtime_config.agents.defaults.context_window_tokens,
         context_block_limit=runtime_config.agents.defaults.context_block_limit,
         max_tool_result_chars=runtime_config.agents.defaults.max_tool_result_chars,
-        brave_api_key=runtime_config.tools.web.search.api_key or None,
+        provider_retry_mode=runtime_config.agents.defaults.provider_retry_mode,
+        web_config=runtime_config.tools.web,
         exec_config=runtime_config.tools.exec,
         restrict_to_workspace=runtime_config.tools.restrict_to_workspace,
         session_manager=session_manager,
-        config=runtime_config,
-        llm_timeout=runtime_config.agents.defaults.llm_timeout,
         mcp_servers=runtime_config.tools.mcp_servers,
-        reasoning_effort=runtime_config.agents.defaults.reasoning_effort,
+        channels_config=runtime_config.channels,
+        timezone=runtime_config.agents.defaults.timezone,
+        unified_session=runtime_config.agents.defaults.unified_session,
+        disabled_skills=runtime_config.agents.defaults.disabled_skills,
+        session_ttl_minutes=runtime_config.agents.defaults.session_ttl_minutes,
+        config=runtime_config,
     )
 
     model_name = runtime_config.agents.defaults.model
@@ -607,9 +644,24 @@ def gateway(
     port: int | None = typer.Option(None, "--port", "-p", help="Gateway port"),
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
-    config_path_arg: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
 ):
     """Start the blackcat gateway."""
+    if verbose:
+        import logging
+
+        logging.basicConfig(level=logging.DEBUG)
+    cfg = _load_runtime_config(config, workspace)
+    _run_gateway(cfg, port=port)
+
+
+def _run_gateway(
+    config: Config,
+    *,
+    port: int | None = None,
+    open_browser_url: str | None = None,
+) -> None:
+    """Shared gateway runtime; ``open_browser_url`` opens a tab once channels are up."""
     from blackcat.agent.loop import AgentLoop
     from blackcat.bus.queue import MessageBus
     from blackcat.channels.manager import ChannelManager
@@ -618,11 +670,6 @@ def gateway(
     from blackcat.heartbeat.service import HeartbeatService
     from blackcat.session.manager import SessionManager
 
-    if verbose:
-        import logging
-        logging.basicConfig(level=logging.DEBUG)
-
-    config = _load_runtime_config(config_path_arg, workspace)
     port = port if port is not None else config.gateway.port
 
     console.print(f"{__logo__} Starting blackcat gateway version {__version__} on port {port}...")
@@ -647,22 +694,35 @@ def gateway(
         model=config.agents.defaults.model,
         max_iterations=config.agents.defaults.max_tool_iterations,
         context_window_tokens=config.agents.defaults.context_window_tokens,
+        web_config=config.tools.web,
         context_block_limit=config.agents.defaults.context_block_limit,
         max_tool_result_chars=config.agents.defaults.max_tool_result_chars,
-        brave_api_key=config.tools.web.search.api_key or None,
+        provider_retry_mode=config.agents.defaults.provider_retry_mode,
         exec_config=config.tools.exec,
         cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
         session_manager=session_manager,
-        config=config,
-        llm_timeout=config.agents.defaults.llm_timeout,
         mcp_servers=config.tools.mcp_servers,
-        reasoning_effort=config.agents.defaults.reasoning_effort,
+        channels_config=config.channels,
+        timezone=config.agents.defaults.timezone,
+        unified_session=config.agents.defaults.unified_session,
+        disabled_skills=config.agents.defaults.disabled_skills,
+        session_ttl_minutes=config.agents.defaults.session_ttl_minutes,
+        config=config,
     )
 
     # Set cron callback (needs agent)
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
+        # Dream is an internal job — run directly, not through the agent loop.
+        if job.name == "dream":
+            try:
+                await agent.dream.run()
+                logger.info("Dream cron job completed")
+            except Exception:
+                logger.exception("Dream cron job failed")
+            return None
+
         from blackcat.agent.tools.cron import CronTool
         from blackcat.agent.tools.message import MessageTool
         from blackcat.utils.evaluator import evaluate_response
@@ -677,12 +737,17 @@ def gateway(
         cron_token = None
         if isinstance(cron_tool, CronTool):
             cron_token = cron_tool.set_cron_context(True)
+
+        async def _silent(*_args, **_kwargs):
+            pass
+
         try:
             resp = await agent.process_direct(
                 reminder_note,
                 session_key=f"cron:{job.id}",
                 channel=job.payload.channel or "cli",
                 chat_id=job.payload.to or "direct",
+                on_progress=_silent,
             )
         finally:
             if isinstance(cron_tool, CronTool) and cron_token is not None:
@@ -691,12 +756,12 @@ def gateway(
         response = resp.content if resp else ""
 
         message_tool = agent.tools.get("message")
-        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
+        if job.payload.deliver and isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
             return response
 
         if job.payload.deliver and job.payload.to and response:
             should_notify = await evaluate_response(
-                response, job.payload.message, provider, agent.model,
+                response, reminder_note, provider, agent.model,
             )
             if should_notify:
                 from blackcat.bus.events import OutboundMessage
@@ -706,10 +771,12 @@ def gateway(
                     content=response,
                 ))
         return response
+
     cron.on_job = on_cron_job
 
-    # Create channel manager
-    channels = ChannelManager(config, bus)
+    # Create channel manager (forwards SessionManager so the WebSocket channel
+    # can serve the embedded webui's REST surface).
+    channels = ChannelManager(config, bus, session_manager=session_manager)
 
     def _pick_heartbeat_target() -> tuple[str, str]:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
@@ -762,9 +829,13 @@ def gateway(
     hb_cfg = config.gateway.heartbeat
     heartbeat = HeartbeatService(
         workspace=config.workspace_path,
-        on_heartbeat=on_heartbeat_execute,
+        provider=provider,
+        model=agent.model,
+        on_execute=on_heartbeat_execute,
+        on_notify=on_heartbeat_notify,
         interval_s=hb_cfg.interval_s,
         enabled=hb_cfg.enabled,
+        timezone=config.agents.defaults.timezone,
     )
 
     if channels.enabled_channels:
@@ -778,14 +849,101 @@ def gateway(
 
     console.print(f"[green]✓[/green] Heartbeat: every {hb_cfg.interval_s}s")
 
+    async def _health_server(host: str, health_port: int):
+        """Lightweight HTTP health endpoint on the gateway port."""
+        import json as _json
+
+        async def handle(reader, writer):
+            try:
+                data = await asyncio.wait_for(reader.read(4096), timeout=5)
+            except (asyncio.TimeoutError, ConnectionError):
+                writer.close()
+                return
+
+            request_line = data.split(b"\r\n", 1)[0].decode("utf-8", errors="replace")
+            method, path = "", ""
+            parts = request_line.split(" ")
+            if len(parts) >= 2:
+                method, path = parts[0], parts[1]
+
+            if method == "GET" and path == "/health":
+                body = _json.dumps({"status": "ok"})
+                resp = (
+                    f"HTTP/1.0 200 OK\r\n"
+                    f"Content-Type: application/json\r\n"
+                    f"Content-Length: {len(body)}\r\n"
+                    f"\r\n{body}"
+                )
+            else:
+                body = "Not Found"
+                resp = (
+                    f"HTTP/1.0 404 Not Found\r\n"
+                    f"Content-Type: text/plain\r\n"
+                    f"Content-Length: {len(body)}\r\n"
+                    f"\r\n{body}"
+                )
+
+            writer.write(resp.encode())
+            await writer.drain()
+            writer.close()
+
+        server = await asyncio.start_server(handle, host, health_port)
+        console.print(f"[green]✓[/green] Health endpoint: http://{host}:{health_port}/health")
+        async with server:
+            await server.serve_forever()
+    # Register Dream system job (always-on, idempotent on restart)
+    dream_cfg = config.agents.defaults.dream
+    if dream_cfg.model_override:
+        agent.dream.model = dream_cfg.model_override
+    agent.dream.max_batch_size = dream_cfg.max_batch_size
+    agent.dream.max_iterations = dream_cfg.max_iterations
+    agent.dream.annotate_line_ages = dream_cfg.annotate_line_ages
+    from blackcat.cron.types import CronJob, CronPayload
+    cron.register_system_job(CronJob(
+        id="dream",
+        name="dream",
+        schedule=dream_cfg.build_schedule(config.agents.defaults.timezone),
+        payload=CronPayload(kind="system_event"),
+    ))
+    console.print(f"[green]✓[/green] Dream: {dream_cfg.describe_schedule()}")
+
+    async def _open_browser_when_ready() -> None:
+        """Wait for the gateway to bind, then point the user's browser at the webui."""
+        if not open_browser_url:
+            return
+        import webbrowser
+        # Channels start asynchronously; a short poll lets us avoid racing the bind.
+        for _ in range(40):  # ~4s max
+            try:
+                reader, writer = await asyncio.open_connection(
+                    config.gateway.host or "127.0.0.1", port
+                )
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+                break
+            except OSError:
+                await asyncio.sleep(0.1)
+        try:
+            webbrowser.open(open_browser_url)
+            console.print(f"[green]✓[/green] Opened browser at {open_browser_url}")
+        except Exception as e:
+            console.print(f"[yellow]Could not open browser ({e}); visit {open_browser_url}[/yellow]")
+
     async def run():
         try:
             await cron.start()
             await heartbeat.start()
-            await asyncio.gather(
+            tasks = [
                 agent.run(),
                 channels.start_all(),
-            )
+                _health_server(config.gateway.host, port),
+            ]
+            if open_browser_url:
+                tasks.append(_open_browser_when_ready())
+            await asyncio.gather(*tasks)
         except KeyboardInterrupt:
             console.print("\nShutting down...")
         except Exception:
@@ -798,10 +956,14 @@ def gateway(
             cron.stop()
             agent.stop()
             await channels.stop_all()
+            # Flush all cached sessions to durable storage before exit.
+            # This prevents data loss on filesystems with write-back
+            # caching (rclone VFS, NFS, FUSE mounts, etc.).
+            flushed = agent.sessions.flush_all()
+            if flushed:
+                logger.info("Shutdown: flushed {} session(s) to disk", flushed)
 
     asyncio.run(run())
-
-
 
 
 # ============================================================================
@@ -814,7 +976,7 @@ def agent(
     message: str = typer.Option(None, "--message", "-m", help="Message to send to the agent"),
     session_id: str = typer.Option("cli:direct", "--session", "-s", help="Session ID"),
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
-    config_path_arg: str | None = typer.Option(None, "--config", "-c", help="Config file path"),
+    config_file: str | None = typer.Option(None, "--config", "-c", help="Config file path"),
     markdown: bool = typer.Option(True, "--markdown/--no-markdown", help="Render assistant output as Markdown"),
     logs: bool = typer.Option(False, "--logs/--no-logs", help="Show blackcat runtime logs during chat"),
 ):
@@ -825,7 +987,7 @@ def agent(
     from blackcat.bus.queue import MessageBus
     from blackcat.cron.service import CronService
 
-    config = _load_runtime_config(config_path_arg, workspace)
+    config = _load_runtime_config(config_file, workspace)
     sync_workspace_templates(config.workspace_path)
 
     bus = MessageBus()
@@ -851,16 +1013,20 @@ def agent(
         model=config.agents.defaults.model,
         max_iterations=config.agents.defaults.max_tool_iterations,
         context_window_tokens=config.agents.defaults.context_window_tokens,
+        web_config=config.tools.web,
         context_block_limit=config.agents.defaults.context_block_limit,
         max_tool_result_chars=config.agents.defaults.max_tool_result_chars,
-        brave_api_key=config.tools.web.search.api_key or None,
+        provider_retry_mode=config.agents.defaults.provider_retry_mode,
         exec_config=config.tools.exec,
         cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
-        config=config,
-        llm_timeout=config.agents.defaults.llm_timeout,
         mcp_servers=config.tools.mcp_servers,
-        reasoning_effort=config.agents.defaults.reasoning_effort,
+        channels_config=config.channels,
+        timezone=config.agents.defaults.timezone,
+        unified_session=config.agents.defaults.unified_session,
+        disabled_skills=config.agents.defaults.disabled_skills,
+        session_ttl_minutes=config.agents.defaults.session_ttl_minutes,
+        config=config,
     )
     restart_notice = consume_restart_notice_from_env()
     if restart_notice and should_show_cli_restart_notice(restart_notice, session_id):
@@ -872,7 +1038,7 @@ def agent(
     # Shared reference for progress callbacks
     _thinking: ThinkingSpinner | None = None
 
-    async def _cli_progress(content: str, *, tool_hint: bool = False) -> None:
+    async def _cli_progress(content: str, *, tool_hint: bool = False, **_kwargs: Any) -> None:
         ch = agent_loop.channels_config
         if ch and tool_hint and not ch.send_tool_hints:
             return
@@ -904,7 +1070,7 @@ def agent(
         # Interactive mode — route through bus like other channels
         from blackcat.bus.events import InboundMessage
         _init_prompt_session()
-        console.print(f"{__logo__} Interactive mode (type [bold]exit[/bold] or [bold]Ctrl+C[/bold] to quit)\n")
+        console.print(f"{__logo__} Interactive mode [bold blue]({config.agents.defaults.model})[/bold blue] — type [bold]exit[/bold] or [bold]Ctrl+C[/bold] to quit\n")
 
         if ":" in session_id:
             cli_channel, cli_chat_id = session_id.split(":", 1)
@@ -986,6 +1152,9 @@ def agent(
                 while True:
                     try:
                         _flush_pending_tty_input()
+                        # Stop spinner before user input to avoid prompt_toolkit conflicts
+                        if renderer:
+                            renderer.stop_for_input()
                         user_input = await _read_interactive_input_async()
                         command = user_input.strip()
                         if not command:
@@ -1062,7 +1231,7 @@ def channels_status(
 
     table = Table(title="Channel Status")
     table.add_column("Channel", style="cyan")
-    table.add_column("Enabled", style="green")
+    table.add_column("Enabled")
 
     for name, cls in sorted(discover_all().items()):
         section = getattr(config.channels, name, None)
@@ -1168,8 +1337,7 @@ def channels_login(
     console.print(f"{__logo__} {all_channels[channel_name].display_name} Login\n")
 
     channel_cls = all_channels[channel_name]
-    bus = MessageBus()
-    channel = channel_cls(channel_cfg, bus=bus)
+    channel = channel_cls(channel_cfg, bus=None)
 
     success = asyncio.run(channel.login(force=force))
 
@@ -1198,7 +1366,7 @@ def plugins_list():
     table = Table(title="Channel Plugins")
     table.add_column("Name", style="cyan")
     table.add_column("Source", style="magenta")
-    table.add_column("Enabled", style="green")
+    table.add_column("Enabled")
 
     for name in sorted(all_channels):
         cls = all_channels[name]

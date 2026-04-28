@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
+from blackcat.agent.tools.ask import (
+    ask_user_options_from_messages,
+    ask_user_outbound,
+    ask_user_tool_result_messages,
+    pending_ask_user_id,
+)
 from blackcat.agent.tools.message import MessageTool
 from blackcat.bus.events import OutboundMessage
-from blackcat.utils.helpers import truncate_string
+from blackcat.command import CommandContext
+from blackcat.config.schema import Config
+from blackcat.utils.document import extract_documents
+from blackcat.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
 if TYPE_CHECKING:
     from blackcat.agent.loop import AgentLoop
     from blackcat.bus.events import InboundMessage
-    from blackcat.session.manager import Session
 
 
 class MessageHandler:
@@ -21,40 +29,37 @@ class MessageHandler:
     Handles a single inbound message through the agent.
 
     Responsibilities:
-    - Resolve message origin (system vs channel)
-    - Get or create session
-    - Build context messages
-    - Run agent loop
-    - Persist session
-    - Construct response
+    - Session management (get/create, checkpoint restore, pending user turn)
+    - Auto-compaction and consolidation
+    - Slash command dispatch
+    - Context building
+    - LLM iteration coordination
+    - Turn persistence (save history, clear checkpoints)
+    - Response formatting (including ask_user options)
 
-    Not responsible for:
-    - LLM iteration (delegates to AgentRunner)
-    - Tool execution (delegates to ToolRegistry)
-    - Bus consumption and task dispatch (AgentLoop)
+    Delegates to AgentLoop for:
+    - Tool execution (ToolRegistry)
+    - LLM provider calls (AgentRunner)
+    - Runtime checkpoint save/restore helpers
     """
 
-    __slots__ = ("_loop", "_msg")
+    __slots__ = ("_loop", "_msg", "config")
 
-    def __init__(self, loop: "AgentLoop", msg: "InboundMessage") -> None:
+    def __init__(self, loop: "AgentLoop", msg: "InboundMessage", config: Config) -> None:
         self._loop = loop
         self._msg = msg
+        self.config = config
 
     async def process(
         self,
         session_key: str | None = None,
-        on_progress=None,
-        on_stream=None,
-        on_stream_end=None,
+        on_progress: Callable[..., Awaitable[None]] | None = None,
+        on_stream: Callable[[str], Awaitable[None]] | None = None,
+        on_stream_end: Callable[..., Awaitable[None]] | None = None,
+        pending_queue: Any | None = None,
     ) -> OutboundMessage | None:
         """
         Process the inbound message and return a response.
-
-        Args:
-            session_key: Optional session key override.
-            on_progress: Optional progress callback.
-            on_stream: Optional streaming callback.
-            on_stream_end: Optional stream end callback.
 
         Returns:
             OutboundMessage to send, or None if no response needed.
@@ -62,154 +67,243 @@ class MessageHandler:
         loop = self._loop
         msg = self._msg
 
-        # Parse origin (system messages encode origin in chat_id as "channel:chat_id")
-        is_system = msg.channel == "system"
-        if is_system:
-            origin_channel, origin_chat_id = self._parse_system_origin(msg.chat_id)
-            key = f"{origin_channel}:{origin_chat_id}"
-            logger.info("Processing system message from {}", msg.sender_id)
-        else:
-            origin_channel, origin_chat_id = msg.channel, msg.chat_id
-            key = session_key or msg.session_key
-            logger.info(
-                "Processing message from {}:{}: {}",
-                origin_channel, msg.sender_id, truncate_string(msg.content, 80),
+        # System messages (subagent follow-ups, background tasks)
+        if msg.channel == "system":
+            return await self._process_system_message(msg, pending_queue)
+
+        # Extract document text from media (PDF, DOCX, etc.)
+        if msg.media:
+            new_content, image_only = extract_documents(msg.content, msg.media)
+            msg = msg.__class__(
+                channel=msg.channel,
+                sender_id=msg.sender_id,
+                chat_id=msg.chat_id,
+                content=new_content,
+                media=image_only,
+                metadata=msg.metadata,
             )
 
-        # Ensure MCP is connected (lazy)
-        await loop._connect_mcp()
-
-        # Get or create session
+        key = session_key or msg.session_key
         session = loop.sessions.get_or_create(key)
 
-        # Dispatch slash commands
+        # Restore checkpoint state from crash recovery
+        if loop._restore_runtime_checkpoint(session):
+            loop.sessions.save(session)
+        if loop._restore_pending_user_turn(session):
+            loop.sessions.save(session)
+
+        # Prepare session (auto-compact if idle)
+        session, pending = loop.auto_compact.prepare_session(session, key)
+
+        # Slash commands
         raw = msg.content.strip()
-        from blackcat.command.router import CommandContext
         ctx = CommandContext(msg=msg, session=session, key=key, raw=raw, loop=loop)
         if result := await loop.commands.dispatch(ctx):
             return result
 
-        # Set tool contexts and reset per-turn tracking
-        loop._set_tool_context(origin_channel, origin_chat_id, msg.metadata.get("message_id"))
+        # Token-budget consolidation
+        await loop.consolidator.maybe_consolidate_by_tokens(session)
+
+        # Set tool context for this turn
+        loop._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
+
+        # Reset per-turn MessageTool tracking
         message_tool = loop.tools.get("message")
         if isinstance(message_tool, MessageTool):
             message_tool.start_turn()
 
-        # Build context messages
-        # Note: Don't limit get_history here - let sliding_window handle compaction
-        author = self._resolve_author(msg.sender_id, msg.channel)
-        messages = await loop.context.build_messages(
-            history=session.get_history(),
-            current_message=msg.content,
-            author=author,
-            channel=origin_channel,
-            chat_id=origin_chat_id,
-            media=msg.media if msg.media and not is_system else None,
-            use_structured_system=loop.provider.supports_prompt_caching,
-        )
+        history = session.get_history(max_messages=0)
 
-        # Compact context if needed
-        messages, _ = await loop.context.sliding_window(
-            messages,
-            window_size=loop.memory_window,
-            max_tokens=loop.context_window_tokens,
-            model=loop.model,
-            session=session,
-        )
+        # Handle pending ask_user response
+        pending_ask_id = pending_ask_user_id(history)
+        author = self.config.resolve_author(msg.sender_id, msg.channel)
+        if pending_ask_id:
+            system_prompt = await loop.context.build_system_prompt(
+                author=author,
+                channel=msg.channel,
+            )
+            initial_messages = ask_user_tool_result_messages(
+                system_prompt,
+                history,
+                pending_ask_id,
+                msg.content,
+            )
+        else:
+            initial_messages = await loop.context.build_messages(
+                history=history,
+                current_message=msg.content,
+                media=msg.media if msg.media else None,
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                author=author,
+            )
 
-        # Progress callback for intermediate output
-        async def _send_progress(content: str, **_kwargs) -> None:
+        # Build progress callback
+        async def _bus_progress(
+            content: str,
+            *,
+            tool_hint: bool = False,
+            tool_events: list[dict[str, Any]] | None = None,
+        ) -> None:
+            meta = dict(msg.metadata or {})
+            meta["_progress"] = True
+            meta["_tool_hint"] = tool_hint
+            if tool_events:
+                meta["_tool_events"] = tool_events
             await loop.bus.publish_outbound(
                 OutboundMessage(
-                    channel=origin_channel,
-                    chat_id=origin_chat_id,
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
                     content=content,
-                    metadata=msg.metadata or {},
+                    metadata=meta,
                 )
             )
 
+        async def _on_retry_wait(content: str) -> None:
+            meta = dict(msg.metadata or {})
+            meta["_retry_wait"] = True
+            await loop.bus.publish_outbound(
+                OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    content=content,
+                    metadata=meta,
+                )
+            )
+
+        # Persist the triggering user message up front so a mid-turn crash
+        # doesn't silently lose the prompt on recovery.
+        user_persisted_early = False
+        media_paths = [p for p in (msg.media or []) if isinstance(p, str) and p]
+        has_text = isinstance(msg.content, str) and msg.content.strip()
+        if not pending_ask_id and (has_text or media_paths):
+            extra: dict[str, Any] = {"media": list(media_paths)} if media_paths else {}
+            text = msg.content if isinstance(msg.content, str) else ""
+            session.add_message("user", text, **extra)
+            loop._mark_pending_user_turn(session)
+            loop.sessions.save(session)
+            user_persisted_early = True
+
         # Run agent loop
-        final_content, tools_used, _ = await loop._run_agent_loop(
-            messages,
-            on_progress=on_progress or _send_progress,
+        final_content, _, all_msgs, stop_reason, had_injections = await loop._run_agent_loop(
+            initial_messages,
+            on_progress=on_progress or _bus_progress,
             on_stream=on_stream,
             on_stream_end=on_stream_end,
+            on_retry_wait=_on_retry_wait,
             session=session,
-            channel=origin_channel,
-            chat_id=origin_chat_id,
-            message_id=msg.metadata.get("message_id") if msg.metadata else None,
+            channel=msg.channel,
+            chat_id=msg.chat_id,
+            message_id=msg.metadata.get("message_id"),
+            pending_queue=pending_queue,
         )
 
         if final_content is None or not final_content.strip():
-            from blackcat.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
             final_content = EMPTY_FINAL_RESPONSE_MESSAGE
 
-        # Log response
-        logger.info(
-            "Response to {}:{}: {}",
-            origin_channel, msg.sender_id, truncate_string(final_content, 120),
+        # Skip the already-persisted user message when saving the turn
+        save_skip = 1 + len(history) + (1 if user_persisted_early else 0)
+        loop._save_turn(session, all_msgs, save_skip)
+        loop._clear_pending_user_turn(session)
+        loop._clear_runtime_checkpoint(session)
+        loop.sessions.save(session)
+        loop._schedule_background(loop.consolidator.maybe_consolidate_by_tokens(session))
+
+        # Suppress response if MessageTool already sent to this target
+        if (mt := loop.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn:
+            if not had_injections or stop_reason == "empty_final_response":
+                return None
+
+        preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
+        logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
+
+        meta = dict(msg.metadata or {})
+        final_content, buttons = ask_user_outbound(
+            final_content,
+            ask_user_options_from_messages(all_msgs) if stop_reason == "ask_user" else [],
+            msg.channel,
         )
-
-        # Persist to session
-        self._save_to_session(session, msg, final_content, tools_used, is_system)
-
-        # Avoid duplicate if message tool already sent
-        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
-            return None
-
-        metadata = msg.metadata or {}
+        if on_stream is not None and stop_reason not in {"ask_user", "error"}:
+            meta["_streamed"] = True
         return OutboundMessage(
-            channel=origin_channel,
-            chat_id=origin_chat_id,
+            channel=msg.channel,
+            chat_id=msg.chat_id,
             content=final_content,
-            reply_to=str(metadata["reply_to"]) if metadata.get("reply_to") else None,
-            metadata=metadata,
+            metadata=meta,
+            buttons=buttons,
         )
 
-    def _parse_system_origin(self, chat_id: str) -> tuple[str, str]:
-        """Parse system message origin from chat_id."""
-        from blackcat.utils.helpers import parse_session_key
-        if ":" in chat_id:
-            return parse_session_key(chat_id)
-        return "cli", chat_id
-
-    def _resolve_author(self, sender_id: str, channel: str) -> str:
-        """Resolve sender_id to author name using config."""
-        if self._loop.config:
-            return self._loop.config.resolve_author(sender_id, channel)
-        return sender_id
-
-    def _save_to_session(
+    async def _process_system_message(
         self,
-        session: "Session",
         msg: "InboundMessage",
-        final_content: str,
-        tools_used: list[dict[str, Any]],
-        is_system: bool,
-    ) -> None:
-        """Persist conversation turn to session."""
-        user_content = f"[System: {msg.sender_id}] {msg.content}" if is_system else msg.content
-        author = self._resolve_author(msg.sender_id, msg.channel)
-        session.add_message("user", user_content, author=author)
+        pending_queue: Any | None = None,
+    ) -> OutboundMessage | None:
+        """Process system message (subagent follow-up, background task)."""
+        loop = self._loop
 
-        agent = self._loop.context.get_identity()
-        agent_name = agent.get("identity", {}).get("name") if isinstance(agent, dict) else None
-        agent_name = agent_name or "blackcat"
+        # Parse origin from chat_id ("channel:chat_id")
+        channel, chat_id = (
+            msg.chat_id.split(":", 1) if ":" in msg.chat_id else ("cli", msg.chat_id)
+        )
+        logger.info("Processing system message from {}", msg.sender_id)
+        key = f"{channel}:{chat_id}"
+        session = loop.sessions.get_or_create(key)
 
-        # Save assistant message with tool calls (for context continuity)
-        if tools_used:
-            tool_calls = [
-                {"id": t["id"], "type": "function", "function": {"name": t["name"], "arguments": t["arguments"]}}
-                for t in tools_used
-            ]
-            session.add_message("assistant", None, author=agent_name, tool_calls=tool_calls)
-            for tool in tools_used:
-                session.add_message(
-                    "function",
-                    content=tool["result"],
-                    author=agent_name,
-                    tool_call_id=tool["id"],
-                    name=tool["name"],
-                )
-        session.add_message("assistant", final_content, author=agent_name)
-        self._loop.sessions.save(session)
+        # Restore checkpoint state from crash recovery
+        if loop._restore_runtime_checkpoint(session):
+            loop.sessions.save(session)
+        if loop._restore_pending_user_turn(session):
+            loop.sessions.save(session)
+
+        # Prepare session (auto-compact if idle)
+        session, pending = loop.auto_compact.prepare_session(session, key)
+
+        # Token-budget consolidation
+        await loop.consolidator.maybe_consolidate_by_tokens(session)
+
+        # Persist subagent follow-ups before prompt assembly
+        is_subagent = msg.sender_id == "subagent"
+        if is_subagent and loop._persist_subagent_followup(session, msg):
+            loop.sessions.save(session)
+
+        # Set tool context for this turn
+        loop._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
+
+        history = session.get_history(max_messages=0)
+
+        # Subagent content is already in `history`; passing it again would double-project
+        # System messages use "system" as author since they're not from a user
+        messages = await loop.context.build_messages(
+            history=history,
+            current_message="" if is_subagent else msg.content,
+            channel=channel,
+            chat_id=chat_id,
+            author="system",
+        )
+
+        final_content, _, all_msgs, stop_reason, _ = await loop._run_agent_loop(
+            messages,
+            session=session,
+            channel=channel,
+            chat_id=chat_id,
+            message_id=msg.metadata.get("message_id"),
+            pending_queue=pending_queue,
+        )
+
+        loop._save_turn(session, all_msgs, 1 + len(history))
+        loop._clear_runtime_checkpoint(session)
+        loop.sessions.save(session)
+        loop._schedule_background(loop.consolidator.maybe_consolidate_by_tokens(session))
+
+        options = ask_user_options_from_messages(all_msgs) if stop_reason == "ask_user" else []
+        content, buttons = ask_user_outbound(
+            final_content or "Background task completed.",
+            options,
+            channel,
+        )
+        return OutboundMessage(
+            channel=channel,
+            chat_id=chat_id,
+            content=content,
+            buttons=buttons,
+        )

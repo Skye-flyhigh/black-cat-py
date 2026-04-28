@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 import webbrowser
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 
 import httpx
 from oauth_cli_kit.models import OAuthToken
@@ -242,7 +242,7 @@ class GitHubCopilotProvider(OpenAICompatProvider):
         temperature: float = 0.7,
         reasoning_effort: str | None = None,
         tool_choice: str | dict[str, object] | None = None,
-        on_content_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_content_delta: Callable[[str], None] | None = None,
     ):
         await self._refresh_client_api_key()
         return await super().chat_stream(
