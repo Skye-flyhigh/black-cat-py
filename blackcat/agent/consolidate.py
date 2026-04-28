@@ -6,18 +6,18 @@
 # Individual history.jsonl writers cap their own payloads tightly; the
 # _HISTORY_ENTRY_HARD_CAP at append_history() is a belt-and-suspenders default
 # that catches any new caller that forgot to set its own cap.
+import asyncio
 import weakref
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 import tiktoken
-from flask import render_template
 from loguru import logger
-import asyncio
 
 from blackcat.memory.memory import MemoryStore
 from blackcat.providers.base import LLMProvider
 from blackcat.session.manager import Session, SessionManager
 from blackcat.utils.formatting import truncate_text
+from blackcat.utils.prompt_templates import render_template
 from blackcat.utils.tokens import estimate_message_tokens, estimate_prompt_tokens_chain
 
 _RAW_ARCHIVE_MAX_CHARS = 16_000       # fallback dump (LLM failed)
@@ -38,7 +38,7 @@ class Consolidator:
         model: str,
         sessions: SessionManager,
         context_window_tokens: int | None,
-        build_messages: Callable[..., list[dict[str, Any]]],
+        build_messages: Callable[..., Awaitable[list[dict[str, Any]]]],
         get_tool_definitions: Callable[[], list[dict[str, Any]]],
         max_completion_tokens: int = 4096,
     ):
@@ -80,21 +80,18 @@ class Consolidator:
 
         return last_boundary
 
-    def estimate_session_prompt_tokens(
+    async def estimate_session_prompt_tokens(
         self,
         session: Session,
-        *,
-        session_summary: str | None = None,
     ) -> tuple[int, str]:
         """Estimate current prompt size for the normal session history view."""
         history = session.get_history(max_messages=0)
         channel, chat_id = (session.key.split(":", 1) if ":" in session.key else (None, None))
-        probe_messages = self._build_messages(
+        probe_messages = await self._build_messages(
             history=history,
             current_message="[token-probe]",
             channel=channel,
             chat_id=chat_id,
-            session_summary=session_summary,
         )
         return estimate_prompt_tokens_chain(
             self.provider,
@@ -160,8 +157,6 @@ class Consolidator:
     async def maybe_consolidate_by_tokens(
         self,
         session: Session,
-        *,
-        session_summary: str | None = None,
     ) -> None:
         """Loop: archive old messages until prompt fits within safe budget.
 
@@ -176,10 +171,7 @@ class Consolidator:
             budget = self._input_token_budget
             target = budget // 2
             try:
-                estimated, source = self.estimate_session_prompt_tokens(
-                    session,
-                    session_summary=session_summary,
-                )
+                estimated, source = await self.estimate_session_prompt_tokens(session)
             except Exception:
                 logger.exception("Token estimation failed for {}", session.key)
                 estimated, source = 0, "error"
@@ -241,10 +233,7 @@ class Consolidator:
                     break
 
                 try:
-                    estimated, source = self.estimate_session_prompt_tokens(
-                        session,
-                        session_summary=session_summary,
-                    )
+                    estimated, source = await self.estimate_session_prompt_tokens(session)
                 except Exception:
                     logger.exception("Token estimation failed for {}", session.key)
                     estimated, source = 0, "error"

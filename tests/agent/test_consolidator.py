@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from blackcat.agent.consolidate import _ARCHIVE_SUMMARY_MAX_CHARS
 from blackcat.agent.memory import (
-    _ARCHIVE_SUMMARY_MAX_CHARS,
     Consolidator,
     MemoryStore,
 )
@@ -134,7 +134,7 @@ class TestConsolidatorTokenBudget:
             }
             for i in range(70)
         ]
-        consolidator.estimate_session_prompt_tokens = MagicMock(
+        consolidator.estimate_session_prompt_tokens = AsyncMock(
             side_effect=[(1200, "tiktoken"), (400, "tiktoken")]
         )
         # Use real pick_consolidation_boundary — it will find boundary at idx=50
@@ -162,7 +162,7 @@ class TestConsolidatorTokenBudget:
             for i in range(70)
         ]
         session.metadata = {}
-        consolidator.estimate_session_prompt_tokens = MagicMock(
+        consolidator.estimate_session_prompt_tokens = AsyncMock(
             side_effect=[(1200, "tiktoken"), (400, "tiktoken")]
         )
         # LLM consolidation fails — archive() returns None (raw_archive fired).
@@ -188,7 +188,7 @@ class TestConsolidatorTokenBudget:
         ]
         session.metadata = {}
         # Keep estimates high so the loop would otherwise run multiple rounds.
-        consolidator.estimate_session_prompt_tokens = MagicMock(
+        consolidator.estimate_session_prompt_tokens = AsyncMock(
             return_value=(1200, "tiktoken")
         )
         consolidator.archive = AsyncMock(return_value=None)
@@ -211,7 +211,7 @@ class TestConsolidatorTokenBudget:
             }
             for i in range(70)
         ]
-        consolidator.estimate_session_prompt_tokens = MagicMock(
+        consolidator.estimate_session_prompt_tokens = AsyncMock(
             side_effect=[(1200, "tiktoken"), (400, "tiktoken")]
         )
         consolidator.archive = AsyncMock(return_value=True)
