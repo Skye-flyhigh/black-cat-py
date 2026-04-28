@@ -49,9 +49,11 @@ class LensDefinitionTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -121,9 +123,11 @@ class LensReferencesTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -194,9 +198,11 @@ class LensHoverTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -248,7 +254,9 @@ class LensWorkspaceSymbolTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(self, query: str, workspace: str | None = None, **kwargs: Any) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        query = kwargs["query"]
+        workspace = kwargs.get("workspace")
         try:
             symbols = await self.client.get_workspace_symbols(query, workspace)
 
@@ -312,7 +320,9 @@ class LensDocumentSymbolTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(self, file_path: str, workspace: str | None = None, **kwargs: Any) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -385,9 +395,11 @@ class LensCompletionTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -467,9 +479,12 @@ class LensRenameTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, new_name: str, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        new_name = kwargs["new_name"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -553,16 +568,13 @@ class LensCodeActionTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self,
-        file_path: str,
-        start_line: int,
-        start_character: int,
-        end_line: int,
-        end_character: int,
-        workspace: str | None = None,
-        **kwargs: Any,
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        start_line = kwargs["start_line"]
+        start_character = kwargs["start_character"]
+        end_line = kwargs["end_line"]
+        end_character = kwargs["end_character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -638,9 +650,11 @@ class LensFormatTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, tab_size: int = 4, insert_spaces: bool = True, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        tab_size = kwargs.get("tab_size", 4)
+        insert_spaces = kwargs.get("insert_spaces", True)
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -712,9 +726,11 @@ class LensSignatureHelpTool(Tool):
     def __init__(self, client: LensClient):
         self.client = client
 
-    async def execute(
-        self, file_path: str, line: int, character: int, workspace: str | None = None, **kwargs: Any
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        line = kwargs["line"]
+        character = kwargs["character"]
+        workspace = kwargs.get("workspace")
         try:
             full_path = self.client.resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
@@ -806,13 +822,10 @@ class LensDiagnosticsTool(Tool):
         self.client = client
         self.default_source = default_source
 
-    async def execute(
-        self,
-        file_path: str,
-        workspace: str | None = None,
-        source: str | None = None,
-        **kwargs: Any,
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
+        file_path = kwargs["file_path"]
+        workspace = kwargs.get("workspace")
+        source = kwargs.get("source")
         """Get diagnostics for a file.
 
         Args:
