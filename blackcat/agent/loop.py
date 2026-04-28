@@ -24,6 +24,19 @@ from blackcat.agent.subagent import SubagentManager
 from blackcat.agent.tools.ask import AskUserTool
 from blackcat.agent.tools.cron import CronTool
 from blackcat.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from blackcat.agent.tools.lens import (
+    LensCodeActionTool,
+    LensCompletionTool,
+    LensDefinitionTool,
+    LensDiagnosticsTool,
+    LensDocumentSymbolTool,
+    LensFormatTool,
+    LensHoverTool,
+    LensReferencesTool,
+    LensRenameTool,
+    LensSignatureHelpTool,
+    LensWorkspaceSymbolTool,
+)
 from blackcat.agent.tools.message import MessageTool
 from blackcat.agent.tools.notebook import NotebookEditTool
 from blackcat.agent.tools.registry import ToolRegistry
@@ -35,6 +48,7 @@ from blackcat.agent.tools.web import WebFetchTool, WebSearchTool
 from blackcat.bus.events import InboundMessage, OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.command import CommandContext, CommandRouter, register_builtin_commands
+from blackcat.config import Config
 from blackcat.config.schema import AgentDefaults
 from blackcat.providers.base import LLMProvider
 from blackcat.session.manager import Session, SessionManager
@@ -49,7 +63,7 @@ from blackcat.utils.progress_events import (
 )
 
 if TYPE_CHECKING:
-    from blackcat.config.schema import ChannelsConfig, ExecToolConfig, ToolsConfig, WebToolsConfig
+    from blackcat.config.schema import ChannelsConfig, ExecToolConfig, WebToolsConfig
     from blackcat.cron.service import CronService
 
 
@@ -186,11 +200,12 @@ class AgentLoop:
         hooks: list[AgentHook] | None = None,
         unified_session: bool = False,
         disabled_skills: list[str] | None = None,
-        tools_config: ToolsConfig | None = None,
+        config: Config | None = None,
     ):
-        from blackcat.config.schema import ExecToolConfig, ToolsConfig, WebToolsConfig
+        from blackcat.config.schema import ExecToolConfig, WebToolsConfig
 
-        _tc = tools_config or ToolsConfig()
+        self.config = config or Config()
+        self.tools_config = self.config.tools
         defaults = AgentDefaults()
         self.bus = bus
         self.channels_config = channels_config
@@ -273,9 +288,19 @@ class AgentLoop:
             provider=provider,
             model=self.model,
         )
+
+        if self.tools_config.lens.enabled:
+            from blackcat.lens import LensClient
+            self.lens_client = LensClient(self.tools_config.lens)
+            self.context.set_lens_client(self.lens_client)
+            logger.info("Lens LSP client initialized with {} workspaces", len(self.tools_config.lens.workspaces))
+        else:
+            self.lens_client = None
+            logger.debug("Lens disabled: tools_config.lens.enabled = {}", self.tools_config.lens.enabled)
+
         self._register_default_tools()
-        if _tc.my.enable:
-            self.tools.register(MyTool(loop=self, modify_allowed=_tc.my.allow_set))
+        if self.tools_config.my.enable:
+            self.tools.register(MyTool(loop=self, modify_allowed=self.tools_config.my.allow_set))
         self._runtime_vars: dict[str, Any] = {}
         self._current_iteration: int = 0
         self.commands = CommandRouter()
@@ -321,6 +346,21 @@ class AgentLoop:
                 CronTool(self.cron_service, default_timezone=self.context.timezone or "UTC")
             )
 
+        if self.lens_client:
+            self.tools.register(LensDefinitionTool(self.lens_client))
+            self.tools.register(LensReferencesTool(self.lens_client))
+            self.tools.register(LensHoverTool(self.lens_client))
+            self.tools.register(LensWorkspaceSymbolTool(self.lens_client))
+            self.tools.register(LensDocumentSymbolTool(self.lens_client))
+            self.tools.register(LensCompletionTool(self.lens_client))
+            self.tools.register(LensRenameTool(self.lens_client))
+            self.tools.register(LensCodeActionTool(self.lens_client))
+            self.tools.register(LensFormatTool(self.lens_client))
+            self.tools.register(LensSignatureHelpTool(self.lens_client))
+            self.tools.register(LensDiagnosticsTool(self.lens_client))
+
+        self.tools.export_md(self.workspace / "TOOLS.md")
+
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
         if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
@@ -332,6 +372,7 @@ class AgentLoop:
             self._mcp_stacks = await connect_mcp_servers(self._mcp_servers, self.tools)
             if self._mcp_stacks:
                 self._mcp_connected = True
+                self.tools.export_mcp_md(self.workspace / "MCP.md")
             else:
                 logger.warning("No MCP servers connected successfully (will retry next message)")
         except asyncio.CancelledError:
@@ -762,7 +803,7 @@ class AgentLoop:
 
         Delegates to MessageHandler for cleaner separation of concerns.
         """
-        handler = MessageHandler(self, msg)
+        handler = MessageHandler(self, msg, self.config)
         return await handler.process(
             session_key=session_key,
             on_progress=on_progress,
