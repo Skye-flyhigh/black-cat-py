@@ -260,7 +260,6 @@ class LensConfig(Base):
             return ws_config.diagnostics_source
         return self.diagnostics_source
 
-
 class MyToolConfig(Base):
     """Self-inspection tool configuration."""
 
@@ -273,6 +272,7 @@ class ToolsConfig(Base):
 
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    lens: LensConfig = Field(default_factory=LensConfig)
     my: MyToolConfig = Field(default_factory=MyToolConfig)
     restrict_to_workspace: bool = False  # restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)

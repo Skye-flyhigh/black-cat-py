@@ -257,6 +257,9 @@ def build_status_content(
     context_window_tokens: int,
     session_msg_count: int,
     context_tokens_estimate: int,
+    search_usage_text: str | None = None,
+    active_task_count: int = 0,
+    max_completion_tokens: int = 8192,
 ) -> str:
     """Build a human-readable runtime status snapshot."""
     uptime_s = int(time.time() - start_time)
@@ -275,14 +278,19 @@ def build_status_content(
     token_line = f"\U0001f4ca Tokens: {last_in} in / {last_out} out"
     if cached and last_in:
         token_line += f" ({cached * 100 // last_in}% cached)"
-    return "\n".join([
+    lines = [
         f"\U0001f408 blackcat v{version}",
         f"\U0001f9e0 Model: {model}",
         token_line,
         f"\U0001f4c8 Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}%)",
         f"\u23f1\ufe0f Uptime: {uptime}",
         f"\U0001f4ac Messages: {session_msg_count}",
-    ])
+    ]
+    if search_usage_text:
+        lines.append(f"\U0001f50d Search: {search_usage_text}")
+    if active_task_count:
+        lines.append(f"\U0001f504 Active tasks: {active_task_count}")
+    return "\n".join(lines)
 
 
 def find_legal_message_start(messages: list[dict[str, Any]]) -> int | None:

@@ -386,6 +386,7 @@ class CronService:
         channel: str | None = None,
         to: str | None = None,
         delete_after_run: bool = False,
+        metadata: dict | None = None,
     ) -> CronJob:
         """Add a new job."""
         _validate_schedule_for_add(schedule)
@@ -407,6 +408,7 @@ class CronService:
             created_at_ms=now,
             updated_at_ms=now,
             delete_after_run=delete_after_run,
+            metadata=metadata,
         )
         if self._running:
             store = self._load_store()
