@@ -449,11 +449,18 @@ class DiscordChannel(BaseChannel):
         channel_id = self._channel_key(message.channel)
         content = message.content or ""
 
+        # Extract text from embeds (link previews, rich content, etc.)
+        embed_markers = []
+        for embed in getattr(message, "embeds", []):
+            embed_text = self._extract_embed_content(embed)
+            if embed_text:
+                embed_markers.append(embed_text)
+
         if not self._should_accept_inbound(message, sender_id, content):
             return
 
         media_paths, attachment_markers = await self._download_attachments(message.attachments)
-        full_content = self._compose_inbound_content(content, attachment_markers)
+        full_content = self._compose_inbound_content(content, attachment_markers, embed_markers)
         metadata = self._build_inbound_metadata(message)
 
         await self._start_typing(str(message.channel.id))
@@ -580,10 +587,38 @@ class DiscordChannel(BaseChannel):
         return media_paths, markers
 
     @staticmethod
-    def _compose_inbound_content(content: str, attachment_markers: list[str]) -> str:
-        """Combine message text with attachment markers."""
+    def _extract_embed_content(embed) -> str:
+        """Extract readable text from a Discord embed (link previews, rich cards, etc.).
+
+        Returns a human-readable summary of the embed, or an empty string if
+        the embed has no extractable text.
+        """
+        parts = []
+
+        if embed.title:
+            parts.append(f"**{embed.title}**")
+
+        if embed.description:
+            parts.append(embed.description)
+
+        for field in embed.fields:
+            value = field.value.replace("```", "").replace("`", "")
+            parts.append(f"{field.name}: {value}")
+
+        if embed.footer and embed.footer.text:
+            parts.append(f"[{embed.footer.text}]")
+
+        return "\n".join(parts)
+
+    @staticmethod
+    def _compose_inbound_content(
+        content: str, attachment_markers: list[str], embed_markers: list[str] | None = None
+    ) -> str:
+        """Combine message text with attachment and embed markers."""
         content_parts = [content] if content else []
         content_parts.extend(attachment_markers)
+        if embed_markers:
+            content_parts.extend(embed_markers)
         return "\n".join(part for part in content_parts if part) or "[empty message]"
 
     @staticmethod

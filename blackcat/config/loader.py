@@ -180,4 +180,8 @@ def _migrate_config(data: dict) -> dict:
         if "contextWindowTokens" not in defaults:
             defaults["contextWindowTokens"] = 65_536
 
+    # Ensure contextWindowTokens has a default value if missing or null
+    if "contextWindowTokens" not in defaults or defaults.get("contextWindowTokens") is None:
+        defaults["contextWindowTokens"] = 65_536
+
     return data

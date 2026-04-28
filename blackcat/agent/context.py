@@ -307,7 +307,6 @@ class ContextBuilder:
         config_workspaces = self.lens_client.workspace_paths
         discovered_workspaces = read_port_mapping()  # {path: port} from VSCode
 
-        logger.debug(f"Config workspaces: {config_workspaces}")
         logger.debug(f"Discovered workspaces: {discovered_workspaces}")
 
         # Create alias -> path mapping
