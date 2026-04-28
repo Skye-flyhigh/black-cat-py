@@ -137,7 +137,7 @@ class ContextBuilder:
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
 
         return render_template(
-            "agent/identity.md",
+            "agent/guidelines.md",
             workspace_path=workspace_path,
             runtime=runtime,
             channel=channel or "",
