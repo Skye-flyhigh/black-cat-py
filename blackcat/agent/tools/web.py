@@ -161,8 +161,8 @@ def _wrap_untrusted_content(content: str, source: str, detected_patterns: list[s
 
 def _strip_tags(text: str) -> str:
     """Remove HTML tags and decode entities."""
-    text = re.sub(r"<script[\s\S]*?</script>", "", text, flags=re.I)
-    text = re.sub(r"<style[\s\S]*?</style>", "", text, flags=re.I)
+    text = re.sub(r"<script\b[\s\S]*?</script\b[^>]*>", "", text, flags=re.I)
+    text = re.sub(r"<style\b[\s\S]*?</style\b[^>]*>", "", text, flags=re.I)
     text = re.sub(r"<[^>]+>", "", text)
     return html.unescape(text).strip()
 
