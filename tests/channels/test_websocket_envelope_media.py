@@ -15,8 +15,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from nanobot.channels.websocket import (
+from blackcat.channels.websocket import (
     WebSocketChannel,
     _extract_data_url_mime,
 )
@@ -75,7 +74,7 @@ def test_extract_data_url_mime(url: Any, expected: str | None) -> None:
 
 def test_max_message_bytes_default_supports_multi_image_frame() -> None:
     """Default 36 MB must comfortably hold 4 × 6 MB base64-encoded images."""
-    from nanobot.channels.websocket import WebSocketConfig
+    from blackcat.channels.websocket import WebSocketConfig
 
     default = WebSocketConfig().max_message_bytes
     # 4 images × 6 MB × 1.37 base64 overhead ≈ 33 MB
@@ -117,7 +116,7 @@ async def test_message_with_single_image_forwards_saved_path(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -146,7 +145,7 @@ async def test_message_with_multiple_images(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -169,7 +168,7 @@ async def test_image_only_message_allows_empty_text(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -190,7 +189,7 @@ async def test_message_rejected_when_more_than_four_images(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -215,7 +214,7 @@ async def test_message_rejected_on_oversize_payload(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -237,7 +236,7 @@ async def test_message_rejected_on_non_image_mime(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -260,7 +259,7 @@ async def test_message_rejected_on_svg_mime(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -281,7 +280,7 @@ async def test_message_rejected_on_malformed_data_url(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -302,7 +301,7 @@ async def test_message_rejected_on_broken_base64(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -324,7 +323,7 @@ async def test_message_rejected_when_media_item_shape_wrong(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 
@@ -372,7 +371,7 @@ async def test_failed_media_does_not_partially_persist(tmp_path) -> None:
     }
 
     with patch(
-        "nanobot.channels.websocket.get_media_dir", return_value=tmp_path
+        "blackcat.channels.websocket.get_media_dir", return_value=tmp_path
     ):
         await channel._dispatch_envelope(mock_conn, "client-1", envelope)
 

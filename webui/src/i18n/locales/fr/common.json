@@ -1,20 +1,20 @@
 {
   "app": {
-    "brand": "nanobot",
+    "brand": "blackcat",
     "loading": {
-      "connecting": "Connexion à nanobot…",
-      "boot": "Chargement de nanobot…"
+      "connecting": "Connexion à blackcat…",
+      "boot": "Chargement de blackcat…"
     },
     "error": {
-      "title": "Impossible de joindre nanobot",
-      "gatewayHint": "Assurez-vous que la gateway est en cours d’exécution (`nanobot gateway`) et que cette page est ouverte sur la même machine."
+      "title": "Impossible de joindre blackcat",
+      "gatewayHint": "Assurez-vous que la gateway est en cours d’exécution (`blackcat gateway`) et que cette page est ouverte sur la même machine."
     },
     "documentTitle": {
-      "base": "nanobot",
-      "chat": "{{title}} · nanobot"
+      "base": "blackcat",
+      "chat": "{{title}} · blackcat"
     },
     "meta": {
-      "description": "Interface web nanobot — discutez avec votre espace de travail nanobot."
+      "description": "Interface web blackcat — discutez avec votre espace de travail blackcat."
     }
   },
   "sidebar": {

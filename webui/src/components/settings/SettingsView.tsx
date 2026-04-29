@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchSettings, updateSettings } from "@/lib/api";
+import type { SettingsPayload } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useClient } from "@/providers/ClientProvider";
-import type { SettingsPayload } from "@/lib/types";
 
 interface SettingsViewProps {
   theme: "light" | "dark";
@@ -235,7 +235,7 @@ function SettingsFooter({
   return (
     <div className="flex min-h-[52px] items-center justify-between gap-4 px-3 py-2.5">
       <div className="text-sm text-muted-foreground">
-        {saved ? "Saved. Restart nanobot to apply." : "Unsaved changes."}
+        {saved ? "Saved. Restart blackcat to apply." : "Unsaved changes."}
       </div>
       <Button size="sm" variant="outline" onClick={onSave} disabled={!dirty || saving}>
         {saving ? "Saving" : "Save"}

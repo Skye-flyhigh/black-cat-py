@@ -1,6 +1,6 @@
 """Tests for heartbeat context bridge — injecting delivered messages into channel session."""
 
-from nanobot.session.manager import SessionManager
+from blackcat.session.manager import SessionManager
 
 
 class TestHeartbeatContextBridge:

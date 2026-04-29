@@ -1,4 +1,4 @@
-from nanobot.session.manager import Session
+from blackcat.session.manager import Session
 
 
 def _assert_no_orphans(history: list[dict]) -> None:
@@ -367,7 +367,7 @@ def test_get_history_respects_max_tokens(monkeypatch):
 
     token_map = {"u1": 50, "a1": 50, "u2": 50, "a2": 50, "u3": 50, "a3": 50}
     monkeypatch.setattr(
-        "nanobot.session.manager.estimate_message_tokens",
+        "blackcat.session.manager.estimate_message_tokens",
         lambda message: token_map.get(message.get("content"), 0),
     )
 
@@ -387,7 +387,7 @@ def test_get_history_recovers_user_when_token_slice_would_be_assistant_only(monk
     )
     token_map = {"u1": 100, "a1": 100, "u2": 100, "a2": 100}
     monkeypatch.setattr(
-        "nanobot.session.manager.estimate_message_tokens",
+        "blackcat.session.manager.estimate_message_tokens",
         lambda message: token_map.get(message.get("content"), 0),
     )
 

@@ -3,11 +3,10 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
-from nanobot.agent.tools.cron import CronTool
-from nanobot.agent.tools.message import MessageTool
-from nanobot.agent.tools.spawn import SpawnTool
-from nanobot.cron.service import CronService
+from blackcat.agent.tools.cron import CronTool
+from blackcat.agent.tools.message import MessageTool
+from blackcat.agent.tools.spawn import SpawnTool
+from blackcat.cron.service import CronService
 
 
 @pytest.mark.asyncio

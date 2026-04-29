@@ -28,10 +28,10 @@ export function Sidebar(props: SidebarProps) {
     <aside className="flex h-full w-full flex-col border-r border-sidebar-border/70 bg-sidebar text-sidebar-foreground">
       <div className="flex items-center justify-between px-3 pb-2 pt-3">
         <picture className="block min-w-0">
-          <source srcSet="/brand/nanobot_logo.webp" type="image/webp" />
+          <source srcSet="/brand/blackcat_logo.webp" type="image/webp" />
           <img
-            src="/brand/nanobot_logo.png"
-            alt="nanobot"
+            src="/brand/blackcat_logo.png"
+            alt="blackcat"
             className="h-7 w-auto select-none object-contain"
             draggable={false}
           />

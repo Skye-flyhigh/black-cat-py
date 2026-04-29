@@ -7,7 +7,7 @@ import pytest
 
 # Check optional QQ dependencies before running tests
 try:
-    from nanobot.channels import qq
+    from blackcat.channels import qq
     QQ_AVAILABLE = getattr(qq, "QQ_AVAILABLE", False)
 except ImportError:
     QQ_AVAILABLE = False
@@ -16,10 +16,9 @@ if not QQ_AVAILABLE:
     pytest.skip("QQ dependencies not installed (qq-botpy)", allow_module_level=True)
 
 import aiohttp
-
-from nanobot.bus.events import OutboundMessage
-from nanobot.bus.queue import MessageBus
-from nanobot.channels.qq import QQChannel, QQConfig
+from blackcat.bus.events import OutboundMessage
+from blackcat.bus.queue import MessageBus
+from blackcat.channels.qq import QQChannel, QQConfig
 
 
 class _FakeApi:

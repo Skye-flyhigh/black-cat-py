@@ -2,14 +2,13 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
+import blackcat.agent.memory as memory_module
 import pytest
+from blackcat.agent.loop import AgentLoop
+from blackcat.bus.queue import MessageBus
+from blackcat.config.schema import AgentDefaults
+from blackcat.providers.base import GenerationSettings, LLMResponse
 from pydantic import ValidationError
-
-import nanobot.agent.memory as memory_module
-from nanobot.agent.loop import AgentLoop
-from nanobot.bus.queue import MessageBus
-from nanobot.config.schema import AgentDefaults
-from nanobot.providers.base import GenerationSettings, LLMResponse
 
 
 def _make_loop(

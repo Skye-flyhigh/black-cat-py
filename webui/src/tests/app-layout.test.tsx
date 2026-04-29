@@ -47,7 +47,7 @@ vi.mock("@/lib/bootstrap", () => ({
   deriveWsUrl: vi.fn(() => "ws://test"),
 }));
 
-vi.mock("@/lib/nanobot-client", () => {
+vi.mock("@/lib/blackcat-client", () => {
   class MockClient {
     status = "idle" as const;
     defaultChatId: string | null = null;
@@ -62,7 +62,7 @@ vi.mock("@/lib/nanobot-client", () => {
     updateUrl = vi.fn();
   }
 
-  return { NanobotClient: MockClient };
+  return { BlackcatClient: MockClient };
 });
 
 import App from "@/App";

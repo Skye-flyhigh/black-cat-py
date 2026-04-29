@@ -2,10 +2,9 @@
 .ipynb detection, and create-file semantics."""
 
 import pytest
+from blackcat.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
 
-from nanobot.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
-from nanobot.agent.tools import file_state
-
+from blackcat.agent.tools import file_state
 
 # ---------------------------------------------------------------------------
 # Helpers

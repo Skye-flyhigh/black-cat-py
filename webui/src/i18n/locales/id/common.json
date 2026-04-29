@@ -1,20 +1,20 @@
 {
   "app": {
-    "brand": "nanobot",
+    "brand": "blackcat",
     "loading": {
-      "connecting": "Menghubungkan ke nanobot…",
-      "boot": "Memuat nanobot…"
+      "connecting": "Menghubungkan ke blackcat…",
+      "boot": "Memuat blackcat…"
     },
     "error": {
-      "title": "Tidak dapat menjangkau nanobot",
-      "gatewayHint": "Pastikan gateway sedang berjalan (`nanobot gateway`) dan halaman ini dibuka pada mesin yang sama."
+      "title": "Tidak dapat menjangkau blackcat",
+      "gatewayHint": "Pastikan gateway sedang berjalan (`blackcat gateway`) dan halaman ini dibuka pada mesin yang sama."
     },
     "documentTitle": {
-      "base": "nanobot",
-      "chat": "{{title}} · nanobot"
+      "base": "blackcat",
+      "chat": "{{title}} · blackcat"
     },
     "meta": {
-      "description": "UI web nanobot — ngobrol dengan workspace nanobot Anda."
+      "description": "UI web blackcat — ngobrol dengan workspace blackcat Anda."
     }
   },
   "sidebar": {

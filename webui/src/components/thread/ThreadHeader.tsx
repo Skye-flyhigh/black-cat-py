@@ -39,7 +39,7 @@ export function ThreadHeader({
           className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent/35 hover:text-foreground"
         >
           <img
-            src="/brand/nanobot_icon.png"
+            src="/brand/blackcat_icon.png"
             alt=""
             className="h-4 w-4 rounded-[5px] opacity-85"
             aria-hidden

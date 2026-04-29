@@ -5,20 +5,19 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
+import blackcat.channels.weixin as weixin_mod
 import httpx
-
-import nanobot.channels.weixin as weixin_mod
-from nanobot.bus.queue import MessageBus
-from nanobot.channels.weixin import (
+import pytest
+from blackcat.bus.queue import MessageBus
+from blackcat.channels.weixin import (
     ITEM_IMAGE,
     ITEM_TEXT,
     MESSAGE_TYPE_BOT,
     WEIXIN_CHANNEL_VERSION,
-    _decrypt_aes_ecb,
-    _encrypt_aes_ecb,
     WeixinChannel,
     WeixinConfig,
+    _decrypt_aes_ecb,
+    _encrypt_aes_ecb,
 )
 
 
@@ -28,7 +27,7 @@ def _make_channel() -> tuple[WeixinChannel, MessageBus]:
         WeixinConfig(
             enabled=True,
             allow_from=["*"],
-            state_dir=tempfile.mkdtemp(prefix="nanobot-weixin-test-"),
+            state_dir=tempfile.mkdtemp(prefix="blackcat-weixin-test-"),
         ),
         bus,
     )
@@ -1012,7 +1011,7 @@ async def test_download_media_item_non_image_requires_aes_key_even_with_full_url
 
 def _make_outbound_msg(chat_id: str = "wx-user", content: str = "", media: list | None = None):
     """Build a minimal OutboundMessage-like object for send() tests."""
-    from nanobot.bus.events import OutboundMessage
+    from blackcat.bus.events import OutboundMessage
 
     return OutboundMessage(
         channel="weixin",

@@ -47,7 +47,7 @@ function makeClient() {
 function wrap(client: ReturnType<typeof makeClient>, children: ReactNode) {
   return (
     <ClientProvider
-      client={client as unknown as import("@/lib/nanobot-client").NanobotClient}
+      client={client as unknown as import("@/lib/blackcat-client").BlackcatClient}
       token="tok"
     >
       {children}
@@ -187,7 +187,7 @@ describe("ThreadShell", () => {
           client,
           <ThreadShell
             session={null}
-            title="nanobot"
+            title="blackcat"
             onToggleSidebar={() => {}}
             onGoHome={() => {}}
             onNewChat={onNewChat}

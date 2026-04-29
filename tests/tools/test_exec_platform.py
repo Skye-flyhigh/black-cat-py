@@ -9,8 +9,7 @@ import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from nanobot.agent.tools.shell import ExecTool
+from blackcat.agent.tools.shell import ExecTool
 
 _WINDOWS_ENV_KEYS = {
     "APPDATA", "LOCALAPPDATA", "ProgramData",
@@ -25,7 +24,7 @@ _WINDOWS_ENV_KEYS = {
 class TestBuildEnvUnix:
 
     def test_expected_keys(self):
-        with patch("nanobot.agent.tools.shell._IS_WINDOWS", False):
+        with patch("blackcat.agent.tools.shell._IS_WINDOWS", False):
             env = ExecTool()._build_env()
         expected = {"HOME", "LANG", "TERM"}
         assert expected <= set(env)
@@ -34,14 +33,14 @@ class TestBuildEnvUnix:
 
     def test_home_from_environ(self, monkeypatch):
         monkeypatch.setenv("HOME", "/Users/dev")
-        with patch("nanobot.agent.tools.shell._IS_WINDOWS", False):
+        with patch("blackcat.agent.tools.shell._IS_WINDOWS", False):
             env = ExecTool()._build_env()
         assert env["HOME"] == "/Users/dev"
 
     def test_secrets_excluded(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
         monkeypatch.setenv("NANOBOT_TOKEN", "tok-secret")
-        with patch("nanobot.agent.tools.shell._IS_WINDOWS", False):
+        with patch("blackcat.agent.tools.shell._IS_WINDOWS", False):
             env = ExecTool()._build_env()
         assert "OPENAI_API_KEY" not in env
         assert "NANOBOT_TOKEN" not in env
@@ -58,14 +57,14 @@ class TestBuildEnvWindows:
     }
 
     def test_expected_keys(self):
-        with patch("nanobot.agent.tools.shell._IS_WINDOWS", True):
+        with patch("blackcat.agent.tools.shell._IS_WINDOWS", True):
             env = ExecTool()._build_env()
         assert set(env) == self._EXPECTED_KEYS
 
     def test_secrets_excluded(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
         monkeypatch.setenv("NANOBOT_TOKEN", "tok-secret")
-        with patch("nanobot.agent.tools.shell._IS_WINDOWS", True):
+        with patch("blackcat.agent.tools.shell._IS_WINDOWS", True):
             env = ExecTool()._build_env()
         assert "OPENAI_API_KEY" not in env
         assert "NANOBOT_TOKEN" not in env
@@ -74,7 +73,7 @@ class TestBuildEnvWindows:
 
     def test_path_has_sensible_default(self):
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", True),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
             patch.dict("os.environ", {}, clear=True),
         ):
             env = ExecTool()._build_env()
@@ -82,7 +81,7 @@ class TestBuildEnvWindows:
 
     def test_systemroot_forwarded(self, monkeypatch):
         monkeypatch.setenv("SYSTEMROOT", r"D:\Windows")
-        with patch("nanobot.agent.tools.shell._IS_WINDOWS", True):
+        with patch("blackcat.agent.tools.shell._IS_WINDOWS", True):
             env = ExecTool()._build_env()
         assert env["SYSTEMROOT"] == r"D:\Windows"
 
@@ -96,7 +95,7 @@ class TestSpawnUnix:
     @pytest.mark.asyncio
     async def test_uses_bash(self):
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", False),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
@@ -115,7 +114,7 @@ class TestSpawnWindows:
     async def test_uses_comspec_from_env(self):
         env = {"COMSPEC": r"C:\Windows\system32\cmd.exe", "PATH": ""}
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", True),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
             mock_exec.return_value = AsyncMock()
@@ -130,7 +129,7 @@ class TestSpawnWindows:
     async def test_falls_back_to_default_comspec(self):
         env = {"PATH": ""}
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", True),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
             patch.dict("os.environ", {}, clear=True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec,
         ):
@@ -164,8 +163,8 @@ class TestPathAppendPlatform:
             return mock_proc
 
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", False),
-            patch("nanobot.agent.tools.shell.os.pathsep", ":"),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
+            patch("blackcat.agent.tools.shell.os.pathsep", ":"),
             patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):
@@ -190,8 +189,8 @@ class TestPathAppendPlatform:
             return mock_proc
 
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", True),
-            patch("nanobot.agent.tools.shell.os.pathsep", ";"),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
+            patch("blackcat.agent.tools.shell.os.pathsep", ";"),
             patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):
@@ -215,7 +214,7 @@ class TestSandboxPlatform:
         mock_proc.returncode = 0
 
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", True),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
             patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):
@@ -234,8 +233,8 @@ class TestSandboxPlatform:
         mock_proc.returncode = 0
 
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", False),
-            patch("nanobot.agent.tools.shell.wrap_command", return_value="bwrap -- sh -c ls") as mock_wrap,
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
+            patch("blackcat.agent.tools.shell.wrap_command", return_value="bwrap -- sh -c ls") as mock_wrap,
             patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):
@@ -261,7 +260,7 @@ class TestExecuteEndToEnd:
         mock_proc.returncode = 0
 
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", True),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
             patch.object(ExecTool, "_spawn", return_value=mock_proc),
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):
@@ -279,7 +278,7 @@ class TestExecuteEndToEnd:
         mock_proc.returncode = 0
 
         with (
-            patch("nanobot.agent.tools.shell._IS_WINDOWS", False),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
             patch.object(ExecTool, "_spawn", return_value=mock_proc),
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):

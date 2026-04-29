@@ -1,20 +1,20 @@
 {
   "app": {
-    "brand": "nanobot",
+    "brand": "blackcat",
     "loading": {
-      "connecting": "nanobot에 연결 중…",
-      "boot": "nanobot 불러오는 중…"
+      "connecting": "blackcat에 연결 중…",
+      "boot": "blackcat 불러오는 중…"
     },
     "error": {
-      "title": "nanobot에 연결할 수 없습니다",
-      "gatewayHint": "gateway(`nanobot gateway`)가 실행 중인지, 그리고 이 페이지가 같은 머신에서 열려 있는지 확인하세요."
+      "title": "blackcat에 연결할 수 없습니다",
+      "gatewayHint": "gateway(`blackcat gateway`)가 실행 중인지, 그리고 이 페이지가 같은 머신에서 열려 있는지 확인하세요."
     },
     "documentTitle": {
-      "base": "nanobot",
-      "chat": "{{title}} · nanobot"
+      "base": "blackcat",
+      "chat": "{{title}} · blackcat"
     },
     "meta": {
-      "description": "nanobot 웹 UI — nanobot 작업공간과 대화하세요."
+      "description": "blackcat 웹 UI — blackcat 작업공간과 대화하세요."
     }
   },
   "sidebar": {

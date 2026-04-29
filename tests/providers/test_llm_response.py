@@ -10,8 +10,7 @@ every tool-execution site now funnels through.
 from __future__ import annotations
 
 import pytest
-
-from nanobot.providers.base import LLMResponse, ToolCallRequest
+from blackcat.providers.base import LLMResponse, ToolCallRequest
 
 
 def _response(finish_reason: str, *, with_tool_call: bool = True) -> LLMResponse:

@@ -9,11 +9,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from nanobot.agent.loop import AgentLoop
-from nanobot.agent.subagent import SubagentManager, SubagentStatus
-from nanobot.agent.tools.search import GlobTool, GrepTool
-from nanobot.bus.queue import MessageBus
+from blackcat.agent.loop import AgentLoop
+from blackcat.agent.subagent import SubagentManager, SubagentStatus
+from blackcat.agent.tools.search import GlobTool, GrepTool
+from blackcat.bus.queue import MessageBus
 
 
 @pytest.mark.asyncio

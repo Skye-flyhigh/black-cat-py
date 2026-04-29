@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useClient } from "@/providers/ClientProvider";
+import type { StreamError } from "@/lib/blackcat-client";
 import { toMediaAttachment } from "@/lib/media";
-import type { StreamError } from "@/lib/nanobot-client";
 import type {
-  InboundEvent,
-  OutboundMedia,
-  UIImage,
-  UIMessage,
+    InboundEvent,
+    OutboundMedia,
+    UIImage,
+    UIMessage,
 } from "@/lib/types";
+import { useClient } from "@/providers/ClientProvider";
 
 interface StreamBuffer {
   /** ID of the assistant message currently receiving deltas. */
@@ -34,7 +34,7 @@ export interface SendImage {
   preview: UIImage;
 }
 
-export function useNanobotStream(
+export function useBlackcatStream(
   chatId: string | null,
   initialMessages: UIMessage[] = [],
 ): {
