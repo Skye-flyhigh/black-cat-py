@@ -8,8 +8,9 @@ from typing import Any, AsyncGenerator
 
 import httpx
 import json_repair
-from blackcat.providers.base import LLMResponse, ToolCallRequest
 from loguru import logger
+
+from blackcat.providers.base import LLMResponse, ToolCallRequest
 
 FINISH_REASON_MAP = {
     "completed": "stop",

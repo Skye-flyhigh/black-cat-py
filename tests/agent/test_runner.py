@@ -30,11 +30,16 @@ def _make_injection_callback(queue: asyncio.Queue):
 def _make_loop(tmp_path):
     from blackcat.agent.loop import AgentLoop
     from blackcat.bus.queue import MessageBus
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
 
+    with patch("blackcat.agent.loop.ContextBuilder"), \
+         patch("blackcat.agent.loop.SessionManager"), \
+         patch("blackcat.agent.loop.SubagentManager") as MockSubMgr:
     with patch("blackcat.agent.loop.ContextBuilder"), \
          patch("blackcat.agent.loop.SessionManager"), \
          patch("blackcat.agent.loop.SubagentManager") as MockSubMgr:
@@ -45,6 +50,7 @@ def _make_loop(tmp_path):
 
 @pytest.mark.asyncio
 async def test_runner_preserves_reasoning_fields_and_tool_results():
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -102,6 +108,8 @@ async def test_runner_preserves_reasoning_fields_and_tool_results():
 
 @pytest.mark.asyncio
 async def test_runner_calls_hooks_in_order():
+    from blackcat.agent.hook import AgentHook, AgentHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.hook import AgentHook, AgentHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
@@ -180,6 +188,8 @@ async def test_runner_calls_hooks_in_order():
 async def test_runner_streaming_hook_receives_deltas_and_end_signal():
     from blackcat.agent.hook import AgentHook, AgentHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.hook import AgentHook, AgentHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     streamed: list[str] = []
@@ -224,6 +234,7 @@ async def test_runner_streaming_hook_receives_deltas_and_end_signal():
 @pytest.mark.asyncio
 async def test_runner_returns_max_iterations_fallback():
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     provider.chat_with_retry = AsyncMock(return_value=LLMResponse(
@@ -255,6 +266,7 @@ async def test_runner_returns_max_iterations_fallback():
 @pytest.mark.asyncio
 async def test_runner_times_out_hung_llm_request():
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
 
@@ -282,6 +294,7 @@ async def test_runner_times_out_hung_llm_request():
 
 @pytest.mark.asyncio
 async def test_runner_returns_structured_tool_error():
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -354,6 +367,7 @@ async def test_runner_stops_on_workspace_violation_without_fail_on_tool_error():
 @pytest.mark.asyncio
 async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     captured_second_call: list[dict] = []
@@ -391,11 +405,13 @@ async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     assert "[tool output persisted]" in tool_message["content"]
     assert "tool-results" in tool_message["content"]
     assert (tmp_path / ".blackcat" / "tool-results" / "test_runner" / "call_big.txt").exists()
+    assert (tmp_path / ".blackcat" / "tool-results" / "test_runner" / "call_big.txt").exists()
 
 
 def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
     from blackcat.utils.helpers import maybe_persist_tool_result
 
+    root = tmp_path / ".blackcat" / "tool-results"
     root = tmp_path / ".blackcat" / "tool-results"
     old_bucket = root / "old_session"
     recent_bucket = root / "recent_session"
@@ -425,6 +441,7 @@ def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
 def test_persist_tool_result_leaves_no_temp_files(tmp_path):
     from blackcat.utils.helpers import maybe_persist_tool_result
 
+    root = tmp_path / ".blackcat" / "tool-results"
     root = tmp_path / ".blackcat" / "tool-results"
     maybe_persist_tool_result(
         tmp_path,
@@ -467,6 +484,7 @@ def test_persist_tool_result_logs_cleanup_failures(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_runner_replaces_empty_tool_result_with_marker():
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     captured_second_call: list[dict] = []
@@ -505,6 +523,7 @@ async def test_runner_replaces_empty_tool_result_with_marker():
 @pytest.mark.asyncio
 async def test_runner_uses_raw_messages_when_context_governance_fails():
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     captured_messages: list[dict] = []
@@ -538,6 +557,7 @@ async def test_runner_uses_raw_messages_when_context_governance_fails():
 @pytest.mark.asyncio
 async def test_runner_retries_empty_final_response_with_summary_prompt():
     """Empty responses get 2 silent retries before finalization kicks in."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -585,6 +605,8 @@ async def test_runner_uses_specific_message_after_empty_finalization_retry():
     """After silent retries + finalization all return empty, stop_reason is empty_final_response."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
     provider = MagicMock()
 
@@ -615,6 +637,7 @@ async def test_runner_empty_response_does_not_break_tool_chain():
     Sequence: tool_call → empty → tool_call → final text.
     The runner should recover via silent retry and complete normally.
     """
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -670,6 +693,7 @@ async def test_runner_empty_response_does_not_break_tool_chain():
 
 def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch):
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     tools = MagicMock()
@@ -697,6 +721,7 @@ def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch
     )
 
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_args, **_kwargs: (500, None))
+    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_args, **_kwargs: (500, None))
     token_sizes = {
         "old user": 120,
         "tool call": 120,
@@ -705,6 +730,7 @@ def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch
         "system": 0,
     }
     monkeypatch.setattr(
+        "blackcat.agent.runner.estimate_message_tokens",
         "blackcat.agent.runner.estimate_message_tokens",
         lambda msg: token_sizes.get(str(msg.get("content")), 40),
     )
@@ -720,6 +746,7 @@ def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch
 
 @pytest.mark.asyncio
 async def test_runner_keeps_going_when_tool_result_persistence_fails():
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -743,6 +770,7 @@ async def test_runner_keeps_going_when_tool_result_persistence_fails():
     tools.execute = AsyncMock(return_value="tool result")
 
     runner = AgentRunner(provider)
+    with patch("blackcat.agent.runner.maybe_persist_tool_result", side_effect=RuntimeError("disk full")):
     with patch("blackcat.agent.runner.maybe_persist_tool_result", side_effect=RuntimeError("disk full")):
         result = await runner.run(AgentRunSpec(
             initial_messages=[{"role": "user", "content": "do task"}],
@@ -803,6 +831,7 @@ class _DelayTool(Tool):
 @pytest.mark.asyncio
 async def test_runner_batches_read_only_tools_before_exclusive_work():
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     tools = ToolRegistry()
     shared_events: list[str] = []
@@ -840,6 +869,7 @@ async def test_runner_batches_read_only_tools_before_exclusive_work():
 
 @pytest.mark.asyncio
 async def test_runner_does_not_batch_exclusive_read_only_tools():
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     tools = ToolRegistry()
@@ -882,6 +912,7 @@ async def test_runner_does_not_batch_exclusive_read_only_tools():
 
 @pytest.mark.asyncio
 async def test_runner_blocks_repeated_external_fetches():
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -998,6 +1029,8 @@ async def test_llm_error_not_appended_to_session_messages():
         _PERSISTED_MODEL_ERROR_PLACEHOLDER,
         AgentRunner,
         AgentRunSpec,
+        AgentRunner,
+        AgentRunSpec,
     )
 
     provider = MagicMock()
@@ -1031,6 +1064,9 @@ async def test_streamed_flag_not_set_on_llm_error(tmp_path):
     from blackcat.agent.loop import AgentLoop
     from blackcat.bus.events import InboundMessage
     from blackcat.bus.queue import MessageBus
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.bus.events import InboundMessage
+    from blackcat.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -1060,6 +1096,10 @@ async def test_streamed_flag_not_set_on_llm_error(tmp_path):
 
 @pytest.mark.asyncio
 async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER
+    from blackcat.bus.events import InboundMessage
+    from blackcat.bus.queue import MessageBus
     from blackcat.agent.loop import AgentLoop
     from blackcat.agent.runner import _PERSISTED_MODEL_ERROR_PLACEHOLDER
     from blackcat.bus.events import InboundMessage
@@ -1110,6 +1150,7 @@ async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
 @pytest.mark.asyncio
 async def test_runner_tool_error_sets_final_content():
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
 
@@ -1143,6 +1184,8 @@ async def test_runner_tool_error_sets_final_content():
 async def test_subagent_max_iterations_announces_existing_fallback(tmp_path, monkeypatch):
     from blackcat.agent.subagent import SubagentManager, SubagentStatus
     from blackcat.bus.queue import MessageBus
+    from blackcat.agent.subagent import SubagentManager, SubagentStatus
+    from blackcat.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -1163,6 +1206,7 @@ async def test_subagent_max_iterations_announces_existing_fallback(tmp_path, mon
         return "tool result"
 
     monkeypatch.setattr("blackcat.agent.tools.filesystem.ListDirTool.execute", fake_execute)
+    monkeypatch.setattr("blackcat.agent.tools.filesystem.ListDirTool.execute", fake_execute)
 
     status = SubagentStatus(task_id="sub-1", label="label", task_description="do task", started_at=time.monotonic())
     await mgr._run_subagent("sub-1", "do task", "label", {"channel": "test", "chat_id": "c1"}, status)
@@ -1177,6 +1221,7 @@ async def test_subagent_max_iterations_announces_existing_fallback(tmp_path, mon
 async def test_runner_accumulates_usage_and_preserves_cached_tokens():
     """Runner should accumulate prompt/completion tokens across iterations
     and preserve cached_tokens from provider responses."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -1219,6 +1264,8 @@ async def test_runner_accumulates_usage_and_preserves_cached_tokens():
 @pytest.mark.asyncio
 async def test_runner_passes_cached_tokens_to_hook_context():
     """Hook context.usage should contain cached_tokens."""
+    from blackcat.agent.hook import AgentHook, AgentHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.hook import AgentHook, AgentHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
@@ -1264,6 +1311,7 @@ async def test_length_recovery_continues_from_truncated_output():
     """When finish_reason is 'length', runner should insert a continuation
     prompt and retry, stitching partial outputs into the final result."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1302,6 +1350,8 @@ async def test_length_recovery_continues_from_truncated_output():
 async def test_length_recovery_streaming_calls_on_stream_end_with_resuming():
     """During length recovery with streaming, on_stream_end should be called
     with resuming=True so the hook knows the conversation is continuing."""
+    from blackcat.agent.hook import AgentHook, AgentHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.hook import AgentHook, AgentHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
@@ -1348,6 +1398,7 @@ async def test_length_recovery_streaming_calls_on_stream_end_with_resuming():
 async def test_length_recovery_gives_up_after_max_retries():
     """After _MAX_LENGTH_RECOVERIES attempts the runner should stop retrying."""
     from blackcat.agent.runner import _MAX_LENGTH_RECOVERIES, AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import _MAX_LENGTH_RECOVERIES, AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1386,6 +1437,7 @@ async def test_length_recovery_gives_up_after_max_retries():
 async def test_backfill_missing_tool_results_inserts_error():
     """Orphaned tool_use (no matching tool_result) should get a synthetic error."""
     from blackcat.agent.runner import _BACKFILL_CONTENT, AgentRunner
+    from blackcat.agent.runner import _BACKFILL_CONTENT, AgentRunner
 
     messages = [
         {"role": "user", "content": "hi"},
@@ -1409,6 +1461,7 @@ async def test_backfill_missing_tool_results_inserts_error():
 
 
 def test_drop_orphan_tool_results_removes_unmatched_tool_messages():
+    from blackcat.agent.runner import AgentRunner
     from blackcat.agent.runner import AgentRunner
 
     messages = [
@@ -1447,6 +1500,7 @@ def test_drop_orphan_tool_results_removes_unmatched_tool_messages():
 async def test_backfill_noop_when_complete():
     """Complete message chains should not be modified."""
     from blackcat.agent.runner import AgentRunner
+    from blackcat.agent.runner import AgentRunner
 
     messages = [
         {"role": "user", "content": "hi"},
@@ -1466,6 +1520,7 @@ async def test_backfill_noop_when_complete():
 
 @pytest.mark.asyncio
 async def test_runner_drops_orphan_tool_results_before_model_request():
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -1506,6 +1561,10 @@ async def test_runner_drops_orphan_tool_results_before_model_request():
 @pytest.mark.asyncio
 async def test_backfill_repairs_model_context_without_shifting_save_turn_boundary(tmp_path):
     """Historical backfill should not duplicate old tail messages on persist."""
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.agent.runner import _BACKFILL_CONTENT
+    from blackcat.bus.events import InboundMessage
+    from blackcat.bus.queue import MessageBus
     from blackcat.agent.loop import AgentLoop
     from blackcat.agent.runner import _BACKFILL_CONTENT
     from blackcat.bus.events import InboundMessage
@@ -1592,6 +1651,7 @@ async def test_backfill_repairs_model_context_without_shifting_save_turn_boundar
 async def test_runner_backfill_only_mutates_model_context_not_returned_messages():
     """Runner should repair orphaned tool calls for the model without rewriting result.messages."""
     from blackcat.agent.runner import _BACKFILL_CONTENT, AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import _BACKFILL_CONTENT, AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     captured_messages: list[dict] = []
@@ -1675,6 +1735,7 @@ async def test_runner_backfill_only_mutates_model_context_not_returned_messages(
 async def test_microcompact_replaces_old_tool_results():
     """Tool results beyond _MICROCOMPACT_KEEP_RECENT should be summarized."""
     from blackcat.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
+    from blackcat.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
     total = _MICROCOMPACT_KEEP_RECENT + 5
     long_content = "x" * 600
@@ -1703,6 +1764,7 @@ async def test_microcompact_replaces_old_tool_results():
 async def test_microcompact_preserves_short_results():
     """Short tool results (< _MICROCOMPACT_MIN_CHARS) should not be replaced."""
     from blackcat.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
+    from blackcat.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
     total = _MICROCOMPACT_KEEP_RECENT + 5
     messages: list[dict] = []
@@ -1724,6 +1786,7 @@ async def test_microcompact_preserves_short_results():
 @pytest.mark.asyncio
 async def test_microcompact_skips_non_compactable_tools():
     """Non-compactable tools (e.g. 'message') should never be replaced."""
+    from blackcat.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
     from blackcat.agent.runner import _MICROCOMPACT_KEEP_RECENT, AgentRunner
 
     total = _MICROCOMPACT_KEEP_RECENT + 5
@@ -1748,6 +1811,7 @@ async def test_microcompact_skips_non_compactable_tools():
 async def test_runner_tool_error_preserves_tool_results_in_messages():
     """When a tool raises a fatal error, its results must still be appended
     to messages so the session never contains orphan tool_calls (#2943)."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -1809,6 +1873,7 @@ def test_governance_repairs_orphans_after_snip():
     """After _snip_history clips an assistant+tool_calls, the second
     _drop_orphan_tool_results pass must clean up the resulting orphans."""
     from blackcat.agent.runner import AgentRunner
+    from blackcat.agent.runner import AgentRunner
 
     messages = [
         {"role": "system", "content": "system"},
@@ -1844,6 +1909,7 @@ def test_governance_fallback_still_repairs_orphans():
     """When full governance fails, the fallback must still run
     _drop_orphan_tool_results and _backfill_missing_tool_results."""
     from blackcat.agent.runner import AgentRunner
+    from blackcat.agent.runner import AgentRunner
 
     # Messages with an orphan tool result (no matching assistant tool_call).
     messages = [
@@ -1864,6 +1930,7 @@ def test_governance_fallback_still_repairs_orphans():
 async def test_drain_injections_returns_empty_when_no_callback():
     """No injection_callback → empty list."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     runner = AgentRunner(provider)
@@ -1881,6 +1948,8 @@ async def test_drain_injections_returns_empty_when_no_callback():
 @pytest.mark.asyncio
 async def test_drain_injections_extracts_content_from_inbound_messages():
     """Should extract .content from InboundMessage objects."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -1949,6 +2018,8 @@ async def test_drain_injections_skips_empty_content():
     """Messages with blank content should be filtered out."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     runner = AgentRunner(provider)
@@ -1977,6 +2048,7 @@ async def test_drain_injections_skips_empty_content():
 async def test_drain_injections_handles_callback_exception():
     """If the callback raises, return empty list (error is logged)."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     runner = AgentRunner(provider)
@@ -1998,6 +2070,8 @@ async def test_drain_injections_handles_callback_exception():
 @pytest.mark.asyncio
 async def test_checkpoint1_injects_after_tool_execution():
     """Follow-up messages are injected after tool execution, before next LLM call."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -2051,6 +2125,9 @@ async def test_checkpoint1_injects_after_tool_execution():
 @pytest.mark.asyncio
 async def test_checkpoint2_injects_after_final_response_with_resuming_stream():
     """After final response, if injections exist, stream_end should get resuming=True."""
+    from blackcat.agent.hook import AgentHook, AgentHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.hook import AgentHook, AgentHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
@@ -2112,6 +2189,8 @@ async def test_checkpoint2_preserves_final_response_in_history_before_followup()
     """A follow-up injected after a final answer must still see that answer in history."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -2165,6 +2244,9 @@ async def test_checkpoint2_preserves_final_response_in_history_before_followup()
 @pytest.mark.asyncio
 async def test_loop_injected_followup_preserves_image_media(tmp_path):
     """Mid-turn follow-ups with images should keep multimodal content."""
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.bus.events import InboundMessage
+    from blackcat.bus.queue import MessageBus
     from blackcat.agent.loop import AgentLoop
     from blackcat.bus.events import InboundMessage
     from blackcat.bus.queue import MessageBus
@@ -2225,6 +2307,7 @@ async def test_loop_injected_followup_preserves_image_media(tmp_path):
 @pytest.mark.asyncio
 async def test_runner_merges_multiple_injected_user_messages_without_losing_media():
     """Multiple injected follow-ups should not create lossy consecutive user messages."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -2290,6 +2373,8 @@ async def test_injection_cycles_capped_at_max():
     """Injection cycles should be capped at _MAX_INJECTION_CYCLES."""
     from blackcat.agent.runner import _MAX_INJECTION_CYCLES, AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import _MAX_INJECTION_CYCLES, AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -2330,6 +2415,7 @@ async def test_injection_cycles_capped_at_max():
 async def test_no_injections_flag_is_false_by_default():
     """had_injections should be False when no injection callback or no messages."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
 
@@ -2363,6 +2449,7 @@ async def test_pending_queue_cleanup_on_dispatch(tmp_path):
     loop.provider.chat_with_retry = chat_with_retry
 
     from blackcat.bus.events import InboundMessage
+    from blackcat.bus.events import InboundMessage
 
     msg = InboundMessage(channel="cli", sender_id="u", chat_id="c", content="hello")
     # The queue should not exist before dispatch
@@ -2377,6 +2464,8 @@ async def test_pending_queue_cleanup_on_dispatch(tmp_path):
 @pytest.mark.asyncio
 async def test_followup_routed_to_pending_queue(tmp_path):
     """Unified-session follow-ups should route into the active pending queue."""
+    from blackcat.agent.loop import UNIFIED_SESSION_KEY
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.loop import UNIFIED_SESSION_KEY
     from blackcat.bus.events import InboundMessage
 
@@ -2408,6 +2497,10 @@ async def test_followup_routed_to_pending_queue(tmp_path):
 @pytest.mark.asyncio
 async def test_pending_queue_preserves_overflow_for_next_injection_cycle(tmp_path):
     """Pending queue should leave overflow messages queued for later drains."""
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN
+    from blackcat.bus.events import InboundMessage
+    from blackcat.bus.queue import MessageBus
     from blackcat.agent.loop import AgentLoop
     from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN
     from blackcat.bus.events import InboundMessage
@@ -2462,6 +2555,7 @@ async def test_pending_queue_preserves_overflow_for_next_injection_cycle(tmp_pat
 async def test_pending_queue_full_falls_back_to_queued_task(tmp_path):
     """QueueFull should preserve the message by dispatching a queued task."""
     from blackcat.bus.events import InboundMessage
+    from blackcat.bus.events import InboundMessage
 
     loop = _make_loop(tmp_path)
     loop._dispatch = AsyncMock()  # type: ignore[method-assign]
@@ -2495,6 +2589,7 @@ async def test_dispatch_republishes_leftover_queue_messages(tmp_path):
     the runner exits early (e.g., max_iterations, tool_error) with messages
     still in the queue.
     """
+    from blackcat.bus.events import InboundMessage
     from blackcat.bus.events import InboundMessage
 
     loop = _make_loop(tmp_path)
@@ -2534,6 +2629,8 @@ async def test_dispatch_republishes_leftover_queue_messages(tmp_path):
 @pytest.mark.asyncio
 async def test_drain_injections_on_fatal_tool_error():
     """Pending injections should be drained even when a fatal tool error occurs."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -2587,6 +2684,8 @@ async def test_drain_injections_on_fatal_tool_error():
 @pytest.mark.asyncio
 async def test_drain_injections_on_llm_error():
     """Pending injections should be drained when the LLM returns an error finish_reason."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -2644,6 +2743,8 @@ async def test_drain_injections_on_empty_final_response():
     """Pending injections should be drained when the runner exits due to empty response."""
     from blackcat.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -2699,6 +2800,8 @@ async def test_drain_injections_on_max_iterations():
     """
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -2748,6 +2851,9 @@ async def test_drain_injections_on_max_iterations():
 @pytest.mark.asyncio
 async def test_drain_injections_set_flag_when_followup_arrives_after_last_iteration():
     """Late follow-ups drained in max_iterations should still flip had_injections."""
+    from blackcat.agent.hook import AgentHook
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.hook import AgentHook
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
@@ -2813,6 +2919,8 @@ async def test_injection_cycle_cap_on_error_path():
     """Injection cycles should be capped even when every iteration hits an LLM error."""
     from blackcat.agent.runner import _MAX_INJECTION_CYCLES, AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import _MAX_INJECTION_CYCLES, AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -2876,6 +2984,7 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
     - The injected user message is in the truncated prefix and gets lost.
     """
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     tools = MagicMock()
@@ -2885,6 +2994,7 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
     messages = [
         {"role": "system", "content": "system"},
         {"role": "assistant", "content": "previous reply"},
+        {"role": "user", "content": ".blackcat的同目录"},
         {"role": "user", "content": ".blackcat的同目录"},
         {
             "role": "assistant",
@@ -2912,15 +3022,18 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
 
     # Make estimate_prompt_tokens_chain report above budget so _snip_history activates.
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
+    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
     # Make kept window small: only the last 2 messages fit the budget.
     token_sizes = {
         "system": 0,
         "previous reply": 200,
         ".blackcat的同目录": 80,
+        ".blackcat的同目录": 80,
         "tool output 1": 80,
         "tool output 2": 80,
     }
     monkeypatch.setattr(
+        "blackcat.agent.runner.estimate_message_tokens",
         "blackcat.agent.runner.estimate_message_tokens",
         lambda msg: token_sizes.get(str(msg.get("content")), 100),
     )
@@ -2939,6 +3052,7 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
 def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
     """Edge case: if non_system has zero user messages, _snip_history should
     still return a valid sequence (not crash or produce system→assistant)."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -2965,7 +3079,9 @@ def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
     )
 
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
+    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
     monkeypatch.setattr(
+        "blackcat.agent.runner.estimate_message_tokens",
         "blackcat.agent.runner.estimate_message_tokens",
         lambda msg: 100,
     )
@@ -2978,6 +3094,7 @@ def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
     assert any(m.get("role") == "system" for m in trimmed)
     # The _enforce_role_alternation safety net must be able to fix whatever
     # _snip_history returns here — verify it produces a valid sequence.
+    from blackcat.providers.base import LLMProvider
     from blackcat.providers.base import LLMProvider
     fixed = LLMProvider._enforce_role_alternation(trimmed)
     non_system = [m for m in fixed if m["role"] != "system"]
@@ -2995,6 +3112,7 @@ async def test_runner_binds_on_retry_wait_to_retry_callback_not_progress():
     internal retry diagnostics like "Model request failed, retry in 1s"
     to leak to end-user channels as normal progress updates.
     """
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     captured: dict = {}

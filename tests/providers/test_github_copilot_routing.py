@@ -9,6 +9,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 from blackcat.providers.registry import find_by_name
 

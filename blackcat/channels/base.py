@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from blackcat.bus.events import InboundMessage, OutboundMessage
 from blackcat.bus.queue import MessageBus
-from loguru import logger
+from blackcat.channels.utils import MEDIA_DIR
+from blackcat.providers.transcription import GroqTranscriptionProvider, OpenAITranscriptionProvider
 
 
 class BaseChannel(ABC):

@@ -8,10 +8,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from blackcat.agent.hook import AgentHook, AgentHookContext
 from blackcat.agent.runner import AgentRunner, AgentRunSpec
 from blackcat.agent.skills import BUILTIN_SKILLS_DIR
-from blackcat.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from blackcat.agent.tools.filesystem import (
+    EditFileTool,
+    ListDirTool,
+    ReadFileTool,
+    WriteFileTool,
+)
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.agent.tools.search import GlobTool, GrepTool
 from blackcat.agent.tools.shell import ExecTool
@@ -21,7 +28,6 @@ from blackcat.bus.queue import MessageBus
 from blackcat.config.schema import ExecToolConfig, WebToolsConfig
 from blackcat.providers.base import LLMProvider
 from blackcat.utils.prompt_templates import render_template
-from loguru import logger
 
 
 @dataclass(slots=True)
@@ -303,7 +309,7 @@ class SubagentManager:
         from blackcat.agent.context import ContextBuilder
         from blackcat.agent.skills import SkillsLoader
 
-        time_ctx = ContextBuilder._build_runtime_context(None, None)
+        time_ctx = ContextBuilder._build_runtime_context(None, channel=None, chat_id=None)
         skills_summary = SkillsLoader(
             self.workspace,
             disabled_skills=self.disabled_skills,

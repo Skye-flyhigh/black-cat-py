@@ -1,6 +1,7 @@
 import json
 
 import pytest
+
 from blackcat.config.loader import (
     _resolve_env_vars,
     load_config,

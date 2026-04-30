@@ -8,9 +8,10 @@ from contextlib import AsyncExitStack
 from typing import Any
 
 import httpx
+from loguru import logger
+
 from blackcat.agent.tools.base import Tool
 from blackcat.agent.tools.registry import ToolRegistry
-from loguru import logger
 
 # Transient connection errors that warrant a single retry.
 # These typically happen when an MCP server restarts or a network
@@ -539,7 +540,6 @@ async def connect_mcp_servers(
                     continue
                 wrapper = MCPToolWrapper(session, name, tool_def, tool_timeout=cfg.tool_timeout)
                 registry.register(wrapper)
-                logger.debug("MCP: registered tool '{}' from server '{}'", wrapper.name, name)
                 registered_count += 1
                 if enabled_tools:
                     if tool_def.name in enabled_tools:

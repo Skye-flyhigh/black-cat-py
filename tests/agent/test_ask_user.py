@@ -2,6 +2,7 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
+
 from blackcat.agent.loop import AgentLoop
 from blackcat.agent.runner import AgentRunner, AgentRunSpec
 from blackcat.agent.tools.ask import AskUserInterrupt, AskUserTool

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
@@ -32,7 +33,7 @@ class _FakePlugin(BaseChannel):
     async def stop(self) -> None:
         pass
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         pass
 
     async def login(self, force: bool = False) -> bool:
@@ -51,7 +52,7 @@ class _FakeTelegram(BaseChannel):
     async def stop(self) -> None:
         pass
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         pass
 
 
@@ -262,7 +263,7 @@ async def test_manager_propagates_openai_transcription_api_base_to_channels():
 @pytest.mark.asyncio
 async def test_base_channel_passes_api_base_to_openai_transcription_provider():
     """BaseChannel.transcribe_audio must forward transcription_api_base to OpenAI."""
-    from blackcat.providers import transcription as transcription_mod
+    from blackcat.channels import base as base_mod
 
     channel = _FakePlugin({"enabled": True, "allowFrom": ["*"]}, MessageBus())
     channel.transcription_provider = "openai"
@@ -281,7 +282,7 @@ async def test_base_channel_passes_api_base_to_openai_transcription_provider():
         async def transcribe(self, file_path):
             return "ok"
 
-    with patch.object(transcription_mod, "OpenAITranscriptionProvider", _StubOpenAI):
+    with patch.object(base_mod, "OpenAITranscriptionProvider", _StubOpenAI):
         result = await channel.transcribe_audio("/tmp/does-not-matter.wav")
 
     assert result == "ok"
@@ -305,7 +306,7 @@ def test_openai_transcription_provider_honors_api_base_argument():
 @pytest.mark.asyncio
 async def test_base_channel_passes_language_to_groq_transcription_provider():
     """BaseChannel.transcribe_audio must forward transcription_language to Groq."""
-    from blackcat.providers import transcription as transcription_mod
+    from blackcat.channels import base as base_mod
 
     channel = _FakePlugin({"enabled": True, "allowFrom": ["*"]}, MessageBus())
     channel.transcription_provider = "groq"
@@ -324,7 +325,7 @@ async def test_base_channel_passes_language_to_groq_transcription_provider():
         async def transcribe(self, file_path):
             return "ok"
 
-    with patch.object(transcription_mod, "GroqTranscriptionProvider", _StubGroq):
+    with patch.object(base_mod, "GroqTranscriptionProvider", _StubGroq):
         result = await channel.transcribe_audio("/tmp/does-not-matter.wav")
 
     assert result == "ok"
@@ -406,9 +407,10 @@ async def test_transcription_provider_omits_language_when_none(tmp_path, provide
 
 
 def test_channels_login_uses_discovered_plugin_class(monkeypatch):
+    from typer.testing import CliRunner
+
     from blackcat.cli.commands import app
     from blackcat.config.schema import Config
-    from typer.testing import CliRunner
 
     runner = CliRunner()
     seen: dict[str, object] = {}
@@ -434,9 +436,10 @@ def test_channels_login_uses_discovered_plugin_class(monkeypatch):
 
 
 def test_channels_login_sets_custom_config_path(monkeypatch, tmp_path):
+    from typer.testing import CliRunner
+
     from blackcat.cli.commands import app
     from blackcat.config.schema import Config
-    from typer.testing import CliRunner
 
     runner = CliRunner()
     seen: dict[str, object] = {}
@@ -463,9 +466,10 @@ def test_channels_login_sets_custom_config_path(monkeypatch, tmp_path):
 
 
 def test_channels_status_sets_custom_config_path(monkeypatch, tmp_path):
+    from typer.testing import CliRunner
+
     from blackcat.cli.commands import app
     from blackcat.config.schema import Config
-    from typer.testing import CliRunner
 
     runner = CliRunner()
     seen: dict[str, object] = {}
@@ -597,7 +601,7 @@ async def test_send_with_retry_succeeds_first_try():
         async def stop(self) -> None:
             pass
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             nonlocal call_count
             call_count += 1
             # Succeeds on first try
@@ -634,7 +638,7 @@ async def test_send_with_retry_retries_on_failure():
         async def stop(self) -> None:
             pass
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             nonlocal call_count
             call_count += 1
             raise RuntimeError("simulated failure")
@@ -675,7 +679,7 @@ async def test_send_with_retry_no_retry_when_max_is_zero():
         async def stop(self) -> None:
             pass
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             nonlocal call_count
             call_count += 1
             raise RuntimeError("simulated failure")
@@ -714,7 +718,7 @@ async def test_send_with_retry_calls_send_delta():
         async def stop(self) -> None:
             pass
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             pass  # Should not be called
 
         async def send_delta(self, chat_id: str, delta: str, metadata: dict | None = None) -> None:
@@ -757,7 +761,7 @@ async def test_send_with_retry_skips_send_when_streamed():
         async def stop(self) -> None:
             pass
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             nonlocal send_called
             send_called = True
 
@@ -800,7 +804,7 @@ async def test_send_with_retry_propagates_cancelled_error():
         async def stop(self) -> None:
             pass
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             raise asyncio.CancelledError("simulated cancellation")
 
     fake_config = SimpleNamespace(
@@ -835,7 +839,7 @@ async def test_send_with_retry_propagates_cancelled_error_during_sleep():
         async def stop(self) -> None:
             pass
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             nonlocal call_count
             call_count += 1
             raise RuntimeError("simulated failure")
@@ -887,7 +891,7 @@ class _ChannelWithAllowFrom(BaseChannel):
     async def stop(self) -> None:
         pass
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         pass
 
 
@@ -907,7 +911,7 @@ class _StartableChannel(BaseChannel):
     async def stop(self) -> None:
         self.stopped = True
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         pass
 
 
@@ -1073,7 +1077,7 @@ async def test_start_channel_logs_error_on_failure():
         async def stop(self) -> None:
             pass
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             pass
 
     fake_config = SimpleNamespace(
@@ -1106,7 +1110,7 @@ async def test_stop_all_handles_channel_exception():
         async def stop(self) -> None:
             raise RuntimeError("stop failed")
 
-        async def send(self, msg: OutboundMessage) -> None:
+        async def _send_impl(self, msg: OutboundMessage) -> None:
             pass
 
     fake_config = SimpleNamespace(

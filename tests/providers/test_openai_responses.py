@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from blackcat.providers.base import LLMResponse, ToolCallRequest
+
 from blackcat.providers.openai_responses.converters import (
     convert_messages,
     convert_tools,

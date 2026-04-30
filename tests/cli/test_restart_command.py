@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from blackcat.bus.events import InboundMessage
 from blackcat.providers.base import LLMResponse
 
@@ -175,10 +176,10 @@ class TestRestartCommand:
         assert response is not None
         assert "Model: test-model" in response.content
         assert "Tokens: 0 in / 0 out" in response.content
-        assert "Context: 20k/65k (31% of input budget)" in response.content
-        assert "Session: 3 messages" in response.content
+        assert "Context: 20k/64k (31%)" in response.content
+        assert "Messages: 3" in response.content
         assert "Uptime: 2m 5s" in response.content
-        assert "Tasks: 0 active" in response.content
+        assert "Active tasks" not in response.content
         assert response.metadata == {"render_as": "text"}
 
     @pytest.mark.asyncio
@@ -203,7 +204,7 @@ class TestRestartCommand:
         response = await loop._process_message(msg)
 
         assert response is not None
-        assert "Tasks: 3 active" in response.content
+        assert "Active tasks: 3" in response.content
 
     @pytest.mark.asyncio
     async def test_run_agent_loop_resets_usage_when_provider_omits_it(self):
@@ -239,8 +240,8 @@ class TestRestartCommand:
 
         assert response is not None
         assert "Tokens: 1200 in / 34 out" in response.content
-        assert "Context: 1k/65k (1% of input budget)" in response.content
-        assert "Tasks: 0 active" in response.content
+        assert "Context: 1k/64k (1%)" in response.content
+        assert "Active tasks" not in response.content
 
     @pytest.mark.asyncio
     async def test_history_shows_recent_messages(self):

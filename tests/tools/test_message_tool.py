@@ -1,9 +1,10 @@
 import os
 
 import pytest
+
 from blackcat.agent.tools.message import MessageTool
 from blackcat.bus.events import OutboundMessage
-from blackcat.config.paths import get_workspace_path
+from blackcat.utils.paths import get_workspace_path
 
 
 @pytest.mark.asyncio

@@ -518,7 +518,7 @@ class DingTalkChannel(BaseChannel):
             {"mediaId": media_id, "fileName": filename, "fileType": file_type},
         )
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send a message through DingTalk."""
         token = await self._get_access_token()
         if not token:
@@ -577,7 +577,7 @@ class DingTalkChannel(BaseChannel):
         sender_id: str,
     ) -> str | None:
         """Download a DingTalk file to the media directory, return local path."""
-        from blackcat.config.paths import get_media_dir
+        from blackcat.utils.paths import get_media_dir
 
         try:
             token = await self._get_access_token()

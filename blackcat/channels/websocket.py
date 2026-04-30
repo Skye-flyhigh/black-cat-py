@@ -32,13 +32,13 @@ from websockets.http11 import Response
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
 from blackcat.utils.helpers import safe_filename
 from blackcat.utils.media_decode import (
     FileSizeExceeded,
     save_base64_data_url,
 )
+from blackcat.utils.paths import get_media_dir
 
 if TYPE_CHECKING:
     from blackcat.session.manager import SessionManager
@@ -1223,7 +1223,7 @@ class WebSocketChannel(BaseChannel):
             logger.error("websocket{}send failed: {}", label, e)
             raise
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         # Snapshot the subscriber set so ConnectionClosed cleanups mid-iteration are safe.
         conns = list(self._subs.get(msg.chat_id, ()))
         if not conns:

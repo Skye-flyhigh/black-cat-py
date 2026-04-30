@@ -6,6 +6,7 @@ import socket
 from unittest.mock import patch
 
 import pytest
+
 from blackcat.security.network import (
     configure_ssrf_whitelist,
     contains_internal_url,
@@ -52,7 +53,7 @@ def test_rejects_missing_domain():
 ])
 def test_blocks_private_ipv4(ip: str, label: str):
     with patch("blackcat.security.network.socket.getaddrinfo", _fake_resolve("evil.com", [ip])):
-        ok, err = validate_url_target(f"http://evil.com/path")
+        ok, err = validate_url_target("http://evil.com/path")
         assert not ok, f"Should block {label} ({ip})"
         assert "private" in err.lower() or "blocked" in err.lower()
 

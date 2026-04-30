@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
 from blackcat.agent.tools.cron import CronTool
 from blackcat.agent.tools.message import MessageTool
 from blackcat.agent.tools.spawn import SpawnTool

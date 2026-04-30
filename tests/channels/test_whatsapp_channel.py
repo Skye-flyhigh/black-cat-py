@@ -7,6 +7,7 @@ import types
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.channels.whatsapp import (
     WhatsAppChannel,

@@ -36,6 +36,9 @@ WORKDIR /app
 RUN useradd -m -u 1000 -s /bin/bash blackcat && \
     mkdir -p /home/blackcat/.blackcat && \
     chown -R blackcat:blackcat /home/blackcat /app
+RUN useradd -m -u 1000 -s /bin/bash blackcat && \
+    mkdir -p /home/blackcat/.blackcat && \
+    chown -R blackcat:blackcat /home/blackcat /app
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh

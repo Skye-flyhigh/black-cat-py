@@ -8,13 +8,38 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from blackcat.agent.tools.base import Tool, tool_parameters
-from blackcat.agent.tools.sandbox import wrap_command
-from blackcat.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
-from blackcat.config.paths import get_media_dir
 from loguru import logger
 
+from blackcat.agent.tools.base import Tool, tool_parameters
+from blackcat.agent.tools.sandbox import wrap_command
+from blackcat.agent.tools.schema import (
+    IntegerSchema,
+    StringSchema,
+    tool_parameters_schema,
+)
+from blackcat.utils.paths import get_media_dir
+
 _IS_WINDOWS = sys.platform == "win32"
+
+_DENY_PATTERNS = [
+    r"\brm\s+-[rf]{1,2}\b",          # rm -r, rm -rf, rm -fr
+    r"\bdel\s+/[fq]\b",              # del /f, del /q
+    r"\brmdir\s+/s\b",               # rmdir /s
+    r"(?:^|[;&|]\s*)format\b",       # format (as standalone command only)
+    r"\b(mkfs|diskpart)\b",          # disk operations
+    r"\bdd\s+if=",                   # dd
+    r">\s*/dev/sd",                  # write to disk
+    r"\b(shutdown|reboot|poweroff)\b",  # system power
+    r":\(\)\s*\{.*\};\s*:",          # fork bomb
+    # Block writes to blackcat internal state files (#2989).
+    # history.jsonl / .dream_cursor are managed by append_history();
+    # direct writes corrupt the cursor format and crash /dream.
+    r">>?\s*\S*(?:history\.jsonl|\.dream_cursor)",            # > / >> redirect
+    r"\btee\b[^|;&<>]*(?:history\.jsonl|\.dream_cursor)",     # tee / tee -a
+    r"\b(?:cp|mv)\b(?:\s+[^\s|;&<>]+)+\s+\S*(?:history\.jsonl|\.dream_cursor)",  # cp/mv target
+    r"\bdd\b[^|;&<>]*\bof=\S*(?:history\.jsonl|\.dream_cursor)",  # dd of=
+    r"\bsed\s+-i[^|;&<>]*(?:history\.jsonl|\.dream_cursor)",  # sed -i
+]
 
 
 @tool_parameters(
@@ -50,29 +75,13 @@ class ExecTool(Tool):
         self.timeout = timeout
         self.working_dir = working_dir
         self.sandbox = sandbox
-        self.deny_patterns = deny_patterns or [
-            r"\brm\s+-[rf]{1,2}\b",          # rm -r, rm -rf, rm -fr
-            r"\bdel\s+/[fq]\b",              # del /f, del /q
-            r"\brmdir\s+/s\b",               # rmdir /s
-            r"(?:^|[;&|]\s*)format\b",       # format (as standalone command only)
-            r"\b(mkfs|diskpart)\b",          # disk operations
-            r"\bdd\s+if=",                   # dd
-            r">\s*/dev/sd",                  # write to disk
-            r"\b(shutdown|reboot|poweroff)\b",  # system power
-            r":\(\)\s*\{.*\};\s*:",          # fork bomb
-            # Block writes to blackcat internal state files (#2989).
-            # history.jsonl / .dream_cursor are managed by append_history();
-            # direct writes corrupt the cursor format and crash /dream.
-            r">>?\s*\S*(?:history\.jsonl|\.dream_cursor)",            # > / >> redirect
-            r"\btee\b[^|;&<>]*(?:history\.jsonl|\.dream_cursor)",     # tee / tee -a
-            r"\b(?:cp|mv)\b(?:\s+[^\s|;&<>]+)+\s+\S*(?:history\.jsonl|\.dream_cursor)",  # cp/mv target
-            r"\bdd\b[^|;&<>]*\bof=\S*(?:history\.jsonl|\.dream_cursor)",  # dd of=
-            r"\bsed\s+-i[^|;&<>]*(?:history\.jsonl|\.dream_cursor)",  # sed -i
-        ]
+        self.deny_patterns = deny_patterns or _DENY_PATTERNS
         self.allow_patterns = allow_patterns or []
         self.restrict_to_workspace = restrict_to_workspace
         self.path_append = path_append
         self.allowed_env_keys = allowed_env_keys or []
+
+    parameters: dict[str, Any] # type: ignore[assignment]
 
     @property
     def name(self) -> str:

@@ -8,7 +8,7 @@ and register it in _BACKENDS below.
 import shlex
 from pathlib import Path
 
-from blackcat.config.paths import get_media_dir
+from blackcat.utils.paths import get_media_dir
 
 
 def _bwrap(command: str, workspace: str, cwd: str) -> str:
@@ -28,7 +28,7 @@ def _bwrap(command: str, workspace: str, cwd: str) -> str:
 
     required  = ["/usr"]
     optional  = ["/bin", "/lib", "/lib64", "/etc/alternatives",
-                 "/etc/ssl/certs", "/etc/resolv.conf", "/etc/ld.so.cache"]
+                "/etc/ssl/certs", "/etc/resolv.conf", "/etc/ld.so.cache"]
 
     args = ["bwrap", "--new-session", "--die-with-parent"]
     for p in required: args += ["--ro-bind",     p, p]
@@ -53,3 +53,4 @@ def wrap_command(sandbox: str, command: str, workspace: str, cwd: str) -> str:
     if backend := _BACKENDS.get(sandbox):
         return backend(command, workspace, cwd)
     raise ValueError(f"Unknown sandbox backend {sandbox!r}. Available: {list(_BACKENDS)}")
+

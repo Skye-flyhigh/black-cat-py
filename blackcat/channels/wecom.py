@@ -10,13 +10,14 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+from pydantic import Field
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
-from loguru import logger
-from pydantic import Field
+from blackcat.utils.paths import get_media_dir
 
 WECOM_AVAILABLE = importlib.util.find_spec("wecom_aibot_sdk") is not None
 
@@ -483,7 +484,7 @@ class WecomChannel(BaseChannel):
             logger.error("WeCom _upload_media_ws error for {}: {}", file_path, e)
             return None, None
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send a message through WeCom."""
         if not self._client:
             logger.warning("WeCom client not initialized")

@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from blackcat.agent.loop import AgentLoop
 from blackcat.bus.events import InboundMessage
 from blackcat.bus.queue import MessageBus
@@ -395,10 +396,7 @@ class TestConsolidationUnaffectedByUnifiedSession:
         await consolidator.maybe_consolidate_by_tokens(session)
 
         # estimate was called (consolidation was attempted)
-        consolidator.estimate_session_prompt_tokens.assert_called_once_with(
-            session,
-            session_summary=None,
-        )
+        consolidator.estimate_session_prompt_tokens.assert_called_once_with(session)
         # but archive was not called (no valid boundary)
         consolidator.archive.assert_not_called()
 
@@ -417,7 +415,7 @@ class TestStopCommandWithUnifiedSession:
         from blackcat.agent.loop import UNIFIED_SESSION_KEY
 
         loop = _make_loop(tmp_path, unified_session=True)
-        
+
         # Create a message from telegram channel
         msg = _make_msg(channel="telegram", chat_id="123456")
 

@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from blackcat.providers.azure_openai_provider import AzureOpenAIProvider
 from blackcat.providers.base import LLMResponse
 

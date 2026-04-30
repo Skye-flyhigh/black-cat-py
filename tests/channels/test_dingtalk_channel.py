@@ -2,7 +2,6 @@ import asyncio
 import zipfile
 from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -19,7 +18,7 @@ if not DINGTALK_AVAILABLE:
 
 import blackcat.channels.dingtalk as dingtalk_module
 from blackcat.bus.queue import MessageBus
-from blackcat.channels.dingtalk import BlackcatDingTalkHandler, DingTalkChannel, DingTalkConfig
+from blackcat.channels.dingtalk import DingTalkChannel, DingTalkConfig, NanobotDingTalkHandler
 
 
 class _FakeResponse:

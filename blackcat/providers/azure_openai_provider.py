@@ -11,9 +11,9 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from blackcat.providers.base import LLMProvider, LLMResponse
 from openai import AsyncOpenAI
 
+from blackcat.providers.base import LLMProvider, LLMResponse
 from blackcat.providers.openai_responses import (
     consume_sdk_stream,
     convert_messages,

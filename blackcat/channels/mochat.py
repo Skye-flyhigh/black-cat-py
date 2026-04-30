@@ -10,13 +10,14 @@ from datetime import datetime
 from typing import Any
 
 import httpx
+from loguru import logger
+from pydantic import Field
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_runtime_subdir
 from blackcat.config.schema import Base
-from loguru import logger
-from pydantic import Field
+from blackcat.utils.paths import get_runtime_subdir
 
 try:
     import socketio
@@ -345,7 +346,7 @@ class MochatChannel(BaseChannel):
             self._http = None
         self._ws_connected = self._ws_ready = False
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send outbound message to session or panel."""
         if not self.config.claw_token:
             logger.warning("Mochat claw_token missing, skip send")

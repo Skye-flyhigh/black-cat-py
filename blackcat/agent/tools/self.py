@@ -5,9 +5,10 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from loguru import logger
+
 from blackcat.agent.subagent import SubagentStatus
 from blackcat.agent.tools.base import Tool
-from loguru import logger
 
 if TYPE_CHECKING:
     from blackcat.agent.loop import AgentLoop

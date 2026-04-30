@@ -6,6 +6,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from typer.testing import CliRunner
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.cli.commands import _make_provider, app
 from blackcat.config.schema import Config
@@ -13,7 +15,6 @@ from blackcat.cron.types import CronJob, CronPayload
 from blackcat.providers.factory import ProviderSnapshot
 from blackcat.providers.openai_codex_provider import _strip_model_prefix
 from blackcat.providers.registry import find_by_name
-from typer.testing import CliRunner
 
 runner = CliRunner()
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from blackcat.utils.helpers import build_status_content
 from blackcat.utils.searchusage import (
     SearchUsageInfo,

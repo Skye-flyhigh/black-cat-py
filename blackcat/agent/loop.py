@@ -11,8 +11,11 @@ from contextlib import AsyncExitStack, nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
+from loguru import logger
+
 from blackcat.agent.autocompact import AutoCompact
 from blackcat.agent.context import ContextBuilder
+from blackcat.agent.handler import MessageHandler
 from blackcat.agent.hook import AgentHook, AgentHookContext, CompositeHook
 from blackcat.agent.memory import Consolidator, Dream
 from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
@@ -20,13 +23,22 @@ from blackcat.agent.skills import BUILTIN_SKILLS_DIR
 from blackcat.agent.subagent import SubagentManager
 from blackcat.agent.tools.ask import (
     AskUserTool,
-    ask_user_options_from_messages,
-    ask_user_outbound,
-    ask_user_tool_result_messages,
-    pending_ask_user_id,
 )
 from blackcat.agent.tools.cron import CronTool
 from blackcat.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from blackcat.agent.tools.lens import (
+    LensCodeActionTool,
+    LensCompletionTool,
+    LensDefinitionTool,
+    LensDiagnosticsTool,
+    LensDocumentSymbolTool,
+    LensFormatTool,
+    LensHoverTool,
+    LensReferencesTool,
+    LensRenameTool,
+    LensSignatureHelpTool,
+    LensWorkspaceSymbolTool,
+)
 from blackcat.agent.tools.message import MessageTool
 from blackcat.agent.tools.notebook import NotebookEditTool
 from blackcat.agent.tools.registry import ToolRegistry
@@ -37,13 +49,15 @@ from blackcat.agent.tools.spawn import SpawnTool
 from blackcat.agent.tools.web import WebFetchTool, WebSearchTool
 from blackcat.bus.events import InboundMessage, OutboundMessage
 from blackcat.bus.queue import MessageBus
+from blackcat.command import CommandContext, CommandRouter, register_builtin_commands
+from blackcat.config import Config
 from blackcat.config.schema import AgentDefaults
 from blackcat.providers.base import LLMProvider
 from blackcat.providers.factory import ProviderSnapshot
 from blackcat.session.manager import Session, SessionManager
 from blackcat.utils.document import extract_documents
-from blackcat.utils.helpers import image_placeholder_text
-from blackcat.utils.helpers import truncate_text as truncate_text_fn
+from blackcat.utils.formatting import truncate_text as truncate_text_fn
+from blackcat.utils.media import image_placeholder_text
 from blackcat.utils.progress_events import (
     build_tool_event_finish_payloads,
     build_tool_event_start_payload,
@@ -51,9 +65,6 @@ from blackcat.utils.progress_events import (
     on_progress_accepts_tool_events,
 )
 from blackcat.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
-from loguru import logger
-
-from blackcat.command import CommandContext, CommandRouter, register_builtin_commands
 
 if TYPE_CHECKING:
     from blackcat.config.schema import ChannelsConfig, ExecToolConfig, ToolsConfig, WebToolsConfig
@@ -79,7 +90,6 @@ class _LoopHook(AgentHook):
         metadata: dict[str, Any] | None = None,
         session_key: str | None = None,
     ) -> None:
-        super().__init__(reraise=True)
         self._loop = agent_loop
         self._on_progress = on_progress
         self._on_stream = on_stream
@@ -119,15 +129,21 @@ class _LoopHook(AgentHook):
                     context.response.content if context.response else None
                 )
                 if thought:
-                    await self._on_progress(thought)
+                    try:
+                        await self._on_progress(thought)
+                    except Exception as e:
+                        logger.warning("on_progress callback failed: {}", e)
             tool_hint = self._loop._strip_think(self._loop._tool_hint(context.tool_calls))
             tool_events = [build_tool_event_start_payload(tc) for tc in context.tool_calls]
-            await invoke_on_progress(
-                self._on_progress,
-                tool_hint,
-                tool_hint=True,
-                tool_events=tool_events,
-            )
+            try:
+                await invoke_on_progress(
+                    self._on_progress,
+                    tool_hint,
+                    tool_hint=True,
+                    tool_events=tool_events,
+                )
+            except Exception as e:
+                logger.warning("on_progress callback failed: {}", e)
         for tc in context.tool_calls:
             args_str = json.dumps(tc.arguments, ensure_ascii=False)
             logger.info("Tool call: {}({})", tc.name, args_str[:200])
@@ -148,12 +164,15 @@ class _LoopHook(AgentHook):
         ):
             tool_events = build_tool_event_finish_payloads(context)
             if tool_events:
-                await invoke_on_progress(
-                    self._on_progress,
-                    "",
-                    tool_hint=False,
-                    tool_events=tool_events,
-                )
+                try:
+                    await invoke_on_progress(
+                        self._on_progress,
+                        "",
+                        tool_hint=False,
+                        tool_events=tool_events,
+                    )
+                except Exception as e:
+                    logger.warning("on_progress callback failed: {}", e)
         u = context.usage or {}
         logger.debug(
             "LLM usage: prompt={} completion={} cached={}",
@@ -209,10 +228,12 @@ class AgentLoop:
         tools_config: ToolsConfig | None = None,
         provider_snapshot_loader: Callable[[], ProviderSnapshot] | None = None,
         provider_signature: tuple[object, ...] | None = None,
+        config: Config | None = None,
     ):
         from blackcat.config.schema import ExecToolConfig, ToolsConfig, WebToolsConfig
 
-        _tc = tools_config or ToolsConfig()
+        self.config = config or Config()
+        self.tools_config = self.config.tools
         defaults = AgentDefaults()
         self.bus = bus
         self.channels_config = channels_config
@@ -299,9 +320,19 @@ class AgentLoop:
             provider=provider,
             model=self.model,
         )
+
+        if self.tools_config.lens.enabled:
+            from blackcat.lens import LensClient
+            self.lens_client = LensClient(self.tools_config.lens)
+            self.context.set_lens_client(self.lens_client)
+            logger.info("Lens LSP client initialized with {} workspaces", len(self.tools_config.lens.workspaces))
+        else:
+            self.lens_client = None
+            logger.debug("Lens disabled: tools_config.lens.enabled = {}", self.tools_config.lens.enabled)
+
         self._register_default_tools()
-        if _tc.my.enable:
-            self.tools.register(MyTool(loop=self, modify_allowed=_tc.my.allow_set))
+        if self.tools_config.my.enable:
+            self.tools.register(MyTool(loop=self, modify_allowed=self.tools_config.my.allow_set))
         self._runtime_vars: dict[str, Any] = {}
         self._current_iteration: int = 0
         self.commands = CommandRouter()
@@ -387,6 +418,21 @@ class AgentLoop:
                 CronTool(self.cron_service, default_timezone=self.context.timezone or "UTC")
             )
 
+        if self.lens_client:
+            self.tools.register(LensDefinitionTool(self.lens_client))
+            self.tools.register(LensReferencesTool(self.lens_client))
+            self.tools.register(LensHoverTool(self.lens_client))
+            self.tools.register(LensWorkspaceSymbolTool(self.lens_client))
+            self.tools.register(LensDocumentSymbolTool(self.lens_client))
+            self.tools.register(LensCompletionTool(self.lens_client))
+            self.tools.register(LensRenameTool(self.lens_client))
+            self.tools.register(LensCodeActionTool(self.lens_client))
+            self.tools.register(LensFormatTool(self.lens_client))
+            self.tools.register(LensSignatureHelpTool(self.lens_client))
+            self.tools.register(LensDiagnosticsTool(self.lens_client))
+
+        self.tools.export_md(self.workspace / "TOOLS.md")
+
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
         if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
@@ -398,6 +444,7 @@ class AgentLoop:
             self._mcp_stacks = await connect_mcp_servers(self._mcp_servers, self.tools)
             if self._mcp_stacks:
                 self._mcp_connected = True
+                self.tools.export_mcp_md(self.workspace / "MCP.md")
             else:
                 logger.warning("No MCP servers connected successfully (will retry next message)")
         except asyncio.CancelledError:
@@ -860,257 +907,17 @@ class AgentLoop:
         on_stream_end: Callable[..., Awaitable[None]] | None = None,
         pending_queue: asyncio.Queue | None = None,
     ) -> OutboundMessage | None:
-        """Process a single inbound message and return the response."""
-        self._refresh_provider_snapshot()
-        # System messages: parse origin from chat_id ("channel:chat_id")
-        if msg.channel == "system":
-            channel, chat_id = (
-                msg.chat_id.split(":", 1) if ":" in msg.chat_id else ("cli", msg.chat_id)
-            )
-            logger.info("Processing system message from {}", msg.sender_id)
-            # Honor session_key_override so subagent announces from threaded
-            # callers route to the originating thread session, not the
-            # channel-level session derived from chat_id.
-            key = msg.session_key_override or f"{channel}:{chat_id}"
-            session = self.sessions.get_or_create(key)
-            if self._restore_runtime_checkpoint(session):
-                self.sessions.save(session)
-            if self._restore_pending_user_turn(session):
-                self.sessions.save(session)
+        """Process a single inbound message and return the response.
 
-            session, pending = self.auto_compact.prepare_session(session, key)
-
-            await self.consolidator.maybe_consolidate_by_tokens(
-                session,
-                session_summary=pending,
-            )
-            # Persist subagent follow-ups into durable history BEFORE prompt
-            # assembly. ContextBuilder merges adjacent same-role messages for
-            # provider compatibility, which previously caused the follow-up to
-            # disappear from session.messages while still being visible to the
-            # LLM via the merged prompt. See _persist_subagent_followup.
-            is_subagent = msg.sender_id == "subagent"
-            if is_subagent and self._persist_subagent_followup(session, msg):
-                self.sessions.save(session)
-            self._set_tool_context(
-                channel, chat_id, msg.metadata.get("message_id"),
-                msg.metadata, session_key=key,
-            )
-            _hist_kwargs: dict[str, Any] = {
-                "max_messages": self._max_messages,
-                "max_tokens": self._replay_token_budget(),
-                "include_timestamps": True,
-            }
-            history = session.get_history(**_hist_kwargs)
-            current_role = "assistant" if is_subagent else "user"
-
-            # Subagent content is already in `history` above; passing it again
-            # as current_message would double-project it into the prompt.
-            messages = self.context.build_messages(
-                history=history,
-                current_message="" if is_subagent else msg.content,
-                channel=channel,
-                chat_id=chat_id,
-                session_summary=pending,
-                current_role=current_role,
-            )
-            final_content, _, all_msgs, stop_reason, _ = await self._run_agent_loop(
-                messages, session=session, channel=channel, chat_id=chat_id,
-                message_id=msg.metadata.get("message_id"),
-                metadata=msg.metadata,
-                session_key=key,
-                pending_queue=pending_queue,
-            )
-            self._save_turn(session, all_msgs, 1 + len(history))
-            session.enforce_file_cap(on_archive=self.context.memory.raw_archive)
-            self._clear_runtime_checkpoint(session)
-            self.sessions.save(session)
-            self._schedule_background(self.consolidator.maybe_consolidate_by_tokens(session))
-            options = ask_user_options_from_messages(all_msgs) if stop_reason == "ask_user" else []
-            content, buttons = ask_user_outbound(
-                final_content or "Background task completed.",
-                options,
-                channel,
-            )
-            # Reconstruct channel-specific metadata from session.key so the
-            # outbound reply lands in the originating thread (not the channel
-            # top-level). The announce InboundMessage carries only
-            # injected_event metadata; we recover thread_ts from the session
-            # key, which slack writes as "slack:<chat_id>:<thread_ts>".
-            outbound_metadata: dict[str, Any] = {}
-            if channel == "slack" and key.startswith("slack:") and key.count(":") >= 2:
-                outbound_metadata["slack"] = {"thread_ts": key.split(":", 2)[2]}
-            return OutboundMessage(
-                channel=channel,
-                chat_id=chat_id,
-                content=content,
-                buttons=buttons,
-                metadata=outbound_metadata,
-            )
-
-        # Extract document text from media at the processing boundary so all
-        # channels benefit without format-specific logic in ContextBuilder.
-        if msg.media:
-            new_content, image_only = extract_documents(msg.content, msg.media)
-            msg = dataclasses.replace(msg, content=new_content, media=image_only)
-
-        preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-        logger.info("Processing message from {}:{}: {}", msg.channel, msg.sender_id, preview)
-
-        key = session_key or msg.session_key
-        session = self.sessions.get_or_create(key)
-        if self._restore_runtime_checkpoint(session):
-            self.sessions.save(session)
-        if self._restore_pending_user_turn(session):
-            self.sessions.save(session)
-
-        session, pending = self.auto_compact.prepare_session(session, key)
-
-        # Slash commands
-        raw = msg.content.strip()
-        ctx = CommandContext(msg=msg, session=session, key=key, raw=raw, loop=self)
-        if result := await self.commands.dispatch(ctx):
-            return result
-
-        await self.consolidator.maybe_consolidate_by_tokens(
-            session,
-            session_summary=pending,
-        )
-
-        self._set_tool_context(
-            msg.channel, msg.chat_id, msg.metadata.get("message_id"),
-            msg.metadata, session_key=key,
-        )
-        if message_tool := self.tools.get("message"):
-            if isinstance(message_tool, MessageTool):
-                message_tool.start_turn()
-
-        _hist_kwargs: dict[str, Any] = {
-            "max_messages": self._max_messages,
-            "max_tokens": self._replay_token_budget(),
-            "include_timestamps": True,
-        }
-        history = session.get_history(**_hist_kwargs)
-
-        pending_ask_id = pending_ask_user_id(history)
-        if pending_ask_id:
-            initial_messages = ask_user_tool_result_messages(
-                self.context.build_system_prompt(channel=msg.channel),
-                history,
-                pending_ask_id,
-                msg.content,
-            )
-        else:
-            initial_messages = self.context.build_messages(
-                history=history,
-                current_message=msg.content,
-                session_summary=pending,
-                media=msg.media if msg.media else None,
-                channel=msg.channel,
-                chat_id=self._runtime_chat_id(msg),
-            )
-
-        async def _bus_progress(
-            content: str,
-            *,
-            tool_hint: bool = False,
-            tool_events: list[dict[str, Any]] | None = None,
-        ) -> None:
-            meta = dict(msg.metadata or {})
-            meta["_progress"] = True
-            meta["_tool_hint"] = tool_hint
-            if tool_events:
-                meta["_tool_events"] = tool_events
-            await self.bus.publish_outbound(
-                OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    content=content,
-                    metadata=meta,
-                )
-            )
-
-        async def _on_retry_wait(content: str) -> None:
-            meta = dict(msg.metadata or {})
-            meta["_retry_wait"] = True
-            await self.bus.publish_outbound(
-                OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
-                    content=content,
-                    metadata=meta,
-                )
-            )
-
-        # Persist the triggering user message up front so a mid-turn crash
-        # doesn't silently lose the prompt on recovery. ``media`` rides along
-        # as raw on-disk paths — sanitized image blocks are stripped from
-        # JSONL, and webui replay needs the paths to mint signed URLs.
-        user_persisted_early = False
-        media_paths = [p for p in (msg.media or []) if isinstance(p, str) and p]
-        has_text = isinstance(msg.content, str) and msg.content.strip()
-        if not pending_ask_id and (has_text or media_paths):
-            extra: dict[str, Any] = {"media": list(media_paths)} if media_paths else {}
-            text = msg.content if isinstance(msg.content, str) else ""
-            session.add_message("user", text, **extra)
-            self._mark_pending_user_turn(session)
-            self.sessions.save(session)
-            user_persisted_early = True
-
-        final_content, _, all_msgs, stop_reason, had_injections = await self._run_agent_loop(
-            initial_messages,
-            on_progress=on_progress or _bus_progress,
+        Delegates to MessageHandler for cleaner separation of concerns.
+        """
+        handler = MessageHandler(self, msg, self.config)
+        return await handler.process(
+            session_key=session_key,
+            on_progress=on_progress,
             on_stream=on_stream,
             on_stream_end=on_stream_end,
-            on_retry_wait=_on_retry_wait,
-            session=session,
-            channel=msg.channel,
-            chat_id=msg.chat_id,
-            message_id=msg.metadata.get("message_id"),
-            metadata=msg.metadata,
-            session_key=key,
             pending_queue=pending_queue,
-        )
-
-        if final_content is None or not final_content.strip():
-            final_content = EMPTY_FINAL_RESPONSE_MESSAGE
-
-        # Skip the already-persisted user message when saving the turn
-        save_skip = 1 + len(history) + (1 if user_persisted_early else 0)
-        self._save_turn(session, all_msgs, save_skip)
-        session.enforce_file_cap(on_archive=self.context.memory.raw_archive)
-        self._clear_pending_user_turn(session)
-        self._clear_runtime_checkpoint(session)
-        self.sessions.save(session)
-        self._schedule_background(self.consolidator.maybe_consolidate_by_tokens(session))
-
-        # When follow-up messages were injected mid-turn, a later natural
-        # language reply may address those follow-ups and should not be
-        # suppressed just because MessageTool was used earlier in the turn.
-        # However, if the turn falls back to the empty-final-response
-        # placeholder, suppress it when the real user-visible output already
-        # came from MessageTool.
-        if (mt := self.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn:
-            if not had_injections or stop_reason == "empty_final_response":
-                return None
-
-        preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
-        logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
-
-        meta = dict(msg.metadata or {})
-        final_content, buttons = ask_user_outbound(
-            final_content,
-            ask_user_options_from_messages(all_msgs) if stop_reason == "ask_user" else [],
-            msg.channel,
-        )
-        if on_stream is not None and stop_reason not in {"ask_user", "error"}:
-            meta["_streamed"] = True
-        return OutboundMessage(
-            channel=msg.channel,
-            chat_id=msg.chat_id,
-            content=final_content,
-            metadata=meta,
-            buttons=buttons,
         )
 
     def _sanitize_persisted_blocks(

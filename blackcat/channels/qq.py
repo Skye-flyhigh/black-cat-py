@@ -40,7 +40,7 @@ from blackcat.config.schema import Base
 from blackcat.security.network import validate_url_target
 
 try:
-    from blackcat.config.paths import get_media_dir
+    from blackcat.utils.paths import get_media_dir
 except Exception:  # pragma: no cover
     get_media_dir = None  # type: ignore
 
@@ -240,7 +240,7 @@ class QQChannel(BaseChannel):
     # Outbound (send)
     # ---------------------------
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send attachments first, then text."""
         try:
             if not self._client:

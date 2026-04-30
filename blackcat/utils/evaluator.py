@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from blackcat.utils.prompt_templates import render_template
 from loguru import logger
+
+from blackcat.utils.prompt_templates import render_template
 
 if TYPE_CHECKING:
     from blackcat.providers.base import LLMProvider

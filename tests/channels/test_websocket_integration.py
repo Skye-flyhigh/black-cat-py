@@ -7,15 +7,15 @@ multi-client scenarios, edge cases, and realistic usage patterns.
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import websockets
+from ws_test_client import WsTestClient, issue_token, issue_token_ok
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.channels.websocket import WebSocketChannel
-from ws_test_client import WsTestClient, issue_token, issue_token_ok
 
 
 def _ch(bus: Any, port: int, **kw: Any) -> WebSocketChannel:

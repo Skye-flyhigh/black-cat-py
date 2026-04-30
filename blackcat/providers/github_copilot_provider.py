@@ -7,9 +7,10 @@ import webbrowser
 from collections.abc import Callable
 
 import httpx
-from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 from oauth_cli_kit.models import OAuthToken
 from oauth_cli_kit.storage import FileTokenStorage
+
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
 DEFAULT_GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code"
 DEFAULT_GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"

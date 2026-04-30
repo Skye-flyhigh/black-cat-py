@@ -3,10 +3,6 @@ import subprocess
 import sys
 from typing import Any
 
-from blackcat.agent.tools.base import Tool
-from blackcat.agent.tools.registry import ToolRegistry
-from blackcat.agent.tools.shell import ExecTool
-
 from blackcat.agent.tools import (
     ArraySchema,
     IntegerSchema,
@@ -16,6 +12,9 @@ from blackcat.agent.tools import (
     tool_parameters,
     tool_parameters_schema,
 )
+from blackcat.agent.tools.base import Tool
+from blackcat.agent.tools.registry import ToolRegistry
+from blackcat.agent.tools.shell import ExecTool
 
 
 class SampleTool(Tool):

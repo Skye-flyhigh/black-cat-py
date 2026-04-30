@@ -3,8 +3,10 @@
 import mimetypes
 from pathlib import Path
 
-from blackcat.utils.helpers import detect_image_mime
 from loguru import logger
+
+from blackcat.utils.helpers import detect_image_mime
+from blackcat.utils.media import detect_image_mime
 
 # Supported file extensions for text extraction
 SUPPORTED_EXTENSIONS: set[str] = {
@@ -102,7 +104,7 @@ def _extract_docx(path: Path) -> str:
     except ImportError:
         return "[error: python-docx not installed]"
     try:
-        doc = DocxDocument(path)
+        doc = DocxDocument(str(path))
         paragraphs: list[str] = [p.text for p in doc.paragraphs if p.text.strip()]
         return _truncate("\n\n".join(paragraphs), _MAX_TEXT_LENGTH)
     except Exception as e:
@@ -144,7 +146,7 @@ def _extract_pptx(path: Path) -> str:
     except ImportError:
         return "[error: python-pptx not installed]"
     try:
-        prs = PptxPresentation(path)
+        prs = PptxPresentation(str(path))
         slides: list[str] = []
         for i, slide in enumerate(prs.slides, 1):
             slide_text: list[str] = []

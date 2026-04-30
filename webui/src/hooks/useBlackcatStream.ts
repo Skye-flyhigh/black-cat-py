@@ -56,7 +56,7 @@ export function useBlackcatStream(
   const buffer = useRef<StreamBuffer | null>(null);
 
   useEffect(() => {
-    return client.onError((err) => setStreamError(err));
+    return client.onError((err: any) => setStreamError(err));
   }, [client]);
 
   const dismissStreamError = useCallback(() => setStreamError(null), []);

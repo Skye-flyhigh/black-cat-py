@@ -10,6 +10,7 @@ every tool-execution site now funnels through.
 from __future__ import annotations
 
 import pytest
+
 from blackcat.providers.base import LLMResponse, ToolCallRequest
 
 

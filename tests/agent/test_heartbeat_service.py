@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+
 from blackcat.heartbeat.service import HeartbeatService
 from blackcat.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 

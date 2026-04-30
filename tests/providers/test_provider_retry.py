@@ -2,6 +2,7 @@ import asyncio
 import copy
 
 import pytest
+
 from blackcat.providers.base import GenerationSettings, LLMProvider, LLMResponse
 
 

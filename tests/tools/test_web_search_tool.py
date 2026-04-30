@@ -2,6 +2,10 @@
 
 import httpx
 import pytest
+<<<<<<< HEAD
+=======
+
+>>>>>>> blackcat
 from blackcat.agent.tools.web import WebSearchTool
 from blackcat.config.schema import WebSearchConfig
 
@@ -55,7 +59,11 @@ async def test_brave_search(monkeypatch):
         })
 
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
+<<<<<<< HEAD
     tool = _tool(provider="brave", api_key="brave-key", user_agent="blackcat-search-test")
+=======
+    tool = _tool(provider="brave", api_key="brave-key")
+>>>>>>> blackcat
     result = await tool.execute(query="blackcat", count=1)
     assert "NanoBot" in result
     assert "https://example.com" in result
@@ -80,6 +88,11 @@ async def test_tavily_search(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_searxng_search(monkeypatch):
+    import socket
+
+    def _fake_resolve(hostname, port, family=0, type_=0):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+
     async def mock_get(self, url, **kw):
         assert "searx.example" in url
         assert kw["headers"]["User-Agent"] == "blackcat-search-test"
@@ -87,6 +100,7 @@ async def test_searxng_search(monkeypatch):
             "results": [{"title": "Result", "url": "https://example.com", "content": "SearXNG result"}]
         })
 
+    monkeypatch.setattr("blackcat.security.network.socket.getaddrinfo", _fake_resolve)
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
     tool = _tool(provider="searxng", base_url="https://searx.example", user_agent="blackcat-search-test")
     result = await tool.execute(query="test")

@@ -4,6 +4,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from blackcat.agent.memory import Dream, MemoryStore
 from blackcat.agent.runner import AgentRunResult
 from blackcat.agent.skills import BUILTIN_SKILLS_DIR

@@ -2,13 +2,13 @@
 
 import asyncio
 import functools
-import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+
 from blackcat.channels.websocket import WebSocketChannel
 from blackcat.session.manager import Session, SessionManager
 

@@ -13,7 +13,8 @@ import uuid
 from typing import Any
 
 from aiohttp import web
-from blackcat.config.paths import get_media_dir
+from loguru import logger
+
 from blackcat.utils.helpers import safe_filename
 from blackcat.utils.media_decode import (
     MAX_FILE_SIZE,
@@ -24,8 +25,8 @@ from blackcat.utils.media_decode import (
 from blackcat.utils.media_decode import (
     save_base64_data_url as _save_base64_data_url,
 )
+from blackcat.utils.paths import get_media_dir
 from blackcat.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
-from loguru import logger
 
 __all__ = (
     "MAX_FILE_SIZE",

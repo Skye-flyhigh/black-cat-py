@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
+
 from blackcat.api.server import (
     API_CHAT_ID,
     API_SESSION_KEY,

@@ -3,6 +3,7 @@ import json
 import time
 
 import pytest
+
 from blackcat.cron.service import CronService
 from blackcat.cron.types import CronJob, CronPayload, CronSchedule
 

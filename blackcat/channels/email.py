@@ -16,14 +16,15 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+from pydantic import Field
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
 from blackcat.utils.helpers import safe_filename
-from loguru import logger
-from pydantic import Field
+from blackcat.utils.paths import get_media_dir
 
 
 class EmailConfig(Base):
@@ -174,7 +175,7 @@ class EmailChannel(BaseChannel):
         """Stop polling loop."""
         self._running = False
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send email via SMTP."""
         if not self.config.consent_granted:
             logger.warning("Skip email send: consent_granted is false")

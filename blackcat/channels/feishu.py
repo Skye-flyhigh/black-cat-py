@@ -12,15 +12,16 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from blackcat.bus.events import OutboundMessage
-from blackcat.bus.queue import MessageBus
-from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_media_dir
-from blackcat.config.schema import Base
 from lark_oapi.api.im.v1.model import MentionEvent, P2ImMessageReceiveV1
 from lark_oapi.core.const import FEISHU_DOMAIN, LARK_DOMAIN
 from loguru import logger
 from pydantic import Field
+
+from blackcat.bus.events import OutboundMessage
+from blackcat.bus.queue import MessageBus
+from blackcat.channels.base import BaseChannel
+from blackcat.config.schema import Base
+from blackcat.utils.paths import get_media_dir
 
 FEISHU_AVAILABLE = importlib.util.find_spec("lark_oapi") is not None
 
@@ -1340,7 +1341,7 @@ class FeishuChannel(BaseChannel):
             return False
 
     async def send_delta(
-        self, chat_id: str, delta: str, metadata: dict[str, Any] | None = None
+        self, chat_id: str, content: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """Progressive streaming via CardKit: create card on first delta, stream-update on subsequent.
 
@@ -1462,7 +1463,7 @@ class FeishuChannel(BaseChannel):
             )
             buf.last_edit = now
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send a message through Feishu, including media (images/files) if present."""
         if not self._client:
             logger.warning("Feishu client not initialized")

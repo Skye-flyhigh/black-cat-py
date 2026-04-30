@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
 from blackcat.bus.events import InboundMessage
 from blackcat.command.builtin import cmd_dream_log, cmd_dream_restore
 from blackcat.command.router import CommandContext

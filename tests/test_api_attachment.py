@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
+
 from blackcat.api.server import (
     _FileSizeExceeded,
     _parse_json_content,

@@ -6,12 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from blackcat.bus.events import OutboundMessage
-from blackcat.bus.queue import MessageBus
-from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_media_dir
-from blackcat.config.schema import Base
-from blackcat.utils.helpers import safe_filename, split_message
 from loguru import logger
 from pydantic import Field
 from slack_sdk.socket_mode.request import SocketModeRequest
@@ -19,6 +13,13 @@ from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.socket_mode.websockets import SocketModeClient
 from slack_sdk.web.async_client import AsyncWebClient
 from slackify_markdown import slackify_markdown
+
+from blackcat.bus.events import OutboundMessage
+from blackcat.bus.queue import MessageBus
+from blackcat.channels.base import BaseChannel
+from blackcat.config.schema import Base
+from blackcat.utils.helpers import safe_filename, split_message
+from blackcat.utils.paths import get_media_dir
 
 
 class SlackDMConfig(Base):
@@ -123,7 +124,7 @@ class SlackChannel(BaseChannel):
                 logger.warning("Slack socket close failed: {}", e)
             self._socket_client = None
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send a message through Slack."""
         if not self._web_client:
             logger.warning("Slack client not running")

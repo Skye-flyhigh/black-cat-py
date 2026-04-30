@@ -5,8 +5,9 @@ import sys
 from contextlib import asynccontextmanager
 from types import ModuleType, SimpleNamespace
 
-import blackcat.agent.tools.mcp as mcp_mod
 import pytest
+
+import blackcat.agent.tools.mcp as mcp_mod
 from blackcat.agent.tools.mcp import (
     MCPPromptWrapper,
     MCPResourceWrapper,

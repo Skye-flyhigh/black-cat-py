@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
+
 from blackcat.api.server import (
     _SSE_DONE,
     _sse_chunk,

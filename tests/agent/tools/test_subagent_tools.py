@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from blackcat.config.schema import AgentDefaults
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
@@ -57,7 +58,6 @@ async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
 async def test_drain_pending_blocks_while_subagents_running(tmp_path):
     """_drain_pending should block when no messages are available but sub-agents are still running."""
     from blackcat.agent.loop import AgentLoop
-    from blackcat.agent.subagent import SubagentManager
     from blackcat.bus.events import InboundMessage
     from blackcat.bus.queue import MessageBus
     from blackcat.session.manager import Session

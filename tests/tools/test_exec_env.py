@@ -3,6 +3,7 @@
 import sys
 
 import pytest
+
 from blackcat.agent.tools.shell import ExecTool
 
 _UNIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="Unix shell commands")

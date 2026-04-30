@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from blackcat.config.paths import (
+from blackcat.utils.paths import (
     get_bridge_install_dir,
     get_cli_history_path,
     get_cron_dir,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+
 from blackcat.agent.loop import AgentLoop
 from blackcat.bus.queue import MessageBus
 

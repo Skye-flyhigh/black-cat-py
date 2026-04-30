@@ -10,6 +10,12 @@ try:
     import questionary
 except ModuleNotFoundError:  # pragma: no cover - exercised in environments without wizard deps
     questionary = None
+from loguru import logger
+from pydantic import BaseModel
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 from blackcat.cli.models import (
     format_token_count,
     get_model_context_limit,
@@ -17,11 +23,6 @@ from blackcat.cli.models import (
 )
 from blackcat.config.loader import get_config_path, load_config
 from blackcat.config.schema import Config
-from loguru import logger
-from pydantic import BaseModel
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
 console = Console()
 

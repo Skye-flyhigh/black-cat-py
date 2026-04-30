@@ -9,10 +9,10 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
-from blackcat.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from loguru import logger
 from oauth_cli_kit import get_token as get_codex_token
 
+from blackcat.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from blackcat.providers.openai_responses import (
     consume_sse,
     convert_messages,

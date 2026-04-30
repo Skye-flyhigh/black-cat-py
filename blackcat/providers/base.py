@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 
-from blackcat.utils.helpers import image_placeholder_text
 from loguru import logger
+
+from blackcat.utils.media import image_placeholder_text
 
 
 @dataclass

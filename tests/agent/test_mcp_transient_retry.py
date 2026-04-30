@@ -5,15 +5,16 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from mcp import types as mcp_types
+from mcp.shared.exceptions import McpError
+from mcp.types import ErrorData
+
 from blackcat.agent.tools.mcp import (
     MCPPromptWrapper,
     MCPResourceWrapper,
     MCPToolWrapper,
     _is_transient,
 )
-from mcp import types as mcp_types
-from mcp.shared.exceptions import McpError
-from mcp.types import ErrorData
 
 # ---------------------------------------------------------------------------
 # _is_transient helper

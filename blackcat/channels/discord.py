@@ -9,15 +9,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from loguru import logger
+from pydantic import Field
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
 from blackcat.command.builtin import build_help_text
-from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
-from blackcat.utils.helpers import safe_filename, split_message
-from loguru import logger
-from pydantic import Field
+from blackcat.utils.formatting import split_message
+from blackcat.utils.helpers import safe_filename
+from blackcat.utils.paths import get_media_dir
 
 DISCORD_AVAILABLE = importlib.util.find_spec("discord") is not None
 if TYPE_CHECKING:
@@ -440,8 +442,8 @@ class DiscordChannel(BaseChannel):
         self._running = False
         await self._reset_runtime_state(close_client=True)
 
-    async def send(self, msg: OutboundMessage) -> None:
-        """Send a message through Discord using discord.py."""
+    async def _send_impl(self, msg: OutboundMessage) -> None:
+        """Internal send implementation - called by BaseChannel.send() after validation."""
         client = self._client
         if client is None or not client.is_ready():
             logger.warning("Discord client not ready; dropping outbound message")
@@ -460,7 +462,7 @@ class DiscordChannel(BaseChannel):
                 await self._clear_reactions(msg.chat_id)
 
     async def send_delta(
-        self, chat_id: str, delta: str, metadata: dict[str, Any] | None = None
+        self, chat_id: str, content: str, metadata: dict[str, Any] | None = None
     ) -> None:
         """Progressive Discord delivery: send once, then edit until the stream ends."""
         client = self._client
@@ -489,7 +491,7 @@ class DiscordChannel(BaseChannel):
         elif buf.stream_id is None:
             buf.stream_id = stream_id
 
-        buf.text += delta
+        buf.text += content
         if not buf.text.strip():
             return
 
@@ -537,11 +539,18 @@ class DiscordChannel(BaseChannel):
         self._remember_channel(message.channel)
         content = message.content or ""
 
+        # Extract text from embeds (link previews, rich content, etc.)
+        embed_markers = []
+        for embed in getattr(message, "embeds", []):
+            embed_text = self._extract_embed_content(embed)
+            if embed_text:
+                embed_markers.append(embed_text)
+
         if not self._should_accept_inbound(message, sender_id, content):
             return
 
         media_paths, attachment_markers = await self._download_attachments(message.attachments)
-        full_content = self._compose_inbound_content(content, attachment_markers)
+        full_content = self._compose_inbound_content(content, attachment_markers, embed_markers)
         metadata = self._build_inbound_metadata(message)
         parent_channel_id = self._channel_parent_key(message.channel)
         session_key = None
@@ -551,7 +560,7 @@ class DiscordChannel(BaseChannel):
             metadata["thread_id"] = channel_id
             session_key = f"{self.name}:{parent_channel_id}:thread:{channel_id}"
 
-        await self._start_typing(message.channel)
+        await self._start_typing(str(message.channel.id))
 
         # Add read receipt reaction immediately, working emoji after delay
         try:
@@ -679,10 +688,38 @@ class DiscordChannel(BaseChannel):
         return media_paths, markers
 
     @staticmethod
-    def _compose_inbound_content(content: str, attachment_markers: list[str]) -> str:
-        """Combine message text with attachment markers."""
+    def _extract_embed_content(embed) -> str:
+        """Extract readable text from a Discord embed (link previews, rich cards, etc.).
+
+        Returns a human-readable summary of the embed, or an empty string if
+        the embed has no extractable text.
+        """
+        parts = []
+
+        if embed.title:
+            parts.append(f"**{embed.title}**")
+
+        if embed.description:
+            parts.append(embed.description)
+
+        for field in embed.fields:
+            value = field.value.replace("```", "").replace("`", "")
+            parts.append(f"{field.name}: {value}")
+
+        if embed.footer and embed.footer.text:
+            parts.append(f"[{embed.footer.text}]")
+
+        return "\n".join(parts)
+
+    @staticmethod
+    def _compose_inbound_content(
+        content: str, attachment_markers: list[str], embed_markers: list[str] | None = None
+    ) -> str:
+        """Combine message text with attachment and embed markers."""
         content_parts = [content] if content else []
         content_parts.extend(attachment_markers)
+        if embed_markers:
+            content_parts.extend(embed_markers)
         return "\n".join(part for part in content_parts if part) or "[empty message]"
 
     @staticmethod
@@ -748,12 +785,16 @@ class DiscordChannel(BaseChannel):
 
     async def _start_typing(self, channel: Messageable) -> None:
         """Start periodic typing indicator for a channel."""
-        channel_id = self._channel_key(channel)
-        await self._stop_typing(channel_id)
+        channel_id = self._channel_key(chat_id)
+        await self._stop_typing(chat_id)
 
         async def typing_loop() -> None:
             while self._running:
                 try:
+                    # Resolve the channel object from chat_id for typing context
+                    channel = await self._resolve_channel(chat_id)
+                    if channel is None:
+                        return
                     async with channel.typing():
                         await asyncio.sleep(TYPING_INTERVAL_S)
                 except asyncio.CancelledError:
@@ -764,9 +805,9 @@ class DiscordChannel(BaseChannel):
 
         self._typing_tasks[channel_id] = asyncio.create_task(typing_loop())
 
-    async def _stop_typing(self, channel_id: str) -> None:
+    async def _stop_typing(self, chat_id: str) -> None:
         """Stop typing indicator for a channel."""
-        task = self._typing_tasks.pop(self._channel_key(channel_id), None)
+        task = self._typing_tasks.pop(self._channel_key(chat_id), None)
         if task is None:
             return
         task.cancel()

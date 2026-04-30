@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from blackcat.command.builtin import register_builtin_commands
 from blackcat.command.router import CommandContext, CommandRouter
 

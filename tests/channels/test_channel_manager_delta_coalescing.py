@@ -3,6 +3,7 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
@@ -27,13 +28,13 @@ class MockChannel(BaseChannel):
     async def stop(self):
         pass
 
-    async def send(self, msg):
+    async def _send_impl(self, msg):
         """Implement abstract method."""
         return await self._send_mock(msg)
 
-    async def send_delta(self, chat_id, delta, metadata=None):
+    async def send_delta(self, chat_id, content, metadata=None):
         """Override send_delta for testing."""
-        return await self._send_delta_mock(chat_id, delta, metadata)
+        return await self._send_delta_mock(chat_id, content, metadata)
 
 
 @pytest.fixture

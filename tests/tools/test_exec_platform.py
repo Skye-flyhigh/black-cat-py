@@ -9,6 +9,7 @@ import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from blackcat.agent.tools.shell import ExecTool
 
 _WINDOWS_ENV_KEYS = {

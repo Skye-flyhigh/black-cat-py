@@ -7,18 +7,7 @@ import signal
 import sys
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any
-
-# Force UTF-8 encoding for Windows console
-if sys.platform == "win32":
-    if sys.stdout.encoding != "utf-8":
-        os.environ["PYTHONIOENCODING"] = "utf-8"
-        # Re-open stdout/stderr with UTF-8 encoding
-        try:
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass
+from typing import Any, Callable
 
 import typer
 from loguru import logger
@@ -33,6 +22,26 @@ from rich.table import Table
 from rich.text import Text
 
 from blackcat import __logo__, __version__
+from blackcat.cli.stream import StreamRenderer, ThinkingSpinner
+from blackcat.config.schema import Config
+from blackcat.utils.helpers import sync_workspace_templates
+from blackcat.utils.paths import get_workspace_path, is_default_workspace
+from blackcat.utils.restart import (
+    consume_restart_notice_from_env,
+    format_restart_completed_message,
+    should_show_cli_restart_notice,
+)
+
+# Force UTF-8 encoding for Windows console
+if sys.platform == "win32":
+    if sys.stdout.encoding != "utf-8":
+        os.environ["PYTHONIOENCODING"] = "utf-8"
+        # Re-open stdout/stderr with UTF-8 encoding
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 
 class SafeFileHistory(FileHistory):
@@ -46,15 +55,6 @@ class SafeFileHistory(FileHistory):
     def store_string(self, string: str) -> None:
         safe = string.encode("utf-8", errors="surrogateescape").decode("utf-8", errors="replace")
         super().store_string(safe)
-from blackcat.cli.stream import StreamRenderer, ThinkingSpinner
-from blackcat.config.paths import get_workspace_path, is_default_workspace
-from blackcat.config.schema import Config
-from blackcat.utils.helpers import sync_workspace_templates
-from blackcat.utils.restart import (
-    consume_restart_notice_from_env,
-    format_restart_completed_message,
-    should_show_cli_restart_notice,
-)
 
 app = typer.Typer(
     name="blackcat",
@@ -85,7 +85,6 @@ def _flush_pending_tty_input() -> None:
 
     try:
         import termios
-
         termios.tcflush(fd, termios.TCIFLUSH)
         return
     except Exception:
@@ -108,7 +107,6 @@ def _restore_terminal() -> None:
         return
     try:
         import termios
-
         termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _SAVED_TERM_ATTRS)
     except Exception:
         pass
@@ -121,12 +119,11 @@ def _init_prompt_session() -> None:
     # Save terminal state so we can restore it on exit
     try:
         import termios
-
         _SAVED_TERM_ATTRS = termios.tcgetattr(sys.stdin.fileno())
     except Exception:
         pass
 
-    from blackcat.config.paths import get_cli_history_path
+    from blackcat.utils.paths import get_cli_history_path
 
     history_file = get_cli_history_path()
     history_file.parent.mkdir(parents=True, exist_ok=True)
@@ -274,15 +271,15 @@ def main(
 @app.command()
 def onboard(
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+    config_file: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
     wizard: bool = typer.Option(False, "--wizard", help="Use interactive wizard"),
 ):
     """Initialize blackcat configuration and workspace."""
     from blackcat.config.loader import get_config_path, load_config, save_config, set_config_path
     from blackcat.config.schema import Config
 
-    if config:
-        config_path = Path(config).expanduser().resolve()
+    if config_file:
+        config_path = Path(config_file).expanduser().resolve()
         set_config_path(config_path)
         console.print(f"[dim]Using config: {config_path}[/dim]")
     else:
@@ -465,14 +462,13 @@ def _warn_deprecated_config_keys(config_path: Path | None) -> None:
 
 def _migrate_cron_store(config: "Config") -> None:
     """One-time migration: move legacy global cron store into the workspace."""
-    from blackcat.config.paths import get_cron_dir
+    from blackcat.utils.paths import get_cron_dir
 
     legacy_path = get_cron_dir() / "jobs.json"
     new_path = config.workspace_path / "cron" / "jobs.json"
     if legacy_path.is_file() and not new_path.exists():
         new_path.parent.mkdir(parents=True, exist_ok=True)
         import shutil
-
         shutil.move(str(legacy_path), str(new_path))
 
 
@@ -497,11 +493,12 @@ def serve(
         console.print("[red]aiohttp is required. Install with: pip install 'blackcat-ai[api]'[/red]")
         raise typer.Exit(1)
 
+    from loguru import logger
+
     from blackcat.agent.loop import AgentLoop
     from blackcat.api.server import create_app
     from blackcat.bus.queue import MessageBus
     from blackcat.session.manager import SessionManager
-    from loguru import logger
 
     if verbose:
         logger.enable("blackcat")
@@ -540,6 +537,7 @@ def serve(
         consolidation_ratio=runtime_config.agents.defaults.consolidation_ratio,
         max_messages=runtime_config.agents.defaults.max_messages,
         tools_config=runtime_config.tools,
+        config=runtime_config,
     )
 
     model_name = runtime_config.agents.defaults.model
@@ -631,6 +629,7 @@ def _run_gateway(
 
     # Create agent with cron service
     agent = AgentLoop(
+        config,
         bus=bus,
         provider=provider,
         workspace=config.workspace_path,
@@ -713,6 +712,8 @@ def _run_gateway(
                 logger.exception("Dream cron job failed")
             return None
 
+        from blackcat.agent.tools.cron import CronTool
+        from blackcat.agent.tools.message import MessageTool
         from blackcat.utils.evaluator import evaluate_response
 
         reminder_note = (
@@ -965,7 +966,6 @@ def _run_gateway(
             console.print("\nShutting down...")
         except Exception:
             import traceback
-
             console.print("\n[red]Error: Gateway crashed unexpectedly[/red]")
             console.print(traceback.format_exc())
         finally:
@@ -994,15 +994,16 @@ def agent(
     message: str = typer.Option(None, "--message", "-m", help="Message to send to the agent"),
     session_id: str = typer.Option("cli:direct", "--session", "-s", help="Session ID"),
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
-    config: str | None = typer.Option(None, "--config", "-c", help="Config file path"),
+    config_file: str | None = typer.Option(None, "--config", "-c", help="Config file path"),
     markdown: bool = typer.Option(True, "--markdown/--no-markdown", help="Render assistant output as Markdown"),
     logs: bool = typer.Option(False, "--logs/--no-logs", help="Show blackcat runtime logs during chat"),
 ):
     """Interact with the agent directly."""
+    from loguru import logger
+
     from blackcat.agent.loop import AgentLoop
     from blackcat.bus.queue import MessageBus
     from blackcat.cron.service import CronService
-    from loguru import logger
 
     config = _load_runtime_config(config, workspace)
     sync_workspace_templates(config.workspace_path)
@@ -1046,6 +1047,7 @@ def agent(
         consolidation_ratio=config.agents.defaults.consolidation_ratio,
         max_messages=config.agents.defaults.max_messages,
         tools_config=config.tools,
+        config=config,
     )
     restart_notice = consume_restart_notice_from_env()
     if restart_notice and should_show_cli_restart_notice(restart_notice, session_id):
@@ -1274,7 +1276,7 @@ def _get_bridge_dir() -> Path:
     import subprocess
 
     # User's bridge location
-    from blackcat.config.paths import get_bridge_install_dir
+    from blackcat.utils.paths import get_bridge_install_dir
 
     user_bridge = get_bridge_install_dir()
 
@@ -1456,14 +1458,13 @@ provider_app = typer.Typer(help="Manage providers")
 app.add_typer(provider_app, name="provider")
 
 
-_LOGIN_HANDLERS: dict[str, callable] = {}
+_LOGIN_HANDLERS: dict[str, Callable] = {}
 
 
 def _register_login(name: str):
     def decorator(fn):
         _LOGIN_HANDLERS[name] = fn
         return fn
-
     return decorator
 
 
@@ -1494,7 +1495,6 @@ def provider_login(
 def _login_openai_codex() -> None:
     try:
         from oauth_cli_kit import get_token, login_oauth_interactive
-
         token = None
         try:
             token = get_token()

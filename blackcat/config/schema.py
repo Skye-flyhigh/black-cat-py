@@ -3,10 +3,11 @@
 from pathlib import Path
 from typing import Any, Literal
 
-from blackcat.cron.types import CronSchedule
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from blackcat.cron.types import CronSchedule
 
 
 class Base(BaseModel):
@@ -69,17 +70,19 @@ class AgentDefaults(Base):
 
     workspace: str = "~/.blackcat/workspace"
     model: str = "anthropic/claude-opus-4-5"
-    provider: str = (
-        "auto"  # Provider name (e.g. "anthropic", "openrouter") or "auto" for auto-detection
-    )
+    provider: str = "auto"  # Provider name (e.g. "anthropic", "openrouter") or "auto" for auto-detection
+    summarizer_model: str | None = None  # Model for summarization (defaults to main model)
     max_tokens: int = 8192
-    context_window_tokens: int = 65_536
+    temperature: float = 0.7
+    reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
+    llm_timeout: int = 60  # Timeout for LLM API calls in seconds
+    daily_summary_hour: int = 3  # Hour to run daily summary (0-23, default 3am)
+    # Context management
+    context_window_tokens: int = 65_536  # Token budget for context window
     context_block_limit: int | None = None
-    temperature: float = 0.1
     max_tool_iterations: int = 200
     max_tool_result_chars: int = 16_000
     provider_retry_mode: Literal["standard", "persistent"] = "standard"
-    reasoning_effort: str | None = None  # low / medium / high / adaptive - enables LLM thinking mode
     timezone: str = "UTC"  # IANA timezone, e.g. "Asia/Shanghai", "America/New_York"
     unified_session: bool = False  # Share one session across all channels (single-user multi-device)
     disabled_skills: list[str] = Field(default_factory=list)  # Skill names to exclude from loading (e.g. ["summarize", "skill-creator"])
@@ -226,6 +229,57 @@ class MCPServerConfig(Base):
     tool_timeout: int = 30  # seconds before a tool call is cancelled
     enabled_tools: list[str] = Field(default_factory=lambda: ["*"])  # Only register these tools; accepts raw MCP names or wrapped mcp_<server>_<tool> names; ["*"] = all tools; [] = no tools
 
+
+class WorkspaceConfig(Base):
+    """Per-workspace Lens configuration."""
+
+    path: str  # absolute path to workspace
+    diagnostics_source: Literal["cli", "vscode"] | None = None
+    """Override global diagnostics_source for this workspace. None = use global default."""
+
+
+def get_workspace_path(ws_config: str | WorkspaceConfig) -> str:
+    """Extract path from workspace config (str or WorkspaceConfig)."""
+    return ws_config.path if isinstance(ws_config, WorkspaceConfig) else ws_config
+
+
+class LensConfig(Base):
+    """Lens LSP bridge configuration."""
+
+    enabled: bool = False
+    workspaces: dict[str, str | WorkspaceConfig] = Field(default_factory=dict)
+    """Workspace name -> path (str) or full config (WorkspaceConfig).
+
+    Examples:
+        # Simple: just a path
+        "black-cat-py": "/path/to/black-cat-py"
+
+        # Full config with overrides
+        "Nomad's Map": {"path": "/path/to/NomadsMap", "diagnostics_source": "vscode"}
+    """
+    diagnostics_source: Literal["cli", "vscode"] = "cli"
+    """Default source for diagnostics.
+
+    - "cli": Run pyright/tsc directly (fresh results, works for healthy codebases)
+    - "vscode": Use VSCode extension (faster but may be stale, fallback for broken codebases)
+
+    Default is "cli" since most projects are healthy. Use "vscode" for large/complex
+    TypeScript projects where tsc --noEmit would be slow or fail.
+
+    Can be overridden per-workspace via WorkspaceConfig.diagnostics_source.
+    """
+
+    def get_workspace_paths(self) -> dict[str, str]:
+        """Get workspace name -> path mapping (normalizes str | WorkspaceConfig)."""
+        return {name: get_workspace_path(cfg) for name, cfg in self.workspaces.items()}
+
+    def get_workspace_source(self, workspace: str) -> Literal["cli", "vscode"]:
+        """Get diagnostics_source for a workspace (with per-workspace override)."""
+        ws_config = self.workspaces.get(workspace)
+        if isinstance(ws_config, WorkspaceConfig) and ws_config.diagnostics_source:
+            return ws_config.diagnostics_source
+        return self.diagnostics_source
+
 class MyToolConfig(Base):
     """Self-inspection tool configuration."""
 
@@ -238,10 +292,21 @@ class ToolsConfig(Base):
 
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    lens: LensConfig = Field(default_factory=LensConfig)
     my: MyToolConfig = Field(default_factory=MyToolConfig)
     restrict_to_workspace: bool = False  # restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
-    ssrf_whitelist: list[str] = Field(default_factory=list)  # CIDR ranges to exempt from SSRF blocking (e.g. ["100.64.0.0/10"] for Tailscale)
+    lens: LensConfig = Field(default_factory=LensConfig)
+    ssrf_whitelist: list[str] = Field(default_factory=list)
+
+
+class AuthorIdentity(Base):
+    """Platform identities for an author (like API keys, keep private)."""
+
+    whatsapp: str | None = None
+    telegram: str | None = None
+    discord: str | None = None
+    cli: str | None = None
 
 
 class Config(BaseSettings):
@@ -253,11 +318,24 @@ class Config(BaseSettings):
     api: ApiConfig = Field(default_factory=ApiConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    authors: dict[str, AuthorIdentity] = Field(
+        default_factory=dict
+    )
 
     @property
     def workspace_path(self) -> Path:
         """Get expanded workspace path."""
         return Path(self.agents.defaults.workspace).expanduser()
+
+    @staticmethod
+    def _is_cloud_model(model: str) -> bool:
+        """Check if model name ends with :cloud suffix (e.g., 'glm-5.1:cloud')."""
+        return model.lower().endswith(":cloud")
+
+    @staticmethod
+    def _strip_cloud_suffix(model: str) -> str:
+        """Remove :cloud suffix from model name for provider matching."""
+        return model[:-6] if model.lower().endswith(":cloud") else model
 
     def _match_provider(
         self, model: str | None = None
@@ -273,7 +351,10 @@ class Config(BaseSettings):
                 return (p, spec.name) if p else (None, None)
             return None, None
 
-        model_lower = (model or self.agents.defaults.model).lower()
+        raw_model = model or self.agents.defaults.model
+        # Strip :cloud suffix for provider matching (cloud routing happens in get_api_base)
+        model_for_matching = self._strip_cloud_suffix(raw_model)
+        model_lower = model_for_matching.lower()
         model_normalized = model_lower.replace("-", "_")
         model_prefix = model_lower.split("/", 1)[0] if "/" in model_lower else ""
         normalized_prefix = model_prefix.replace("-", "_")
@@ -344,6 +425,11 @@ class Config(BaseSettings):
         from blackcat.providers.registry import find_by_name
 
         p, name = self._match_provider(model)
+
+        # Ollama cloud routing: models ending with :cloud use ollama.com
+        if name == "ollama" and model and self._is_cloud_model(model):
+            return "https://ollama.com/v1/"
+
         if p and p.api_base:
             return p.api_base
         if name:
@@ -352,4 +438,24 @@ class Config(BaseSettings):
                 return spec.default_api_base
         return None
 
-    model_config = ConfigDict(env_prefix="NANOBOT_", env_nested_delimiter="__")
+    def resolve_author(self, sender_id: str, channel: str) -> str:
+        """
+        Resolve sender_id to author name using configured identities.
+
+        Args:
+            sender_id: The platform-specific sender identifier.
+            channel: The channel name (telegram, whatsapp, discord, cli).
+
+        Returns:
+            Author name if found in config, otherwise "unknown".
+        """
+        for author_name, identity in self.authors.items():
+            platform_id = getattr(identity, channel, None)
+            if platform_id and platform_id == sender_id:
+                return author_name
+        return "unknown"
+
+    model_config = SettingsConfigDict(
+        env_prefix="BLACKCAT_",
+        env_nested_delimiter="__",
+    )

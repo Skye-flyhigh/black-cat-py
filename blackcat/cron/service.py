@@ -9,6 +9,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Literal
 
+from filelock import FileLock
+from loguru import logger
+
 from blackcat.cron.types import (
     CronJob,
     CronJobState,
@@ -17,8 +20,6 @@ from blackcat.cron.types import (
     CronSchedule,
     CronStore,
 )
-from filelock import FileLock
-from loguru import logger
 
 
 def _now_ms() -> int:
@@ -393,8 +394,7 @@ class CronService:
         channel: str | None = None,
         to: str | None = None,
         delete_after_run: bool = False,
-        channel_meta: dict | None = None,
-        session_key: str | None = None,
+        metadata: dict | None = None,
     ) -> CronJob:
         """Add a new job."""
         _validate_schedule_for_add(schedule)
@@ -418,6 +418,7 @@ class CronService:
             created_at_ms=now,
             updated_at_ms=now,
             delete_after_run=delete_after_run,
+            metadata=metadata,
         )
         if self._running:
             store = self._load_store()

@@ -11,12 +11,13 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Literal
 
+from loguru import logger
+from pydantic import Field
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
 from blackcat.config.schema import Base
-from loguru import logger
-from pydantic import Field
 
 
 class WhatsAppConfig(Base):
@@ -30,7 +31,7 @@ class WhatsAppConfig(Base):
 
 
 def _bridge_token_path() -> Path:
-    from blackcat.config.paths import get_runtime_subdir
+    from blackcat.utils.paths import get_runtime_subdir
 
     return get_runtime_subdir("whatsapp-auth") / "bridge-token"
 
@@ -163,7 +164,7 @@ class WhatsAppChannel(BaseChannel):
             await self._ws.close()
             self._ws = None
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send a message through WhatsApp."""
         if not self._ws or not self._connected:
             logger.warning("WhatsApp bridge not connected")
@@ -312,7 +313,7 @@ def _ensure_bridge_setup() -> Path:
     Returns the bridge directory. Raises RuntimeError if npm is not found
     or bridge cannot be built.
     """
-    from blackcat.config.paths import get_bridge_install_dir
+    from blackcat.utils.paths import get_bridge_install_dir
 
     user_bridge = get_bridge_install_dir()
 

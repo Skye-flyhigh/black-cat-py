@@ -1,4 +1,5 @@
 import pytest
+
 from blackcat.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from blackcat.utils.evaluator import evaluate_response
 

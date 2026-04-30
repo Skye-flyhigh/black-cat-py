@@ -11,8 +11,6 @@ from blackcat.command.router import CommandContext, CommandRouter
 from blackcat.utils.helpers import build_status_content
 from blackcat.utils.restart import set_restart_notice_to_env
 
-from blackcat import __version__
-
 
 async def cmd_stop(ctx: CommandContext) -> OutboundMessage:
     """Cancel all active tasks and subagents for the session."""
@@ -77,6 +75,8 @@ async def cmd_status(ctx: CommandContext) -> OutboundMessage:
         task_count += loop.subagents.get_running_count_by_session(ctx.key)
     except Exception:
         pass
+    from blackcat import __version__
+
     return OutboundMessage(
         channel=ctx.msg.channel,
         chat_id=ctx.msg.chat_id,

@@ -5,9 +5,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import blackcat.channels.weixin as weixin_mod
 import httpx
 import pytest
+
+import blackcat.channels.weixin as weixin_mod
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.weixin import (
     ITEM_IMAGE,

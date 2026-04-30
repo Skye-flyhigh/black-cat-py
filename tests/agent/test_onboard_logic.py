@@ -4,12 +4,13 @@ These tests focus on the business logic behind the onboard wizard,
 without testing the interactive UI components.
 """
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-import pytest
+from pydantic import BaseModel, Field
+
+from blackcat.cli import onboard as onboard_wizard
 
 # Import functions to test
 from blackcat.cli.commands import _merge_missing_defaults
@@ -26,9 +27,6 @@ from blackcat.cli.onboard import (
 )
 from blackcat.config.schema import Config
 from blackcat.utils.helpers import sync_workspace_templates
-from pydantic import BaseModel, Field
-
-from blackcat.cli import onboard as onboard_wizard
 
 
 class TestMergeMissingDefaults:
@@ -528,7 +526,6 @@ class TestValidateFieldConstraint:
             name: str = "hello"
 
         field_info = M.model_fields["name"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         assert _validate_field_constraint("anything", field_info) is None
 
@@ -540,7 +537,6 @@ class TestValidateFieldConstraint:
             count: int = Field(default=3, ge=0)
 
         field_info = M.model_fields["count"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         result = _validate_field_constraint(-1, field_info)
         assert result is not None
@@ -554,7 +550,6 @@ class TestValidateFieldConstraint:
             count: int = Field(default=3, ge=0)
 
         field_info = M.model_fields["count"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         assert _validate_field_constraint(0, field_info) is None
 
@@ -566,7 +561,6 @@ class TestValidateFieldConstraint:
             retries: int = Field(default=3, le=10)
 
         field_info = M.model_fields["retries"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         result = _validate_field_constraint(11, field_info)
         assert result is not None
@@ -580,7 +574,6 @@ class TestValidateFieldConstraint:
             retries: int = Field(default=3, le=10)
 
         field_info = M.model_fields["retries"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         assert _validate_field_constraint(10, field_info) is None
 
@@ -592,7 +585,6 @@ class TestValidateFieldConstraint:
             retries: int = Field(default=3, ge=0, le=10)
 
         field_info = M.model_fields["retries"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         assert _validate_field_constraint(5, field_info) is None
         assert _validate_field_constraint(-1, field_info) is not None
@@ -606,7 +598,6 @@ class TestValidateFieldConstraint:
             ratio: float = Field(default=0.5, gt=0.0, lt=1.0)
 
         field_info = M.model_fields["ratio"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         assert _validate_field_constraint(0.5, field_info) is None
         assert _validate_field_constraint(0.0, field_info) is not None
@@ -620,7 +611,6 @@ class TestValidateFieldConstraint:
             name: str = Field(default="x", min_length=1)
 
         field_info = M.model_fields["name"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         assert _validate_field_constraint("a", field_info) is None
         assert _validate_field_constraint("", field_info) is not None
@@ -633,14 +623,12 @@ class TestValidateFieldConstraint:
             tag: str = Field(default="x", max_length=5)
 
         field_info = M.model_fields["tag"]
-        from blackcat.cli.onboard import _validate_field_constraint
 
         assert _validate_field_constraint("abc", field_info) is None
         assert _validate_field_constraint("abcdef", field_info) is not None
 
     def test_real_send_max_retries_field(self):
         """Validate against the actual ChannelsConfig.send_max_retries field."""
-        from blackcat.cli.onboard import _validate_field_constraint
         from blackcat.config.schema import ChannelsConfig
 
         field_info = ChannelsConfig.model_fields["send_max_retries"]
@@ -840,7 +828,6 @@ class TestMainMenuUpdate:
             _SETTINGS_GETTER,
             _SETTINGS_SECTIONS,
             _SETTINGS_SETTER,
-            run_onboard,
         )
 
         assert "Channel Common" in _SETTINGS_SECTIONS

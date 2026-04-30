@@ -1,7 +1,8 @@
 """Configuration module for blackcat."""
 
 from blackcat.config.loader import get_config_path, load_config
-from blackcat.config.paths import (
+from blackcat.config.schema import Config
+from blackcat.utils.paths import (
     get_bridge_install_dir,
     get_cli_history_path,
     get_cron_dir,
@@ -13,7 +14,6 @@ from blackcat.config.paths import (
     get_workspace_path,
     is_default_workspace,
 )
-from blackcat.config.schema import Config
 
 __all__ = [
     "Config",

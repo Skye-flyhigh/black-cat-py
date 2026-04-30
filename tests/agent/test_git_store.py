@@ -1,8 +1,8 @@
 """Tests for GitStore — git-backed version control for memory files."""
 
-from pathlib import Path
 
 import pytest
+
 from blackcat.utils.gitstore import CommitInfo, GitStore
 
 TRACKED = ["SOUL.md", "USER.md", "memory/MEMORY.md"]

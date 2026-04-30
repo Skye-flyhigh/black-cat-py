@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from blackcat.agent.loop import AgentLoop
 from blackcat.agent.tools.message import MessageTool
 from blackcat.bus.events import InboundMessage, OutboundMessage

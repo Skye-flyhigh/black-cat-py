@@ -5,9 +5,9 @@ import sys
 from unittest.mock import patch
 
 import pytest
-from blackcat.agent.tools.filesystem import ReadFileTool, WriteFileTool
 
 from blackcat.agent.tools import file_state
+from blackcat.agent.tools.filesystem import ReadFileTool, WriteFileTool
 
 
 @pytest.fixture(autouse=True)

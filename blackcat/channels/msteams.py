@@ -32,13 +32,14 @@ except ImportError:  # pragma: no cover
     fcntl = None
 
 import httpx
+from loguru import logger
+from pydantic import Field
+
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_workspace_path
 from blackcat.config.schema import Base
-from loguru import logger
-from pydantic import Field
+from blackcat.utils.paths import get_workspace_path
 
 MSTEAMS_AVAILABLE = (
     importlib.util.find_spec("jwt") is not None
@@ -234,7 +235,7 @@ class MSTeamsChannel(BaseChannel):
             await self._http.aclose()
             self._http = None
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def _send_impl(self, msg: OutboundMessage) -> None:
         """Send a plain text reply into an existing Teams conversation."""
         if not self._http:
             raise RuntimeError("MSTeams HTTP client not initialized")
