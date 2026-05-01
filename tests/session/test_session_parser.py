@@ -1,4 +1,4 @@
-"""Tests for blackcat.dream.session_parser."""
+"""Tests for blackcat.session.parser."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from blackcat.dream.session_parser import SessionParser, _looks_like_error
+from blackcat.session.parser import SessionParser, _looks_like_error
 
 
 class TestLooksLikeError:

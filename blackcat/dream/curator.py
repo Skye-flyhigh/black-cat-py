@@ -6,8 +6,7 @@ from collections import Counter
 from typing import Any
 
 from loguru import logger
-
-from blackcat.dream.session_parser import SessionSummary
+from blackcat.session.parser import SessionSummary
 
 
 class BehavioralAnalyzer:

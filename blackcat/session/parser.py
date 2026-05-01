@@ -14,7 +14,7 @@ from typing import Any
 
 from loguru import logger
 
-from blackcat.utils.paths import get_workspace_dir
+from blackcat.utils.paths import get_workspace_path
 
 
 @dataclass(frozen=True)
@@ -70,7 +70,7 @@ class SessionParser:
     """Parse ``sessions/*.jsonl`` into structured behavioral telemetry."""
 
     def __init__(self, sessions_dir: Path | None = None) -> None:
-        self.sessions_dir = sessions_dir or get_workspace_dir() / "sessions"
+        self.sessions_dir = sessions_dir or get_workspace_path() / "sessions"
 
     def parse_all(self, since: datetime | None = None) -> list[SessionSummary]:
         """Parse every ``*.jsonl`` session file.

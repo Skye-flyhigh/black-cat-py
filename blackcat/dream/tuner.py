@@ -9,7 +9,7 @@ from typing import Any
 from loguru import logger
 
 from blackcat.agent.skills import SkillsLoader
-from blackcat.utils.paths import get_workspace_dir
+from blackcat.utils.paths import get_workspace_path
 
 
 class SkillEvolver:
@@ -20,7 +20,7 @@ class SkillEvolver:
         skills_loader: SkillsLoader | None = None,
         min_evidence: int = 3,
     ) -> None:
-        self.loader = skills_loader or SkillsLoader(get_workspace_dir())
+        self.loader = skills_loader or SkillsLoader(get_workspace_path())
         self.min_evidence = min_evidence
 
     def list_skills(self) -> dict[str, Path]:
