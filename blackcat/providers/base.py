@@ -12,7 +12,7 @@ from typing import Any
 
 from loguru import logger
 
-from blackcat.utils.helpers import image_placeholder_text
+from blackcat.utils.media import image_placeholder_text
 
 
 @dataclass
@@ -90,6 +90,8 @@ _SYNTHETIC_USER_CONTENT = "(conversation continued)"
 
 class LLMProvider(ABC):
     """Base class for LLM providers."""
+
+    supports_progress_deltas = False
 
     _CHAT_RETRY_DELAYS = (1, 2, 4)
     _PERSISTENT_MAX_DELAY = 60

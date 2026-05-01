@@ -34,10 +34,10 @@ from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
 from blackcat.command.builtin import build_help_text
-from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
 from blackcat.security.network import validate_url_target
 from blackcat.utils.formatting import split_message
+from blackcat.utils.paths import get_media_dir
 
 TELEGRAM_MAX_MESSAGE_LEN = 4000  # Telegram message character limit
 # Telegram's actual API limit is 4096; we split raw markdown at 4000 as a
@@ -266,6 +266,7 @@ class TelegramChannel(BaseChannel):
         BotCommand("stop", "Stop the current task"),
         BotCommand("restart", "Restart the bot"),
         BotCommand("status", "Show bot status"),
+        BotCommand("history", "Show recent conversation messages"),
         BotCommand("dream", "Run Dream memory consolidation now"),
         BotCommand("dream_log", "Show the latest Dream memory change"),
         BotCommand("dream_restore", "Restore Dream memory to an earlier version"),
@@ -533,13 +534,15 @@ class TelegramChannel(BaseChannel):
                     continue
 
                 media_bytes = Path(media_path).read_bytes()
+                filename = Path(media_path).name
+                send_kwargs = {param: media_bytes, "filename": filename}
                 await self._call_with_retry(
                     sender,
                     chat_id=chat_id,
-                    **{param: media_bytes},
                     reply_parameters=reply_params,
                     **thread_kwargs,
                     **extra,
+                    **send_kwargs,
                 )
             except Exception as e:
                 filename = media_path.rsplit("/", 1)[-1]

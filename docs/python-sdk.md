@@ -7,11 +7,11 @@ Use blackcat as a library — no CLI, no gateway, just Python.
 ```python
 import asyncio
 
-from blackcat import Nanobot
+from blackcat import Blackcat
 
 
 async def main() -> None:
-    bot = Nanobot.from_config()
+    bot = Blackcat.from_config()
     result = await bot.run("What time is it in Tokyo?")
     print(result.content)
 
@@ -19,16 +19,16 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-`Nanobot.from_config()` reuses your normal `~/.blackcat/config.json`, so the SDK follows the same provider, model, tools, and workspace defaults as the CLI unless you override them.
+`Blackcat.from_config()` reuses your normal `~/.blackcat/config.json`, so the SDK follows the same provider, model, tools, and workspace defaults as the CLI unless you override them.
 
 ## Common Patterns
 
 ### Use a specific config or workspace
 
 ```python
-from blackcat import Nanobot
+from blackcat import Blackcat
 
-bot = Nanobot.from_config(
+bot = Blackcat.from_config(
     config_path="~/.blackcat/config.json",
     workspace="/my/project",
 )
@@ -62,9 +62,9 @@ result = await bot.run("Review this change", hooks=[AuditHook()])
 
 ## API Reference
 
-### `Nanobot.from_config(config_path=None, *, workspace=None)`
+### `Blackcat.from_config(config_path=None, *, workspace=None)`
 
-Create a `Nanobot` instance from a config file.
+Create a `Blackcat` instance from a config file.
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -188,7 +188,7 @@ class Censor(AgentHook):
 import asyncio
 import time
 
-from blackcat import Nanobot
+from blackcat import Blackcat
 from blackcat.agent import AgentHook, AgentHookContext
 
 
@@ -206,7 +206,7 @@ class TimingHook(AgentHook):
 
 
 async def main() -> None:
-    bot = Nanobot.from_config(workspace="/my/project")
+    bot = Blackcat.from_config(workspace="/my/project")
     result = await bot.run(
         "Explain the main function",
         session_key="sdk:demo",

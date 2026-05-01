@@ -4,6 +4,7 @@ from typing import Any
 
 from blackcat.agent.tools.base import Tool
 from blackcat.lens import LensClient
+from blackcat.utils.paths import resolve_path
 
 
 class LensDefinitionTool(Tool):
@@ -55,7 +56,7 @@ class LensDefinitionTool(Tool):
         character = kwargs["character"]
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             locations = await self.client.get_definition(uri, line, character)
 
@@ -129,7 +130,7 @@ class LensReferencesTool(Tool):
         character = kwargs["character"]
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             locations = await self.client.get_references(uri, line, character)
 
@@ -204,7 +205,7 @@ class LensHoverTool(Tool):
         character = kwargs["character"]
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             hover = await self.client.get_hover(uri, line, character)
 
@@ -324,7 +325,7 @@ class LensDocumentSymbolTool(Tool):
         file_path = kwargs["file_path"]
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             symbols = await self.client.get_document_symbols(uri)
 
@@ -401,7 +402,7 @@ class LensCompletionTool(Tool):
         character = kwargs["character"]
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             result = await self.client.get_completion(uri, line, character)
 
@@ -486,7 +487,7 @@ class LensRenameTool(Tool):
         new_name = kwargs["new_name"]
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             result = await self.client.get_rename_edits(uri, line, character, new_name)
 
@@ -576,7 +577,7 @@ class LensCodeActionTool(Tool):
         end_character = kwargs["end_character"]
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             actions = await self.client.get_code_actions(
                 uri, start_line, start_character, end_line, end_character
@@ -656,7 +657,7 @@ class LensFormatTool(Tool):
         insert_spaces = kwargs.get("insert_spaces", True)
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             edits = await self.client.get_formatting(uri, tab_size, insert_spaces)
 
@@ -732,7 +733,7 @@ class LensSignatureHelpTool(Tool):
         character = kwargs["character"]
         workspace = kwargs.get("workspace")
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             uri = self.client._make_file_uri(full_path)
             result = await self.client.get_signature_help(uri, line, character)
 
@@ -843,7 +844,7 @@ class LensDiagnosticsTool(Tool):
             actual_source = self.default_source
 
         try:
-            full_path = self.client.resolve_path(file_path, workspace)
+            full_path = resolve_path(file_path, workspace)
             diagnostics = await self.client.get_diagnostics(
                 str(full_path), workspace, source=actual_source
             )

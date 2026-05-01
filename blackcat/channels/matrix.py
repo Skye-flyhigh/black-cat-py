@@ -38,15 +38,15 @@ try:
     from nio.exceptions import EncryptionError
 except ImportError as e:
     raise ImportError(
-        "Matrix dependencies not installed. Run: pip install nanobot-ai[matrix]"
+        "Matrix dependencies not installed. Run: pip install blackcat-ai[matrix]"
     ) from e
 
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_data_dir, get_media_dir
 from blackcat.config.schema import Base
 from blackcat.utils.helpers import safe_filename
+from blackcat.utils.paths import get_data_dir, get_media_dir
 
 TYPING_NOTICE_TIMEOUT_MS = 30_000
 # Must stay below TYPING_NOTICE_TIMEOUT_MS so the indicator doesn't expire mid-processing.
@@ -141,19 +141,19 @@ def _build_matrix_text_content(
 ) -> dict[str, object]:
     """
     Constructs and returns a dictionary representing the matrix text content with optional
-    HTML formatting and reference to an existing event for replacement. This function is 
+    HTML formatting and reference to an existing event for replacement. This function is
     primarily used to create content payloads compatible with the Matrix messaging protocol.
 
     :param text: The plain text content to include in the message.
     :type text: str
-    :param event_id: Optional ID of the event to replace. If provided, the function will 
-        include information indicating that the message is a replacement of the specified 
+    :param event_id: Optional ID of the event to replace. If provided, the function will
+        include information indicating that the message is a replacement of the specified
         event.
     :type event_id: str | None
     :param thread_relates_to: Optional Matrix thread relation metadata. For edits this is
         stored in ``m.new_content`` so the replacement remains in the same thread.
     :type thread_relates_to: dict[str, object] | None
-    :return: A dictionary containing the matrix text content, potentially enriched with 
+    :return: A dictionary containing the matrix text content, potentially enriched with
         HTML formatting and replacement metadata if applicable.
     :rtype: dict[str, object]
     """
@@ -263,10 +263,18 @@ class MatrixChannel(BaseChannel):
         self.store_path.mkdir(parents=True, exist_ok=True)
         self.session_path = self.store_path / "session.json"
 
+        # Replace ':' with '_' to produce a Windows-safe filename
+        safe_store_name = self.config.user_id.replace(":", "_") + f"_{self.config.device_id}.db"
+
         self.client = AsyncClient(
-            homeserver=self.config.homeserver, user=self.config.user_id,
+            homeserver=self.config.homeserver,
+            user=self.config.user_id,
             store_path=self.store_path,
-            config=AsyncClientConfig(store_sync_tokens=True, encryption_enabled=self.config.e2ee_enabled),
+            config=AsyncClientConfig(
+                store_sync_tokens=True,
+                encryption_enabled=self.config.e2ee_enabled,
+                store_name=safe_store_name,
+            ),
         )
 
         self._register_event_callbacks()

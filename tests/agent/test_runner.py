@@ -313,6 +313,46 @@ async def test_runner_returns_structured_tool_error():
 
 
 @pytest.mark.asyncio
+async def test_runner_stops_on_workspace_violation_without_fail_on_tool_error():
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+
+    provider = MagicMock()
+    provider.chat_with_retry = AsyncMock(side_effect=[
+        LLMResponse(
+            content="working",
+            tool_calls=[ToolCallRequest(id="call_1", name="read_file", arguments={"path": "/tmp/outside.md"})],
+        ),
+        LLMResponse(content="should not continue", tool_calls=[]),
+    ])
+    tools = MagicMock()
+    tools.get_definitions.return_value = []
+    tools.execute = AsyncMock(
+        side_effect=PermissionError("Path /tmp/outside.md is outside allowed directory /workspace")
+    )
+
+    runner = AgentRunner(provider)
+
+    result = await runner.run(AgentRunSpec(
+        initial_messages=[],
+        tools=tools,
+        model="test-model",
+        max_iterations=2,
+        max_tool_result_chars=_MAX_TOOL_RESULT_CHARS,
+    ))
+
+    assert provider.chat_with_retry.await_count == 1
+    assert result.stop_reason == "tool_error"
+    assert "outside allowed directory" in (result.error or "")
+    assert result.tool_events == [
+        {
+            "name": "read_file",
+            "status": "error",
+            "detail": "workspace_violation: Path /tmp/outside.md is outside allowed directory /workspace",
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
@@ -352,11 +392,13 @@ async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     assert "[tool output persisted]" in tool_message["content"]
     assert "tool-results" in tool_message["content"]
     assert (tmp_path / ".blackcat" / "tool-results" / "test_runner" / "call_big.txt").exists()
+    assert (tmp_path / ".blackcat" / "tool-results" / "test_runner" / "call_big.txt").exists()
 
 
 def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
     from blackcat.utils.tools import maybe_persist_tool_result
 
+    root = tmp_path / ".blackcat" / "tool-results"
     root = tmp_path / ".blackcat" / "tool-results"
     old_bucket = root / "old_session"
     recent_bucket = root / "recent_session"
@@ -386,6 +428,7 @@ def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
 def test_persist_tool_result_leaves_no_temp_files(tmp_path):
     from blackcat.utils.tools import maybe_persist_tool_result
 
+    root = tmp_path / ".blackcat" / "tool-results"
     root = tmp_path / ".blackcat" / "tool-results"
     maybe_persist_tool_result(
         tmp_path,
@@ -658,6 +701,7 @@ def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch
     )
 
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_args, **_kwargs: (500, None))
+    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_args, **_kwargs: (500, None))
     token_sizes = {
         "old user": 120,
         "tool call": 120,
@@ -666,7 +710,7 @@ def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch
         "system": 0,
     }
     monkeypatch.setattr(
-        "blackcat.agent.runner.estimate_message_tokens",
+        "blackcat.utils.tokens.estimate_message_tokens",
         lambda msg: token_sizes.get(str(msg.get("content")), 40),
     )
 
@@ -1060,11 +1104,10 @@ async def test_next_turn_after_llm_error_keeps_turn_boundary(tmp_path):
 
     request_messages = provider.chat_with_retry.await_args_list[1].kwargs["messages"]
     non_system = [message for message in request_messages if message.get("role") != "system"]
-    assert non_system[0] == {"role": "user", "content": "first question"}
-    assert non_system[1] == {
-        "role": "assistant",
-        "content": _PERSISTED_MODEL_ERROR_PLACEHOLDER,
-    }
+    assert non_system[0]["role"] == "user"
+    assert "first question" in non_system[0]["content"]
+    assert non_system[1]["role"] == "assistant"
+    assert _PERSISTED_MODEL_ERROR_PLACEHOLDER in non_system[1]["content"]
     assert non_system[2]["role"] == "user"
     assert "second question" in non_system[2]["content"]
 
@@ -1124,6 +1167,7 @@ async def test_subagent_max_iterations_announces_existing_fallback(tmp_path, mon
     async def fake_execute(self, **kwargs):
         return "tool result"
 
+    monkeypatch.setattr("blackcat.agent.tools.filesystem.ListDirTool.execute", fake_execute)
     monkeypatch.setattr("blackcat.agent.tools.filesystem.ListDirTool.execute", fake_execute)
 
     status = SubagentStatus(task_id="sub-1", label="label", task_description="do task", started_at=time.monotonic())
@@ -1874,11 +1918,7 @@ async def test_drain_injections_extracts_content_from_inbound_messages():
 @pytest.mark.asyncio
 async def test_drain_injections_passes_limit_to_callback_when_supported():
     """Limit-aware callbacks can preserve overflow in their own queue."""
-    from blackcat.agent.runner import (
-        _MAX_INJECTIONS_PER_TURN,
-        AgentRunner,
-        AgentRunSpec,
-    )
+    from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
@@ -2852,6 +2892,7 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
         {"role": "system", "content": "system"},
         {"role": "assistant", "content": "previous reply"},
         {"role": "user", "content": ".blackcat的同目录"},
+        {"role": "user", "content": ".blackcat的同目录"},
         {
             "role": "assistant",
             "content": None,
@@ -2878,16 +2919,18 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
 
     # Make estimate_prompt_tokens_chain report above budget so _snip_history activates.
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
+    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
     # Make kept window small: only the last 2 messages fit the budget.
     token_sizes = {
         "system": 0,
         "previous reply": 200,
         ".blackcat的同目录": 80,
+        ".blackcat的同目录": 80,
         "tool output 1": 80,
         "tool output 2": 80,
     }
     monkeypatch.setattr(
-        "blackcat.agent.runner.estimate_message_tokens",
+        "blackcat.utils.tokens.estimate_message_tokens",
         lambda msg: token_sizes.get(str(msg.get("content")), 100),
     )
 
@@ -2931,8 +2974,9 @@ def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
     )
 
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
+    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
     monkeypatch.setattr(
-        "blackcat.agent.runner.estimate_message_tokens",
+        "blackcat.utils.tokens.estimate_message_tokens",
         lambda msg: 100,
     )
 

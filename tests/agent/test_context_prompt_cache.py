@@ -189,12 +189,22 @@ def test_identity_has_no_behavioral_instructions(tmp_path) -> None:
     workspace = _make_workspace(tmp_path)
     builder = ContextBuilder(workspace)
 
-    # load_identity is synchronous and returns a dict
-    identity = builder.load_identity()
-    identity_text = "\n\n".join(identity.values()) if identity else ""
-    assert "You are blackcat" not in identity_text
-    assert "Act, don't narrate" not in identity_text
-    assert "Execution Rules" not in identity_text
+    identity = builder._get_guidelines(channel=None)
+    assert "You are blackcat" not in identity
+    assert "Act, don't narrate" not in identity
+    assert "Execution Rules" not in identity
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_does_not_warn_about_message_time_markers(tmp_path) -> None:
+    """Parroting is prevented by not annotating assistant turns in history;
+    no prompt-level warning about ``[Message Time: ...]`` is needed."""
+    workspace = _make_workspace(tmp_path)
+    builder = ContextBuilder(workspace)
+
+    prompt = await builder.build_system_prompt()
+
+    assert "Message Time" not in prompt
 
 
 def test_default_soul_template_contains_execution_rules() -> None:

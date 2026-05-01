@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NanobotClient as BlackcatClient } from "@/lib/blackcat-client";
+import { BlackcatClient } from "@/lib/blackcat-client";
 
 /**
- * Minimal fake WebSocket implementing the subset NanobotClient touches.
+ * Minimal fake WebSocket implementing the subset BlackcatClient touches.
  * Every instance is retrievable via ``FakeSocket.instances`` so tests can
  * drive open/close/message lifecycles deterministically.
  */
@@ -68,7 +68,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("NanobotClient", () => {
+describe("BlackcatClient", () => {
   it("routes events to the matching chat handler", () => {
     const client = new BlackcatClient({
       url: "ws://test",

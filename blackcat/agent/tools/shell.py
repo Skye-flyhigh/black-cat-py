@@ -17,7 +17,7 @@ from blackcat.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
-from blackcat.config.paths import get_media_dir
+from blackcat.utils.paths import get_media_dir
 
 _IS_WINDOWS = sys.platform == "win32"
 
@@ -144,9 +144,10 @@ class ExecTool(Tool):
 
         if self.path_append:
             if _IS_WINDOWS:
-                env["PATH"] = env.get("PATH", "") + ";" + self.path_append
+                env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
             else:
-                command = f'export PATH="$PATH:{self.path_append}"; {command}'
+                env["BLACKCAT_PATH_APPEND"] = self.path_append
+                command = f'export PATH="$PATH{os.pathsep}$BLACKCAT_PATH_APPEND"; {command}'
 
         try:
             process = await self._spawn(command, cwd, env)

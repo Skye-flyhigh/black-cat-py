@@ -15,10 +15,9 @@ from blackcat.agent.hook import AgentHook, AgentHookContext
 from blackcat.agent.tools.ask import AskUserInterrupt
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.providers.base import LLMProvider, LLMResponse, ToolCallRequest
-from blackcat.utils.formatting import build_assistant_message
+from blackcat.utils.formatting import build_assistant_message, strip_think, truncate_text
 from blackcat.utils.helpers import (
     find_legal_message_start,
-    truncate_text,
 )
 from blackcat.utils.prompt_templates import render_template
 from blackcat.utils.runtime import (
@@ -592,8 +591,8 @@ class AgentRunner:
         if timeout_s is None:
             # Default to a finite timeout to avoid per-session lock starvation when an LLM
             # request hangs indefinitely (e.g. gateway/network stall).
-            # Set NANOBOT_LLM_TIMEOUT_S=0 to disable.
-            raw = os.environ.get("NANOBOT_LLM_TIMEOUT_S", "300").strip()
+            # Set BLACKCAT_LLM_TIMEOUT_S=0 to disable.
+            raw = os.environ.get("BLACKCAT_LLM_TIMEOUT_S", "300").strip()
             try:
                 timeout_s = float(raw)
             except (TypeError, ValueError):
@@ -606,13 +605,41 @@ class AgentRunner:
             messages,
             tools=spec.tools.get_definitions(),
         )
-        if hook.wants_streaming():
+        wants_streaming = hook.wants_streaming()
+        wants_progress_streaming = (
+            not wants_streaming
+            and spec.progress_callback is not None
+            and getattr(self.provider, "supports_progress_deltas", False) is True
+        )
+
+        if wants_streaming:
             async def _stream(delta: str) -> None:
+                if delta:
+                    context.streamed_content = True
                 await hook.on_stream(context, delta)
 
             coro = self.provider.chat_stream_with_retry(
                 **kwargs,
                 on_content_delta=_stream,
+            )
+        elif wants_progress_streaming:
+            stream_buf = ""
+
+            async def _stream_progress(delta: str) -> None:
+                nonlocal stream_buf
+                if not delta:
+                    return
+                prev_clean = strip_think(stream_buf)
+                stream_buf += delta
+                new_clean = strip_think(stream_buf)
+                incremental = new_clean[len(prev_clean):]
+                if incremental:
+                    context.streamed_content = True
+                    await spec.progress_callback(incremental)
+
+            coro = self.provider.chat_stream_with_retry(
+                **kwargs,
+                on_content_delta=_stream_progress,
             )
         else:
             coro = self.provider.chat_with_retry(**kwargs)
@@ -734,6 +761,15 @@ class AgentRunner:
                 "status": "error",
                 "detail": prep_error.split(": ", 1)[-1][:120],
             }
+            if self._is_workspace_violation(prep_error):
+                logger.warning(
+                    "Tool {} blocked by workspace/safety guard during preparation; aborting turn: {}",
+                    tool_call.name,
+                    prep_error.replace("\n", " ").strip()[:200],
+                )
+                event["detail"] = ("workspace_violation: "
+                                   + prep_error.replace("\n", " ").strip())[:160]
+                return prep_error, event, RuntimeError(prep_error)
             return prep_error + hint, event, RuntimeError(prep_error) if spec.fail_on_tool_error else None
         try:
             if tool is not None:
@@ -751,6 +787,15 @@ class AgentRunner:
             if isinstance(exc, AskUserInterrupt):
                 event["status"] = "waiting"
                 return "", event, exc
+            if self._is_workspace_violation(str(exc)):
+                logger.warning(
+                    "Tool {} blocked by workspace/safety guard; aborting turn: {}",
+                    tool_call.name,
+                    str(exc).replace("\n", " ").strip()[:200],
+                )
+                event["detail"] = ("workspace_violation: "
+                                   + str(exc).replace("\n", " ").strip())[:160]
+                return f"Error: {type(exc).__name__}: {exc}", event, exc
             if spec.fail_on_tool_error:
                 return f"Error: {type(exc).__name__}: {exc}", event, exc
             return f"Error: {type(exc).__name__}: {exc}", event, None
@@ -761,6 +806,17 @@ class AgentRunner:
                 "status": "error",
                 "detail": result.replace("\n", " ").strip()[:120],
             }
+
+            # check the outside workspace error and break loop
+            if self._is_workspace_violation(result):
+                logger.warning(
+                    "Tool {} blocked by workspace/safety guard; aborting turn: {}",
+                    tool_call.name,
+                    result.replace("\n", " ").strip()[:200],
+                )
+                event["detail"] = ("workspace_violation: "
+                                   + result.replace("\n", " ").strip())[:160]
+                return result, event, RuntimeError(result)
             if spec.fail_on_tool_error:
                 return result + hint, event, RuntimeError(result)
             return result + hint, event, None
@@ -772,6 +828,24 @@ class AgentRunner:
         elif len(detail) > 120:
             detail = detail[:120] + "..."
         return result, {"name": tool_call.name, "status": "ok", "detail": detail}, None
+
+    # Markers identifying tool results that represent a workspace / safety boundary rejection.
+    _WORKSPACE_BLOCK_MARKERS: tuple[str, ...] = (
+        "blocked by safety guard",
+        "outside the configured workspace",
+        "outside allowed directory",
+        "working_dir is outside",
+        "working_dir could not be resolved",
+        "path traversal detected",
+        "path outside working dir",
+    )
+
+    @classmethod
+    def _is_workspace_violation(cls, text: str) -> bool:
+        if not text:
+            return False
+        lowered = text.lower()
+        return any(marker in lowered for marker in cls._WORKSPACE_BLOCK_MARKERS)
 
     async def _emit_checkpoint(
         self,

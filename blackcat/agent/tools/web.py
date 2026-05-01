@@ -12,13 +12,9 @@ from urllib.parse import quote, urlparse
 import httpx
 
 from blackcat.agent.tools.base import Tool, tool_parameters
-from blackcat.agent.tools.schema import (
-    IntegerSchema,
-    StringSchema,
-    tool_parameters_schema,
-)
-from blackcat.config.schema import WebSearchConfig
-from blackcat.utils.media import build_image_content_blocks
+from blackcat.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
+from blackcat.config.schema import WebFetchConfig, WebSearchConfig
+from blackcat.utils.helpers import build_image_content_blocks
 
 # ========== Schema definitions ==========
 
@@ -38,7 +34,7 @@ _WEB_FETCH_PARAMETERS = tool_parameters_schema(
 )
 
 # Shared constants
-USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
+_DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
 MAX_REDIRECTS = 5  # Limit redirects to prevent DoS attacks
 MAX_QUERY_LENGTH = 500  # Prevent overly long queries
 
@@ -191,6 +187,11 @@ def _validate_url(url: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _validate_url_safe(url: str) -> tuple[bool, str]:
+    """Validate URL with SSRF protection: scheme, domain, and resolved IP check."""
+    from blackcat.security.network import validate_url_target
+    return validate_url_target(url)
+
 def _validate_query(query: str) -> tuple[bool, str]:
     """Validate search query: non-empty, reasonable length."""
     if not query or not query.strip():
@@ -237,11 +238,39 @@ class WebSearchTool(Tool):
 
     parameters: dict[str, Any]  # type: ignore[assignment]
 
-    def __init__(self, config: WebSearchConfig | None = None, proxy: str | None = None):
+    def __init__(
+        self, config: WebSearchConfig | None = None, proxy: str | None = None, user_agent: str | None = None
+    ):
         from blackcat.config.schema import WebSearchConfig
 
         self.config = config if config is not None else WebSearchConfig()
         self.proxy = proxy
+        self.user_agent = user_agent if user_agent is not None else _DEFAULT_USER_AGENT
+
+    def _effective_provider(self) -> str:
+        """Resolve the backend that execute() will actually use."""
+        provider = self.config.provider.strip().lower() or "brave"
+        if provider == "duckduckgo":
+            return "duckduckgo"
+        if provider == "brave":
+            api_key = self.config.api_key or os.environ.get("BRAVE_API_KEY", "")
+            return "brave" if api_key else "duckduckgo"
+        if provider == "tavily":
+            api_key = self.config.api_key or os.environ.get("TAVILY_API_KEY", "")
+            return "tavily" if api_key else "duckduckgo"
+        if provider == "searxng":
+            base_url = (self.config.base_url or os.environ.get("SEARXNG_BASE_URL", "")).strip()
+            return "searxng" if base_url else "duckduckgo"
+        if provider == "jina":
+            api_key = self.config.api_key or os.environ.get("JINA_API_KEY", "")
+            return "jina" if api_key else "duckduckgo"
+        if provider == "kagi":
+            api_key = self.config.api_key or os.environ.get("KAGI_API_KEY", "")
+            return "kagi" if api_key else "duckduckgo"
+        if provider == "olostep":
+            api_key = self.config.api_key or os.environ.get("OLOSTEP_API_KEY", "")
+            return "olostep" if api_key else "duckduckgo"
+        return provider
 
     @property
     def name(self) -> str:
@@ -249,11 +278,7 @@ class WebSearchTool(Tool):
 
     @property
     def description(self) -> str:
-        return (
-            "Search the web. Returns titles, URLs, and snippets. "
-            "count defaults to 5 (max 10). "
-            "Use web_fetch to read a specific page in full."
-        )
+        return "Search the web using the configured provider. Returns titles, URLs, and snippets."
 
     @property
     def read_only(self) -> bool:
@@ -275,9 +300,11 @@ class WebSearchTool(Tool):
         if not is_valid:
             return f"Error: {error_msg}"
 
-        provider = self.config.provider.strip().lower() or "brave"
+        provider = self._effective_provider()
         n = min(max(count or self.config.max_results, 1), 10)
 
+        if provider == "olostep":
+            return await self._search_olostep(query, n)
         if provider == "duckduckgo":
             return await self._search_duckduckgo(query, n)
         elif provider == "tavily":
@@ -293,6 +320,58 @@ class WebSearchTool(Tool):
         else:
             return f"Error: unknown search provider '{provider}'"
 
+    async def _search_olostep(self, query: str, n: int) -> str:
+        try:
+            from olostep import AsyncOlostep, Olostep_BaseError
+        except ImportError:
+            return "Error: olostep package not installed. Run: pip install olostep"
+        api_key = self.config.api_key or os.environ.get("OLOSTEP_API_KEY", "")
+        if not api_key:
+            logger.warning("OLOSTEP_API_KEY not set, falling back to DuckDuckGo")
+            return await self._search_duckduckgo(query, n)
+        try:
+            async with AsyncOlostep(api_key=api_key) as client:
+                if self.proxy:
+                    transport = getattr(client, "_transport", None)
+                    http_client = getattr(transport, "_client", None)
+                    if transport is not None and isinstance(http_client, httpx.AsyncClient):
+                        await http_client.aclose()
+                        transport._client = httpx.AsyncClient(  # type: ignore[attr-defined]
+                            proxy=self.proxy,
+                            headers=dict(http_client.headers),
+                            timeout=http_client.timeout,
+                            limits=httpx.Limits(
+                                max_keepalive_connections=100,
+                                max_connections=200,
+                            ),
+                            http2=True,
+                        )
+                result = await client.answers.create(task=query)
+
+            sources = getattr(result, "sources", None) or []
+            source_lines = []
+            for i, source in enumerate(sources[:n], 1):
+                if isinstance(source, dict):
+                    title = source.get("title", "")
+                    url = source.get("url", "")
+                else:
+                    title = getattr(source, "title", "")
+                    url = getattr(source, "url", "")
+                if title and url:
+                    source_lines.append(f"{i}. {title} — {url}")
+                elif url:
+                    source_lines.append(f"{i}. {url}")
+                elif title:
+                    source_lines.append(f"{i}. {title}")
+
+            answer_text = getattr(result, "answer", "") or ""
+            items = [{"title": answer_text or "Olostep answer", "url": "", "content": "\n".join(source_lines)}]
+            return _format_results(query, items, n)
+        except Olostep_BaseError as e:
+            return f"Olostep search error: {type(e).__name__}: {e}"
+        except Exception as e:
+            return f"Olostep search error: {type(e).__name__}: {e}"
+
     async def _search_brave(self, query: str, n: int) -> str:
         api_key = self.config.api_key or os.environ.get("BRAVE_API_KEY", "")
         if not api_key:
@@ -303,7 +382,11 @@ class WebSearchTool(Tool):
                 r = await client.get(
                     "https://api.search.brave.com/res/v1/web/search",
                     params={"q": query, "count": n},
-                    headers={"Accept": "application/json", "X-Subscription-Token": api_key},
+                    headers={
+                        "Accept": "application/json",
+                        "X-Subscription-Token": api_key,
+                        "User-Agent": self.user_agent,
+                    },
                     timeout=10.0,
                 )
                 r.raise_for_status()
@@ -324,7 +407,7 @@ class WebSearchTool(Tool):
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 r = await client.post(
                     "https://api.tavily.com/search",
-                    headers={"Authorization": f"Bearer {api_key}"},
+                    headers={"Authorization": f"Bearer {api_key}", "User-Agent": self.user_agent},
                     json={"query": query, "max_results": n},
                     timeout=15.0,
                 )
@@ -347,7 +430,7 @@ class WebSearchTool(Tool):
                 r = await client.get(
                     endpoint,
                     params={"q": query, "format": "json"},
-                    headers={"User-Agent": USER_AGENT},
+                    headers={"User-Agent": self.user_agent},
                     timeout=10.0,
                 )
                 r.raise_for_status()
@@ -361,7 +444,11 @@ class WebSearchTool(Tool):
             logger.warning("JINA_API_KEY not set, falling back to DuckDuckGo")
             return await self._search_duckduckgo(query, n)
         try:
-            headers = {"Accept": "application/json", "Authorization": f"Bearer {api_key}"}
+            headers = {
+                "Accept": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": self.user_agent,
+            }
             encoded_query = quote(query, safe="")
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 r = await client.get(
@@ -390,7 +477,7 @@ class WebSearchTool(Tool):
                 r = await client.get(
                     "https://kagi.com/api/v0/search",
                     params={"q": query, "limit": n},
-                    headers={"Authorization": f"Bot {api_key}"},
+                    headers={"Authorization": f"Bot {api_key}", "User-Agent": self.user_agent},
                     timeout=10.0,
                 )
                 r.raise_for_status()
@@ -432,9 +519,13 @@ class WebFetchTool(Tool):
 
     parameters: dict[str, Any]  # type: ignore[assignment]
 
-    def __init__(self, max_chars: int = 50000, proxy: str | None = None):
-        self.max_chars = max_chars
+    def __init__(self, config: WebFetchConfig | None = None, proxy: str | None = None, user_agent: str | None = None, max_chars: int = 50000):
+        from blackcat.config.schema import WebFetchConfig
+
+        self.config = config if config is not None else WebFetchConfig()
         self.proxy = proxy
+        self.user_agent = user_agent or _DEFAULT_USER_AGENT
+        self.max_chars = max_chars
 
     @property
     def name(self) -> str:
@@ -452,22 +543,25 @@ class WebFetchTool(Tool):
     def read_only(self) -> bool:
         return True
 
-    async def execute(self, url: str, extract_mode: str = "markdown", max_chars: int | None = None, **kwargs: Any) -> Any:
-        max_chars = max_chars or self.max_chars
-        is_valid, error_msg = _validate_url(url)
+    async def execute(
+        self,
+        url: str,
+        extract_mode: str = "markdown",
+        max_chars: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        extract_mode = kwargs.pop("extractMode", extract_mode)
+        max_chars = kwargs.pop("maxChars", max_chars) or self.max_chars
+        is_valid, error_msg = _validate_url_safe(url)
         if not is_valid:
             return json.dumps({"error": f"URL validation failed: {error_msg}", "url": url}, ensure_ascii=False)
 
         # Detect and fetch images directly to avoid Jina's textual image captioning
         try:
             async with httpx.AsyncClient(proxy=self.proxy, follow_redirects=True, max_redirects=MAX_REDIRECTS, timeout=15.0) as client:
-                async with client.stream("GET", url, headers={"User-Agent": USER_AGENT}) as r:
+                async with client.stream("GET", url, headers={"User-Agent": self.user_agent}) as r:
                     from blackcat.security.network import validate_resolved_url
-
                     redir_ok, redir_err = validate_resolved_url(str(r.url))
-                    if not redir_ok:
-                        return json.dumps({"error": f"Redirect blocked: {redir_err}", "url": url}, ensure_ascii=False)
-
                     ctype = r.headers.get("content-type", "")
                     if ctype.startswith("image/"):
                         r.raise_for_status()
@@ -476,7 +570,9 @@ class WebFetchTool(Tool):
         except Exception as e:
             logger.debug("Pre-fetch image detection failed for {}: {}", url, e)
 
-        result = await self._fetch_jina(url, max_chars)
+        result = None
+        if self.config.use_jina_reader:
+            result = await self._fetch_jina(url, max_chars)
         if result is None:
             result = await self._fetch_readability(url, extract_mode, max_chars)
         return result
@@ -484,7 +580,7 @@ class WebFetchTool(Tool):
     async def _fetch_jina(self, url: str, max_chars: int) -> str | None:
         """Try fetching via Jina Reader API. Returns None on failure."""
         try:
-            headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
+            headers = {"Accept": "application/json", "User-Agent": self.user_agent}
             jina_key = os.environ.get("JINA_API_KEY", "")
             if jina_key:
                 headers["Authorization"] = f"Bearer {jina_key}"
@@ -531,7 +627,7 @@ class WebFetchTool(Tool):
                 timeout=30.0,
                 proxy=self.proxy,
             ) as client:
-                r = await client.get(url, headers={"User-Agent": USER_AGENT})
+                r = await client.get(url, headers={"User-Agent": self.user_agent})
                 r.raise_for_status()
 
             from blackcat.security.network import validate_resolved_url

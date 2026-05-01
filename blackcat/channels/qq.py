@@ -3,7 +3,7 @@
 Inbound:
 - Parse QQ botpy messages (C2C / Group)
 - Download attachments to media dir using chunked streaming write (memory-safe)
-- Publish to Nanobot bus via BaseChannel._handle_message()
+- Publish to Blackcat bus via BaseChannel._handle_message()
 - Content includes a clear, actionable "Received files:" list with local paths
 
 Outbound:
@@ -40,7 +40,7 @@ from blackcat.config.schema import Base
 from blackcat.security.network import validate_url_target
 
 try:
-    from blackcat.config.paths import get_media_dir
+    from blackcat.utils.paths import get_media_dir
 except Exception:  # pragma: no cover
     get_media_dir = None  # type: ignore
 

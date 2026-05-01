@@ -15,7 +15,10 @@ from blackcat.config.schema import AgentDefaults
 from blackcat.providers.base import LLMResponse
 
 
-def _make_loop(tmp_path: Path, session_ttl_minutes: int = 15) -> AgentLoop:
+def _make_loop(
+    tmp_path: Path,
+    session_ttl_minutes: int = 15,
+) -> AgentLoop:
     """Create a minimal AgentLoop for testing."""
     bus = MessageBus()
     provider = MagicMock()
@@ -72,6 +75,11 @@ class TestSessionTTLConfig:
         assert data["idleCompactAfterMinutes"] == 30
         assert "sessionTtlMinutes" not in data
 
+    def test_session_file_cap_is_internal_constant(self):
+        """Session file cap should remain an internal constant, not a config field."""
+        from blackcat.session.manager import FILE_MAX_MESSAGES
+        assert FILE_MAX_MESSAGES == 2000
+
 
 class TestAgentLoopTTLParam:
     """Test that AutoCompact receives and stores session_ttl_minutes."""
@@ -85,6 +93,72 @@ class TestAgentLoopTTLParam:
         """AutoCompact default TTL should be 0 (disabled)."""
         loop = _make_loop(tmp_path, session_ttl_minutes=0)
         assert loop.auto_compact._ttl == 0
+
+    @pytest.mark.asyncio
+    async def test_process_message_reads_history_with_token_budget(self, tmp_path):
+        """_process_message should read history for token budget estimation."""
+        loop = _make_loop(tmp_path)
+        session = loop.sessions.get_or_create("cli:direct")
+        session.get_history = MagicMock(return_value=[])
+        loop.context.build_messages = AsyncMock(return_value=[])
+        loop._run_agent_loop = AsyncMock(return_value=("ok", [], [], "stop", False))
+        loop._save_turn = MagicMock()
+
+        msg = InboundMessage(
+            channel="cli",
+            sender_id="u1",
+            chat_id="direct",
+            content="hello",
+        )
+        await loop._process_message(msg)
+        # get_history should be called (consolidator uses it for token estimation)
+        assert session.get_history.called
+
+    @pytest.mark.asyncio
+    async def test_session_file_cap_archives_and_trims_old_messages(self, tmp_path):
+        loop = _make_loop(tmp_path)
+        loop.context.memory.raw_archive = MagicMock()
+
+        for i in range(4):
+            msg = InboundMessage(
+                channel="cli",
+                sender_id="u1",
+                chat_id="direct",
+                content=f"hello {i}",
+            )
+            await loop._process_message(msg)
+
+        session = loop.sessions.get_or_create("cli:direct")
+        from blackcat.session.manager import FILE_MAX_MESSAGES
+        assert len(session.messages) <= FILE_MAX_MESSAGES
+
+    def test_session_enforce_file_cap_skips_archive_when_dropped_prefix_already_consolidated(self, tmp_path):
+        from blackcat.session.manager import Session
+        archive_fn = MagicMock()
+        session = Session(key="cli:direct")
+        for i in range(8):
+            session.add_message("user", f"u{i}")
+        session.last_consolidated = 6
+
+        session.enforce_file_cap(on_archive=archive_fn, limit=4)
+
+        assert len(session.messages) <= 4
+        archive_fn.assert_not_called()
+
+    def test_session_enforce_file_cap_archives_only_unconsolidated_dropped_prefix(self, tmp_path):
+        from blackcat.session.manager import Session
+        archive_fn = MagicMock()
+        session = Session(key="cli:direct")
+        for i in range(8):
+            session.add_message("user", f"u{i}")
+        session.last_consolidated = 2
+
+        session.enforce_file_cap(on_archive=archive_fn, limit=4)
+
+        assert len(session.messages) <= 4
+        archive_fn.assert_called_once()
+        archived = archive_fn.call_args.args[0]
+        assert [m["content"] for m in archived] == ["u2", "u3"]
 
 
 class TestAutoCompact:
@@ -187,7 +261,6 @@ class TestAutoCompact:
     async def test_auto_compact_empty_session(self, tmp_path):
         """_archive on empty session should not archive."""
         loop = _make_loop(tmp_path, session_ttl_minutes=15)
-        session = loop.sessions.get_or_create("cli:test")
 
         archive_called = False
 

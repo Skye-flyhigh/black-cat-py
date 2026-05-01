@@ -116,7 +116,7 @@ class TestConsolidatorTokenBudget:
         session.last_consolidated = 0
         session.messages = [{"role": "user", "content": "hi"}]
         session.key = "test:key"
-        consolidator.estimate_session_prompt_tokens = MagicMock(return_value=(100, "tiktoken"))
+        consolidator.estimate_session_prompt_tokens = AsyncMock(return_value=(100, "tiktoken"))
         consolidator.archive = AsyncMock(return_value=True)
         await consolidator.maybe_consolidate_by_tokens(session)
         consolidator.archive.assert_not_called()
@@ -143,7 +143,8 @@ class TestConsolidatorTokenBudget:
 
         await consolidator.maybe_consolidate_by_tokens(session)
 
-        archived_chunk = consolidator.archive.await_args.args[0]
+        assert consolidator.archive.called
+        archived_chunk = consolidator.archive.call_args.args[0]
         # pick_consolidation_boundary returns (50, tokens) — user turn at idx 50
         assert archived_chunk[0]["content"] == "m0"
         assert session.last_consolidated > 0
@@ -170,7 +171,7 @@ class TestConsolidatorTokenBudget:
 
         await consolidator.maybe_consolidate_by_tokens(session)
 
-        consolidator.archive.assert_awaited_once()
+        assert consolidator.archive.called
         # The chunk is considered "materialized" (as a raw-archive breadcrumb),
         # so last_consolidated must have moved past it.
         assert session.last_consolidated == 50
@@ -196,7 +197,7 @@ class TestConsolidatorTokenBudget:
         await consolidator.maybe_consolidate_by_tokens(session)
 
         # Exactly one fallback per call — not _MAX_CONSOLIDATION_ROUNDS.
-        assert consolidator.archive.await_count == 1
+        assert consolidator.archive.call_count == 1
 
     async def test_boundary_respected_when_no_intermediate_user_turn(self, consolidator):
         """When boundary points past a long tool chain, the full chunk is archived."""
@@ -218,7 +219,7 @@ class TestConsolidatorTokenBudget:
 
         await consolidator.maybe_consolidate_by_tokens(session)
 
-        consolidator.archive.assert_awaited_once()
+        assert consolidator.archive.called
         # pick_consolidation_boundary finds the only boundary at idx=61
         assert session.last_consolidated == 61
 

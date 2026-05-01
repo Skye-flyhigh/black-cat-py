@@ -8,7 +8,7 @@
 # that catches any new caller that forgot to set its own cap.
 import asyncio
 import weakref
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 import tiktoken
 from loguru import logger
@@ -24,6 +24,7 @@ _RAW_ARCHIVE_MAX_CHARS = 16_000       # fallback dump (LLM failed)
 _ARCHIVE_SUMMARY_MAX_CHARS = 8_000    # LLM-produced consolidation summary
 
 
+
 class Consolidator:
     """Lightweight consolidation: summarizes evicted messages into history.jsonl."""
 
@@ -37,22 +38,35 @@ class Consolidator:
         provider: LLMProvider,
         model: str,
         sessions: SessionManager,
-        context_window_tokens: int | None,
-        build_messages: Callable[..., Awaitable[list[dict[str, Any]]]],
+        context_window_tokens: int,
+        build_messages: Callable[..., list[dict[str, Any]]],
         get_tool_definitions: Callable[[], list[dict[str, Any]]],
         max_completion_tokens: int = 4096,
+        consolidation_ratio: float = 0.5,
     ):
         self.store = store
         self.provider = provider
         self.model = model
         self.sessions = sessions
-        self.context_window_tokens = context_window_tokens if context_window_tokens is not None else 128_000
+        self.context_window_tokens = context_window_tokens
         self.max_completion_tokens = max_completion_tokens
+        self.consolidation_ratio = consolidation_ratio
         self._build_messages = build_messages
         self._get_tool_definitions = get_tool_definitions
         self._locks: weakref.WeakValueDictionary[str, asyncio.Lock] = (
             weakref.WeakValueDictionary()
         )
+
+    def set_provider(
+        self,
+        provider: LLMProvider,
+        model: str,
+        context_window_tokens: int,
+    ) -> None:
+        self.provider = provider
+        self.model = model
+        self.context_window_tokens = context_window_tokens
+        self.max_completion_tokens = provider.generation.max_tokens
 
     def get_lock(self, session_key: str) -> asyncio.Lock:
         """Return the shared consolidation lock for one session."""
@@ -83,9 +97,11 @@ class Consolidator:
     async def estimate_session_prompt_tokens(
         self,
         session: Session,
+        *,
+        session_summary: str | None = None,
     ) -> tuple[int, str]:
         """Estimate current prompt size for the normal session history view."""
-        history = session.get_history(max_messages=0)
+        history = session.get_history(max_messages=0, include_timestamps=True)
         channel, chat_id = (session.key.split(":", 1) if ":" in session.key else (None, None))
         probe_messages = await self._build_messages(
             history=history,
@@ -157,21 +173,26 @@ class Consolidator:
     async def maybe_consolidate_by_tokens(
         self,
         session: Session,
+        *,
+        session_summary: str | None = None,
     ) -> None:
         """Loop: archive old messages until prompt fits within safe budget.
 
         The budget reserves space for completion tokens and a safety buffer
         so the LLM request never exceeds the context window.
         """
-        if not session.messages or (self.context_window_tokens is not None and self.context_window_tokens <= 0):
+        if not session.messages or self.context_window_tokens <= 0:
             return
 
         lock = self.get_lock(session.key)
         async with lock:
             budget = self._input_token_budget
-            target = budget // 2
+            target = int(budget * self.consolidation_ratio)
             try:
-                estimated, source = await self.estimate_session_prompt_tokens(session)
+                estimated, source = await self.estimate_session_prompt_tokens(
+                    session,
+                    session_summary=session_summary,
+                )
             except Exception:
                 logger.exception("Token estimation failed for {}", session.key)
                 estimated, source = 0, "error"
@@ -233,7 +254,10 @@ class Consolidator:
                     break
 
                 try:
-                    estimated, source = await self.estimate_session_prompt_tokens(session)
+                    estimated, source = await self.estimate_session_prompt_tokens(
+                        session,
+                        session_summary=session_summary,
+                    )
                 except Exception:
                     logger.exception("Token estimation failed for {}", session.key)
                     estimated, source = 0, "error"

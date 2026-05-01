@@ -87,6 +87,11 @@ ruff check blackcat/
 ruff format blackcat/
 ```
 
+## Contribution License
+
+By submitting a contribution, you confirm that you have the right to submit it
+and agree that it will be licensed under the project's MIT License.
+
 ## Code Style
 
 We care about more than passing lint. We want blackcat to stay small, calm, and readable.

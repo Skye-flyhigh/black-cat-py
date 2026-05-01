@@ -41,7 +41,7 @@ function wrap(client: ReturnType<typeof fakeClient>["client"]) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <ClientProvider
-        client={client as unknown as import("@/lib/blackcat-client").NanobotClient}
+        client={client as unknown as import("@/lib/blackcat-client").BlackcatClient}
         token="tok"
       >
         {children}
@@ -50,7 +50,7 @@ function wrap(client: ReturnType<typeof fakeClient>["client"]) {
   };
 }
 
-describe("useNanobotStream", () => {
+describe("useBlackcatStream", () => {
   it("collapses consecutive tool_hint frames into one trace row", () => {
     const fake = fakeClient();
     const { result } = renderHook(() => useBlackcatStream("chat-t", []), {
@@ -111,6 +111,29 @@ describe("useNanobotStream", () => {
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].media).toEqual([
       { kind: "video", url: "/api/media/sig/payload", name: "demo.mp4" },
+    ]);
+  });
+
+  it("keeps assistant buttons on complete messages", () => {
+    const fake = fakeClient();
+    const { result } = renderHook(() => useBlackcatStream("chat-q", []), {
+      wrapper: wrap(fake.client),
+    });
+
+    act(() => {
+      fake.emit("chat-q", {
+        event: "message",
+        chat_id: "chat-q",
+        text: "How should I continue?\n\n1. Short answer\n2. Detailed answer",
+        button_prompt: "How should I continue?",
+        buttons: [["Short answer", "Detailed answer"]],
+      });
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0].content).toBe("How should I continue?");
+    expect(result.current.messages[0].buttons).toEqual([
+      ["Short answer", "Detailed answer"],
     ]);
   });
 });

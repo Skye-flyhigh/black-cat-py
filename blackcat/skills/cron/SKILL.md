@@ -25,6 +25,16 @@ Dynamic task (agent executes each time):
 cron(action="add", message="Check HKUDS/blackcat GitHub stars and report", every_seconds=600)
 ```
 
+One-time scheduled task (compute ISO datetime from current time):
+```
+cron(action="add", message="Remind me about the meeting", at="<ISO datetime>")
+```
+
+Timezone-aware cron:
+```
+cron(action="add", message="Morning standup", cron_expr="0 9 * * 1-5", tz="America/Vancouver")
+```
+
 List/remove:
 ```
 cron(action="list")

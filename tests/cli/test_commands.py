@@ -12,6 +12,7 @@ from blackcat.bus.events import OutboundMessage
 from blackcat.cli.commands import _make_provider, app
 from blackcat.config.schema import Config
 from blackcat.cron.types import CronJob, CronPayload
+from blackcat.providers.factory import ProviderSnapshot
 from blackcat.providers.openai_codex_provider import _strip_model_prefix
 from blackcat.providers.registry import find_by_name
 
@@ -637,7 +638,7 @@ def test_agent_workspace_override_does_not_migrate_legacy_cron(
     monkeypatch.setattr("blackcat.cli.commands.sync_workspace_templates", lambda _path: None)
     monkeypatch.setattr("blackcat.cli.commands._make_provider", lambda _config: object())
     monkeypatch.setattr("blackcat.bus.queue.MessageBus", lambda: object())
-    monkeypatch.setattr("blackcat.config.paths.get_cron_dir", lambda: legacy_dir)
+    monkeypatch.setattr("blackcat.utils.paths.get_cron_dir", lambda: legacy_dir)
 
     class _FakeCron:
         def __init__(self, store_path: Path) -> None:
@@ -690,7 +691,7 @@ def test_agent_custom_config_workspace_does_not_migrate_legacy_cron(
     monkeypatch.setattr("blackcat.cli.commands.sync_workspace_templates", lambda _path: None)
     monkeypatch.setattr("blackcat.cli.commands._make_provider", lambda _config: object())
     monkeypatch.setattr("blackcat.bus.queue.MessageBus", lambda: object())
-    monkeypatch.setattr("blackcat.config.paths.get_cron_dir", lambda: legacy_dir)
+    monkeypatch.setattr("blackcat.utils.paths.get_cron_dir", lambda: legacy_dir)
 
     class _FakeCron:
         def __init__(self, store_path: Path) -> None:
@@ -776,6 +777,15 @@ def _stop_gateway_provider(_config) -> object:
     raise _StopGatewayError("stop")
 
 
+def _test_provider_snapshot(provider: object, config: Config) -> ProviderSnapshot:
+    return ProviderSnapshot(
+        provider=provider,
+        model=config.agents.defaults.model,
+        context_window_tokens=config.agents.defaults.context_window_tokens,
+        signature=("test",),
+    )
+
+
 def _patch_cli_command_runtime(
     monkeypatch,
     config: Config,
@@ -788,6 +798,8 @@ def _patch_cli_command_runtime(
     cron_service=None,
     get_cron_dir=None,
 ) -> None:
+    provider_factory = make_provider or (lambda _config: object())
+
     monkeypatch.setattr(
         "blackcat.config.loader.set_config_path",
         set_config_path or (lambda _path: None),
@@ -800,7 +812,15 @@ def _patch_cli_command_runtime(
     )
     monkeypatch.setattr(
         "blackcat.cli.commands._make_provider",
-        make_provider or (lambda _config: object()),
+        provider_factory,
+    )
+    monkeypatch.setattr(
+        "blackcat.providers.factory.build_provider_snapshot",
+        lambda _config: _test_provider_snapshot(provider_factory(_config), _config),
+    )
+    monkeypatch.setattr(
+        "blackcat.providers.factory.load_provider_snapshot",
+        lambda _config_path=None: _test_provider_snapshot(provider_factory(config), config),
     )
 
     if message_bus is not None:
@@ -810,7 +830,7 @@ def _patch_cli_command_runtime(
     if cron_service is not None:
         monkeypatch.setattr("blackcat.cron.service.CronService", cron_service)
     if get_cron_dir is not None:
-        monkeypatch.setattr("blackcat.config.paths.get_cron_dir", get_cron_dir)
+        monkeypatch.setattr("blackcat.utils.paths.get_cron_dir", get_cron_dir)
 
 
 def _patch_serve_runtime(monkeypatch, config: Config, seen: dict[str, object]) -> None:
@@ -941,8 +961,36 @@ def test_gateway_cron_evaluator_receives_scheduled_reminder_context(
     monkeypatch.setattr("blackcat.config.loader.load_config", lambda _path=None: config)
     monkeypatch.setattr("blackcat.cli.commands.sync_workspace_templates", lambda _path: None)
     monkeypatch.setattr("blackcat.cli.commands._make_provider", lambda _config: provider)
+    monkeypatch.setattr(
+        "blackcat.providers.factory.build_provider_snapshot",
+        lambda _config: _test_provider_snapshot(provider, _config),
+    )
+    monkeypatch.setattr(
+        "blackcat.providers.factory.load_provider_snapshot",
+        lambda _config_path=None: _test_provider_snapshot(provider, config),
+    )
     monkeypatch.setattr("blackcat.bus.queue.MessageBus", lambda: bus)
-    monkeypatch.setattr("blackcat.session.manager.SessionManager", lambda _workspace: object())
+
+    class _FakeSession:
+        def __init__(self) -> None:
+            self.messages = []
+
+        def add_message(self, role: str, content: str, **kwargs) -> None:
+            self.messages.append({"role": role, "content": content, **kwargs})
+
+    class _FakeSessionManager:
+        def __init__(self, _workspace: Path) -> None:
+            self.session = _FakeSession()
+            seen["session_manager"] = self
+
+        def get_or_create(self, key: str) -> _FakeSession:
+            seen["session_key"] = key
+            return self.session
+
+        def save(self, session: _FakeSession) -> None:
+            seen["saved_session"] = session
+
+    monkeypatch.setattr("blackcat.session.manager.SessionManager", _FakeSessionManager)
 
     class _FakeCron:
         def __init__(self, _store_path: Path) -> None:
@@ -1019,9 +1067,11 @@ def test_gateway_cron_evaluator_receives_scheduled_reminder_context(
     assert seen["provider"] is provider
     assert seen["model"] == "test-model"
     assert seen["task_context"] == (
-        "[Scheduled Task] Timer finished.\n\n"
-        "Task 'stretch' has been triggered.\n"
-        "Scheduled instruction: Remind me to stretch."
+        "The scheduled time has arrived. Deliver this reminder to the user now, "
+        "as a brief and natural message in their language. Speak directly to them — "
+        "do not narrate progress, summarize, include user IDs, or add status reports "
+        "like 'Done' or 'Reminded'.\n\n"
+        "Reminder: Remind me to stretch."
     )
     bus.publish_outbound.assert_awaited_once_with(
         OutboundMessage(
@@ -1030,6 +1080,16 @@ def test_gateway_cron_evaluator_receives_scheduled_reminder_context(
             content="Time to stretch.",
         )
     )
+    assert seen["session_key"] == "telegram:user-1"
+    saved_session = seen["saved_session"]
+    assert isinstance(saved_session, _FakeSession)
+    assert saved_session.messages == [
+        {
+            "role": "assistant",
+            "content": "Time to stretch.",
+            "_channel_delivery": True,
+        }
+    ]
 
 
 def test_gateway_cron_job_suppresses_intermediate_progress(
@@ -1052,6 +1112,14 @@ def test_gateway_cron_job_suppresses_intermediate_progress(
     monkeypatch.setattr("blackcat.config.loader.load_config", lambda _path=None: config)
     monkeypatch.setattr("blackcat.cli.commands.sync_workspace_templates", lambda _path: None)
     monkeypatch.setattr("blackcat.cli.commands._make_provider", lambda _config: object())
+    monkeypatch.setattr(
+        "blackcat.providers.factory.build_provider_snapshot",
+        lambda _config: _test_provider_snapshot(object(), _config),
+    )
+    monkeypatch.setattr(
+        "blackcat.providers.factory.load_provider_snapshot",
+        lambda _config_path=None: _test_provider_snapshot(object(), config),
+    )
     monkeypatch.setattr("blackcat.bus.queue.MessageBus", lambda: bus)
     monkeypatch.setattr("blackcat.session.manager.SessionManager", lambda _workspace: object())
 
@@ -1210,7 +1278,7 @@ def test_migrate_cron_store_moves_legacy_file(tmp_path: Path) -> None:
     config.agents.defaults.workspace = str(tmp_path / "workspace")
     workspace_cron = config.workspace_path / "cron" / "jobs.json"
 
-    with patch("blackcat.config.paths.get_cron_dir", return_value=legacy_dir):
+    with patch("blackcat.utils.paths.get_cron_dir", return_value=legacy_dir):
         _migrate_cron_store(config)
 
     assert workspace_cron.exists()
@@ -1232,7 +1300,7 @@ def test_migrate_cron_store_skips_when_workspace_file_exists(tmp_path: Path) -> 
     workspace_cron.parent.mkdir(parents=True)
     workspace_cron.write_text('{"new": true}')
 
-    with patch("blackcat.config.paths.get_cron_dir", return_value=legacy_dir):
+    with patch("blackcat.utils.paths.get_cron_dir", return_value=legacy_dir):
         _migrate_cron_store(config)
 
     assert workspace_cron.read_text() == '{"new": true}'
@@ -1293,7 +1361,7 @@ def test_gateway_health_endpoint_binds_and_serves_expected_responses(
             return 0
 
     class _FakeAgentLoop:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self, *args, **_kwargs) -> None:
             self.model = "test-model"
             self.dream = _FakeDream()
             self.sessions = _FakeSessionManager()

@@ -40,11 +40,11 @@ class TestBuildEnvUnix:
 
     def test_secrets_excluded(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
-        monkeypatch.setenv("NANOBOT_TOKEN", "tok-secret")
+        monkeypatch.setenv("BLACKCAT_TOKEN", "tok-secret")
         with patch("blackcat.agent.tools.shell._IS_WINDOWS", False):
             env = ExecTool()._build_env()
         assert "OPENAI_API_KEY" not in env
-        assert "NANOBOT_TOKEN" not in env
+        assert "BLACKCAT_TOKEN" not in env
         for v in env.values():
             assert "secret" not in v.lower()
 
@@ -64,11 +64,11 @@ class TestBuildEnvWindows:
 
     def test_secrets_excluded(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
-        monkeypatch.setenv("NANOBOT_TOKEN", "tok-secret")
+        monkeypatch.setenv("BLACKCAT_TOKEN", "tok-secret")
         with patch("blackcat.agent.tools.shell._IS_WINDOWS", True):
             env = ExecTool()._build_env()
         assert "OPENAI_API_KEY" not in env
-        assert "NANOBOT_TOKEN" not in env
+        assert "BLACKCAT_TOKEN" not in env
         for v in env.values():
             assert "secret" not in v.lower()
 
@@ -148,23 +148,33 @@ class TestSpawnWindows:
 class TestPathAppendPlatform:
 
     @pytest.mark.asyncio
-    async def test_unix_injects_export(self):
-        """On Unix, path_append is an export statement prepended to command."""
+    async def test_unix_uses_env_var_in_fixed_export(self):
+        """On Unix, path_append must not be interpolated into shell source."""
         mock_proc = AsyncMock()
         mock_proc.communicate.return_value = (b"ok", b"")
         mock_proc.returncode = 0
 
+        captured_cmd = None
+        captured_env = {}
+
+        async def capture_spawn(cmd, cwd, env):
+            nonlocal captured_cmd
+            captured_cmd = cmd
+            captured_env.update(env)
+            return mock_proc
+
         with (
             patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
-            patch.object(ExecTool, "_spawn", return_value=mock_proc) as mock_spawn,
+            patch("blackcat.agent.tools.shell.os.pathsep", ":"),
+            patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):
-            tool = ExecTool(path_append="/opt/bin")
+            tool = ExecTool(path_append="/opt/bin; echo INJECTED")
             await tool.execute(command="ls")
 
-        spawned_cmd = mock_spawn.call_args[0][0]
-        assert 'export PATH="$PATH:/opt/bin"' in spawned_cmd
-        assert spawned_cmd.endswith("ls")
+        assert captured_cmd == 'export PATH="$PATH:$BLACKCAT_PATH_APPEND"; ls'
+        assert captured_env["BLACKCAT_PATH_APPEND"] == "/opt/bin; echo INJECTED"
+        assert "INJECTED" not in captured_cmd
 
     @pytest.mark.asyncio
     async def test_windows_modifies_env(self):
@@ -181,6 +191,7 @@ class TestPathAppendPlatform:
 
         with (
             patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
+            patch("blackcat.agent.tools.shell.os.pathsep", ";"),
             patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):

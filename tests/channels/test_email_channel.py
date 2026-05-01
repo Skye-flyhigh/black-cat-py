@@ -92,7 +92,7 @@ def test_fetch_new_messages_parses_unseen_and_marks_seen(monkeypatch) -> None:
 
 
 def test_fetch_new_messages_skips_self_sent_email_and_marks_seen(monkeypatch) -> None:
-    raw = _make_raw_email(from_addr="Nanobot <bot@example.com>", subject="Loop test")
+    raw = _make_raw_email(from_addr="Blackcat <bot@example.com>", subject="Loop test")
 
     class FakeIMAP:
         def __init__(self) -> None:

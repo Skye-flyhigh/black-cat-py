@@ -4,12 +4,11 @@ import base64
 import json
 import re
 import time
-from asyncio.log import logger
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import tiktoken
+from loguru import logger
 
 
 def strip_think(text: str) -> str:
@@ -85,13 +84,6 @@ def build_image_content_blocks(
         {"type": "text", "text": label},
     ]
 
-
-def ensure_dir(path: Path) -> Path:
-    """Ensure directory exists, return it."""
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
 def timestamp() -> str:
     """Current ISO timestamp."""
     return datetime.now().isoformat()
@@ -125,55 +117,27 @@ def safe_filename(name: str) -> str:
     return _UNSAFE_CHARS.sub("_", name).strip()
 
 
-def image_placeholder_text(path: str | None, *, empty: str = "[image]") -> str:
-    """Build an image placeholder string."""
-    return f"[image: {path}]" if path else empty
-
-
-def truncate_text(text: str, max_chars: int) -> str:
-    """Truncate text with a stable suffix."""
-    if max_chars <= 0 or len(text) <= max_chars:
-        return text
-    return text[:max_chars] + "\n... (truncated)"
-
-
-def get_data_path() -> Path:
-    """Get the blackcat data directory (~/.blackcat)."""
-    return ensure_dir(Path.home() / ".blackcat")
-
-
-def get_workspace_path(workspace: str | None = None) -> Path:
-    """
-    Get the workspace path.
-
-    Args:
-        workspace: Optional workspace path. Defaults to ~/.blackcat/workspace.
-
-    Returns:
-        Expanded and ensured workspace path.
-    """
-    if workspace:
-        path = Path(workspace).expanduser()
-    else:
-        path = Path.home() / ".blackcat" / "workspace"
-    return ensure_dir(path)
-
-
-def get_sessions_path() -> Path:
-    """Get the sessions storage directory."""
-    return ensure_dir(get_data_path() / "sessions")
-
-
-def get_memory_path(workspace: Path | None = None) -> Path:
-    """Get the memory directory within the workspace."""
-    ws = workspace or get_workspace_path()
-    return ensure_dir(ws / "memory")
-
-
-def get_skills_path(workspace: Path | None = None) -> Path:
-    """Get the skills directory within the workspace."""
-    ws = workspace or get_workspace_path()
-    return ensure_dir(ws / "skills")
+def find_legal_message_start(messages: list[dict[str, Any]]) -> int:
+    """Find the first index whose tool results have matching assistant calls."""
+    declared: set[str] = set()
+    start = 0
+    for i, msg in enumerate(messages):
+        role = msg.get("role")
+        if role == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                if isinstance(tc, dict) and tc.get("id"):
+                    declared.add(str(tc["id"]))
+        elif role == "tool":
+            tid = msg.get("tool_call_id")
+            if tid and str(tid) not in declared:
+                start = i + 1
+                declared.clear()
+                for prev in messages[start : i + 1]:
+                    if prev.get("role") == "assistant":
+                        for tc in prev.get("tool_calls") or []:
+                            if isinstance(tc, dict) and tc.get("id"):
+                                declared.add(str(tc["id"]))
+    return start
 
 
 def truncate_string(s: str, max_len: int = 100, suffix: str = "...") -> str:
@@ -232,21 +196,6 @@ def extract_system_message(
     return None, messages
 
 
-def resolve_path(
-    path: str, workspace: Path | None = None, allowed_dir: Path | None = None
-) -> Path:
-    """Resolve path against workspace (if relative) and enforce directory restriction."""
-    p = Path(path).expanduser()
-    if not p.is_absolute() and workspace:
-        p = workspace / p
-    resolved = p.resolve()
-    if allowed_dir:
-        try:
-            resolved.relative_to(allowed_dir.resolve())
-        except ValueError:
-            raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
-    return resolved
-
 
 def build_status_content(
     *,
@@ -271,10 +220,16 @@ def build_status_content(
     last_in = last_usage.get("prompt_tokens", 0)
     last_out = last_usage.get("completion_tokens", 0)
     cached = last_usage.get("cached_tokens", 0)
-    ctx_total = max(context_window_tokens or 0, 0)
-    ctx_pct = int((context_tokens_estimate / ctx_total) * 100) if ctx_total > 0 else 0
-    ctx_used_str = f"{context_tokens_estimate // 1000}k" if context_tokens_estimate >= 1000 else str(context_tokens_estimate)
-    ctx_total_str = f"{ctx_total // 1024}k" if ctx_total > 0 else "n/a"
+    ctx_total = max(context_window_tokens, 0)
+    # Budget mirrors Consolidator formula: ctx_window - max_completion - _SAFETY_BUFFER
+    ctx_budget = max(ctx_total - int(max_completion_tokens) - 1024, 1)
+    ctx_pct = min(int((context_tokens_estimate / ctx_budget) * 100), 999) if ctx_budget > 0 else 0
+    ctx_used_str = (
+        f"{context_tokens_estimate // 1000}k"
+        if context_tokens_estimate >= 1000
+        else str(context_tokens_estimate)
+    )
+    ctx_total_str = f"{ctx_total // 1000}k" if ctx_total > 0 else "n/a"
     token_line = f"\U0001f4ca Tokens: {last_in} in / {last_out} out"
     if cached and last_in:
         token_line += f" ({cached * 100 // last_in}% cached)"
@@ -282,47 +237,15 @@ def build_status_content(
         f"\U0001f408 blackcat v{version}",
         f"\U0001f9e0 Model: {model}",
         token_line,
-        f"\U0001f4c8 Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}%)",
-        f"\u23f1\ufe0f Uptime: {uptime}",
-        f"\U0001f4ac Messages: {session_msg_count}",
+        f"\U0001f4da Context: {ctx_used_str}/{ctx_total_str} ({ctx_pct}% of input budget)",
+        f"\U0001f4ac Session: {session_msg_count} messages",
+        f"\u23f1 Uptime: {uptime}",
+        f"\u26a1 Tasks: {active_task_count} active",
     ]
     if search_usage_text:
-        lines.append(f"\U0001f50d Search: {search_usage_text}")
-    if active_task_count:
-        lines.append(f"\U0001f504 Active tasks: {active_task_count}")
+        lines.append(search_usage_text)
     return "\n".join(lines)
 
-
-def find_legal_message_start(messages: list[dict[str, Any]]) -> int | None:
-    """Find the index of the first message that starts a legal turn.
-
-    Returns None if all messages are legal, or the index of the first message
-    that should be dropped to make the list legal.
-    """
-    if not messages:
-        return None
-
-    # If starts with user, already legal
-    if messages[0].get("role") == "user":
-        return None
-
-    # Find first user message
-    for i, msg in enumerate(messages):
-        if msg.get("role") == "user":
-            return i
-
-    # No user messages found - return None to preserve assistant-only messages
-    # (e.g., for defensive handling of media kwargs on non-user rows)
-    return None
-
-
-def count_tokens(text: str, model: str = "gpt-4") -> int:
-    """Count tokens using tiktoken."""
-    try:
-        encoding = tiktoken.encoding_for_model(model)
-    except KeyError:
-        encoding = tiktoken.get_encoding("cl100k_base")
-    return len(encoding.encode(text))
 
 def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]:
     """Sync bundled templates to workspace. Only creates missing files."""

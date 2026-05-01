@@ -15,8 +15,8 @@ from blackcat.agent.tools.schema import (
     StringSchema,
     tool_parameters_schema,
 )
-from blackcat.config.paths import get_media_dir
 from blackcat.utils.media import build_image_content_blocks, detect_image_mime
+from blackcat.utils.paths import get_media_dir
 
 
 def _resolve_path(

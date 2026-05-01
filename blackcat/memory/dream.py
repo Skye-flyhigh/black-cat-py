@@ -61,6 +61,11 @@ class Dream:
         self._runner = AgentRunner(provider)
         self._tools = self._build_tools()
 
+    def set_provider(self, provider: LLMProvider, model: str) -> None:
+        self.provider = provider
+        self.model = model
+        self._runner.provider = provider
+
     # -- tool registry -------------------------------------------------------
 
     def _build_tools(self) -> ToolRegistry:
@@ -93,7 +98,7 @@ class Dream:
 
         from blackcat.agent.skills import BUILTIN_SKILLS_DIR
 
-        _desc_re = _re.compile(r"^description:\s*(.+)$", _re.MULTILINE | _re.IGNORECASE)
+        _DESC_RE = _re.compile(r"^description:\s*(.+)$", _re.MULTILINE | _re.IGNORECASE)
         entries: dict[str, str] = {}
         for base in (self.store.workspace / "skills", BUILTIN_SKILLS_DIR):
             if not base.exists():
@@ -108,7 +113,7 @@ class Dream:
                 if d.name in entries and base == BUILTIN_SKILLS_DIR:
                     continue
                 content = skill_md.read_text(encoding="utf-8")[:500]
-                m = _desc_re.search(content)
+                m = _DESC_RE.search(content)
                 desc = m.group(1).strip() if m else "(no description)"
                 entries[d.name] = desc
         return [f"{name} — {desc}" for name, desc in sorted(entries.items())]

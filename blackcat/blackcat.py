@@ -25,7 +25,7 @@ class Blackcat:
 
     Usage::
 
-        bot = Nanobot.from_config()
+        bot = Blackcat.from_config()
         result = await bot.run("Summarize this repo", hooks=[MyHook()])
         print(result.content)
     """
@@ -40,7 +40,7 @@ class Blackcat:
         *,
         workspace: str | Path | None = None,
     ) -> Blackcat:
-        """Create a Nanobot instance from a config file.
+        """Create a Blackcat instance from a config file.
 
         Args:
             config_path: Path to ``config.json``.  Defaults to
@@ -84,6 +84,8 @@ class Blackcat:
             unified_session=defaults.unified_session,
             disabled_skills=defaults.disabled_skills,
             session_ttl_minutes=defaults.session_ttl_minutes,
+            consolidation_ratio=defaults.consolidation_ratio,
+            tools_config=config.tools,
             config=config,
         )
         return cls(loop)

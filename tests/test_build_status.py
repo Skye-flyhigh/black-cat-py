@@ -72,8 +72,7 @@ def test_status_context_pct_uses_budget_not_total():
         max_completion_tokens=8192,
     )
     # budget = 128000 - 8192 - 1024 = 118784; pct = 120000/118784*100 ≈ 101%
-    # Format changed to just show percentage
-    assert "(101%)" in content or "93%" in content
+    assert "101% of input budget" in content or "93% of input budget" in content
 
 
 def test_status_context_pct_capped_at_999():
@@ -88,5 +87,5 @@ def test_status_context_pct_capped_at_999():
         context_tokens_estimate=100000,
         max_completion_tokens=4096,
     )
-    # Format changed to just show percentage, capped at 1000%
-    assert "(1000%)" in content or "(999%)" in content
+    # Format changed to just show percentage, capped at 999%
+    assert "999% of input budget" in content

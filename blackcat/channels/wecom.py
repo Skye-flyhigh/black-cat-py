@@ -16,8 +16,8 @@ from pydantic import Field
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
+from blackcat.utils.paths import get_media_dir
 
 WECOM_AVAILABLE = importlib.util.find_spec("wecom_aibot_sdk") is not None
 
@@ -103,7 +103,7 @@ class WecomChannel(BaseChannel):
     async def start(self) -> None:
         """Start the WeCom bot with WebSocket long connection."""
         if not WECOM_AVAILABLE:
-            logger.error("WeCom SDK not installed. Run: pip install nanobot-ai[wecom]")
+            logger.error("WeCom SDK not installed. Run: pip install blackcat-ai[wecom]")
             return
 
         if not self.config.bot_id or not self.config.secret:

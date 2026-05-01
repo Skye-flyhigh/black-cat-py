@@ -18,7 +18,7 @@ if not DINGTALK_AVAILABLE:
 
 import blackcat.channels.dingtalk as dingtalk_module
 from blackcat.bus.queue import MessageBus
-from blackcat.channels.dingtalk import DingTalkChannel, DingTalkConfig, NanobotDingTalkHandler
+from blackcat.channels.dingtalk import BlackcatDingTalkHandler, DingTalkChannel, DingTalkConfig
 
 
 class _FakeResponse:
@@ -97,7 +97,7 @@ async def test_group_send_uses_group_messages_api() -> None:
         "token",
         "group:conv123",
         "sampleMarkdown",
-        {"text": "hello", "title": "Nanobot Reply"},
+        {"text": "hello", "title": "Blackcat Reply"},
     )
 
     assert ok is True
@@ -114,7 +114,7 @@ async def test_handler_uses_voice_recognition_text_when_text_is_empty(monkeypatc
         DingTalkConfig(client_id="app", client_secret="secret", allow_from=["user1"]),
         bus,
     )
-    handler = NanobotDingTalkHandler(channel)
+    handler = BlackcatDingTalkHandler(channel)
 
     class _FakeChatbotMessage:
         text = None
@@ -158,7 +158,7 @@ async def test_handler_processes_file_message(monkeypatch) -> None:
         DingTalkConfig(client_id="app", client_secret="secret", allow_from=["user1"]),
         bus,
     )
-    handler = NanobotDingTalkHandler(channel)
+    handler = BlackcatDingTalkHandler(channel)
 
     class _FakeFileChatbotMessage:
         text = None
@@ -223,8 +223,8 @@ async def test_download_dingtalk_file(tmp_path, monkeypatch) -> None:
 
     # Redirect media dir to tmp_path
     monkeypatch.setattr(
-        "blackcat.config.paths.get_media_dir",
-        lambda channel_name=None: tmp_path / channel_name if channel_name else tmp_path,
+        "blackcat.utils.paths.get_media_dir",
+        lambda channel=None: tmp_path / channel if channel else tmp_path,
     )
 
     result = await channel._download_dingtalk_file("code123", "test.xlsx", "user1")
@@ -330,7 +330,7 @@ async def test_send_batch_message_propagates_transport_error() -> None:
             "token",
             "user123",
             "sampleMarkdown",
-            {"text": "hello", "title": "Nanobot Reply"},
+            {"text": "hello", "title": "Blackcat Reply"},
         )
 
     # The POST was attempted exactly once

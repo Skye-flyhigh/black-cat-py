@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from blackcat.agent.tools.base import Tool
+from blackcat.utils.exports import export_mcp_tools_md, export_tools_md
 
 
 class ToolRegistry:
@@ -15,14 +16,17 @@ class ToolRegistry:
 
     def __init__(self):
         self._tools: dict[str, Tool] = {}
+        self._cached_definitions: list[dict[str, Any]] | None = None
 
     def register(self, tool: Tool) -> None:
         """Register a tool."""
         self._tools[tool.name] = tool
+        self._cached_definitions = None
 
     def unregister(self, name: str) -> None:
         """Unregister a tool by name."""
         self._tools.pop(name, None)
+        self._cached_definitions = None
 
     def get(self, name: str) -> Tool | None:
         """Get a tool by name."""
@@ -47,8 +51,12 @@ class ToolRegistry:
         """Get tool definitions with stable ordering for cache-friendly prompts.
 
         Built-in tools are sorted first as a stable prefix, then MCP tools are
-        sorted and appended.
+        sorted and appended.  The result is cached until the next
+        register/unregister call.
         """
+        if self._cached_definitions is not None:
+            return self._cached_definitions
+
         definitions = [tool.to_schema() for tool in self._tools.values()]
         builtins: list[dict[str, Any]] = []
         mcp_tools: list[dict[str, Any]] = []
@@ -61,7 +69,8 @@ class ToolRegistry:
 
         builtins.sort(key=self._schema_name)
         mcp_tools.sort(key=self._schema_name)
-        return builtins + mcp_tools
+        self._cached_definitions = builtins + mcp_tools
+        return self._cached_definitions
 
     def prepare_call(
         self,
@@ -69,6 +78,13 @@ class ToolRegistry:
         params: dict[str, Any],
     ) -> tuple[Tool | None, dict[str, Any], str | None]:
         """Resolve, cast, and validate one tool call."""
+        # Guard against invalid parameter types (e.g., list instead of dict)
+        if not isinstance(params, dict) and name in ('write_file', 'read_file'):
+            return None, params, (
+                f"Error: Tool '{name}' parameters must be a JSON object, got {type(params).__name__}. "
+                "Use named parameters: tool_name(param1=\"value1\", param2=\"value2\")"
+            )
+
         tool = self._tools.get(name)
         if not tool:
             return None, params, (
@@ -85,19 +101,19 @@ class ToolRegistry:
 
     async def execute(self, name: str, params: dict[str, Any]) -> Any:
         """Execute a tool by name with given parameters."""
-        _hint = "\n\n[Analyze the error above and try a different approach.]"
+        _HINT = "\n\n[Analyze the error above and try a different approach.]"
         tool, params, error = self.prepare_call(name, params)
         if error:
-            return error + _hint
+            return error + _HINT
 
         try:
             assert tool is not None  # guarded by prepare_call()
             result = await tool.execute(**params)
             if isinstance(result, str) and result.startswith("Error"):
-                return result + _hint
+                return result + _HINT
             return result
         except Exception as e:
-            return f"Error executing {name}: {str(e)}" + _hint
+            return f"Error executing {name}: {str(e)}" + _HINT
 
     @property
     def tool_names(self) -> list[str]:
@@ -117,34 +133,7 @@ class ToolRegistry:
         Args:
             path: Path to write TOOLS.md (typically workspace/TOOLS.md)
         """
-        lines = [
-            "# Available Tools",
-            "",
-            "This document lists all tools available to blackcat.",
-            "Auto-generated from registered tools.",
-            "",
-        ]
-
-        for tool in self._tools.values():
-            lines.append(f"## {tool.name}")
-            lines.append("")
-            lines.append(tool.description)
-            lines.append("")
-
-            # Parameters
-            props = tool.parameters.get("properties", {})
-            required = set(tool.parameters.get("required", []))
-
-            if props:
-                lines.append("**Parameters:**")
-                for name, prop in props.items():
-                    prop_type = prop.get("type", "any")
-                    desc = prop.get("description", "")
-                    req = "(required)" if name in required else "(optional)"
-                    lines.append(f"- `{name}` ({prop_type}) {req}: {desc}")
-                lines.append("")
-
-        path.write_text("\n".join(lines), encoding="utf-8")
+        export_tools_md(self._tools, path)
 
     def export_mcp_md(self, path: Path) -> None:
         """
@@ -155,56 +144,5 @@ class ToolRegistry:
         Args:
             path: Path to write MCP.md (typically workspace/MCP.md)
         """
-        # Group MCP tools by server
-        mcp_tools: dict[str, list[Tool]] = {}
-        for tool in self._tools.values():
-            server = getattr(tool, "server_name", None)
-            if server:
-                if server not in mcp_tools:
-                    mcp_tools[server] = []
-                mcp_tools[server].append(tool)
-
-        if not mcp_tools:
-            return
-
-        lines = [
-            "# MCP Tools",
-            "",
-            "This document lists all tools from MCP servers.",
-            "Auto-generated from connected MCP servers.",
-            "",
-        ]
-
-        for server, tools in sorted(mcp_tools.items()):
-            lines.append(f"## Server: `{server}`")
-            lines.append("")
-            lines.append(f"_{len(tools)} tool(s) available_")
-            lines.append("")
-
-            for tool in sorted(tools, key=lambda t: t.name):
-                original_name = getattr(tool, "original_name", tool.name)
-                lines.append(f"### {original_name}")
-                lines.append("")
-                lines.append(f"**Full name:** `{tool.name}`")
-                lines.append("")
-                lines.append(tool.description)
-                lines.append("")
-
-                # Parameters
-                props = tool.parameters.get("properties", {})
-                required = set(tool.parameters.get("required", []))
-
-                if props:
-                    lines.append("**Parameters:**")
-                    for name, prop in props.items():
-                        prop_type = prop.get("type", "any")
-                        desc = prop.get("description", "")
-                        req = "(required)" if name in required else "(optional)"
-                        lines.append(f"- `{name}` ({prop_type}) {req}: {desc}")
-                    lines.append("")
-
-            lines.append("---")
-            lines.append("")
-
-        path.write_text("\n".join(lines), encoding="utf-8")
+        export_mcp_tools_md(self._tools, path)
 

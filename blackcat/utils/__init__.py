@@ -14,20 +14,24 @@ from blackcat.utils.formatting import (
 from blackcat.utils.helpers import (
     build_status_content,
     build_tool_call_dicts,
-    ensure_dir,
     extract_system_message,
     find_legal_message_start,
-    get_data_path,
-    get_memory_path,
-    get_sessions_path,
-    get_skills_path,
-    get_workspace_path,
     parse_session_key,
-    resolve_path,
     safe_filename,
     safe_json_dumps,
     sync_workspace_templates,
     truncate_string,
+)
+from blackcat.utils.paths import (
+    get_cli_history_path,
+    get_cron_dir,
+    get_data_dir,
+    get_legacy_sessions_dir,
+    get_logs_dir,
+    get_media_dir,
+    get_runtime_subdir,
+    get_workspace_path,
+    is_default_workspace,
 )
 
 # Runtime utilities
@@ -65,12 +69,15 @@ from blackcat.utils.tools import (
 
 __all__ = [
     # Path utilities
-    "ensure_dir",
-    "get_data_path",
+    "get_data_dir",
+    "get_runtime_subdir",
+    "get_media_dir",
+    "get_cron_dir",
+    "get_logs_dir",
     "get_workspace_path",
-    "get_sessions_path",
-    "get_memory_path",
-    "get_skills_path",
+    "is_default_workspace",
+    "get_cli_history_path",
+    "get_legacy_sessions_dir",
     "safe_filename",
     "safe_json_dumps",
     "parse_session_key",

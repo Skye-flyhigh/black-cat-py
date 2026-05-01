@@ -8,7 +8,8 @@ from typing import Any
 from loguru import logger
 
 from blackcat.utils.formatting import stringify_text_blocks
-from blackcat.utils.helpers import ensure_dir, safe_filename
+from blackcat.utils.helpers import safe_filename
+from blackcat.utils.paths import ensure_dir
 
 _TOOL_RESULT_PREVIEW_CHARS = 1200
 _TOOL_RESULTS_DIR = ".blackcat/tool-results"
@@ -86,6 +87,12 @@ def _write_text_atomic(path: Path, content: str) -> None:
         if tmp.exists():
             tmp.unlink(missing_ok=True)
 
+def _bucket_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
 def _render_tool_result_reference(
     filepath: Path,
     *,
@@ -102,10 +109,3 @@ def _render_tool_result_reference(
     if truncated_preview:
         result += "\n...\n(Read the saved file if you need the full output.)"
     return result
-
-
-def _bucket_mtime(path: Path) -> float:
-    try:
-        return path.stat().st_mtime
-    except OSError:
-        return 0.0

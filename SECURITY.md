@@ -3,7 +3,6 @@
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in blackcat, please report it by:
-If you discover a security vulnerability in blackcat, please report it by:
 
 1. **DO NOT** open a public GitHub issue
 2. Create a private security advisory on GitHub or contact the repository maintainers (xubinrencs@gmail.com)
@@ -24,12 +23,12 @@ We aim to respond to security reports within 48 hours.
 ```bash
 # ✅ Good: Store in config file with restricted permissions
 chmod 600 ~/.blackcat/config.json
+chmod 600 ~/.blackcat/config.json
 
 # ❌ Bad: Hardcoding keys in code or committing them
 ```
 
 **Recommendations:**
-- Store API keys in `~/.blackcat/config.json` with file permissions set to `0600`
 - Store API keys in `~/.blackcat/config.json` with file permissions set to `0600`
 - Consider using environment variables for sensitive keys
 - Use OS keyring/credential manager for production deployments
@@ -71,7 +70,6 @@ The `exec` tool can execute shell commands. While dangerous command patterns are
 - ✅ Understand what commands the agent is running
 - ✅ Use a dedicated user account with limited privileges
 - ✅ Never run blackcat as root
-- ✅ Never run blackcat as root
 - ❌ Don't disable security checks
 - ❌ Don't run on systems with sensitive data without careful review
 
@@ -82,6 +80,7 @@ On Linux, set `"tools.exec.sandbox": "bwrap"` to wrap every shell command in a [
 - Workspace directory → **read-write** (agent works normally)
 - Media directory → **read-only** (can read uploaded attachments)
 - System directories (`/usr`, `/bin`, `/lib`) → **read-only** (commands still work)
+- Config files and API keys (`~/.blackcat/config.json`) → **hidden** (masked by tmpfs)
 - Config files and API keys (`~/.blackcat/config.json`) → **hidden** (masked by tmpfs)
 
 Requires `bwrap` installed (`apt install bubblewrap`). Pre-installed in the official Docker image. **Not available on macOS or Windows** — bubblewrap depends on Linux kernel namespaces.
@@ -101,6 +100,7 @@ File operations have path traversal protection, but:
 
 - ✅ Enable `restrictToWorkspace` or the bwrap sandbox to confine file access
 - ✅ Run blackcat with a dedicated user account
+- ✅ Run blackcat with a dedicated user account
 - ✅ Use filesystem permissions to protect sensitive directories
 - ✅ Regularly audit file operations in logs
 - ❌ Don't give unrestricted access to sensitive files
@@ -116,6 +116,7 @@ File operations have path traversal protection, but:
 - The bridge binds to `127.0.0.1:3001` (localhost only, not accessible from external network)
 - Set `bridgeToken` in config to enable shared-secret authentication between Python and Node.js
 - Keep authentication data in `~/.blackcat/whatsapp-auth` secure (mode 0700)
+- Keep authentication data in `~/.blackcat/whatsapp-auth` secure (mode 0700)
 
 ### 6. Dependency Security
 
@@ -127,7 +128,6 @@ pip install pip-audit
 pip-audit
 
 # Update to latest secure versions
-pip install --upgrade blackcat-ai
 pip install --upgrade blackcat-ai
 ```
 
@@ -143,6 +143,7 @@ npm audit fix
 - We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
 - Run `pip-audit` or `npm audit` regularly
 - Subscribe to security advisories for blackcat and its dependencies
+- Subscribe to security advisories for blackcat and its dependencies
 
 ### 7. Production Deployment
 
@@ -152,14 +153,11 @@ For production use:
    ```bash
    # Run in a container or VM
    docker run --rm -it python:3.11
-   pip install nanobot-ai
-   pip install nanobot-ai
+   pip install blackcat-ai
    ```
 
 2. **Use a Dedicated User**
    ```bash
-   sudo useradd -m -s /bin/bash blackcat
-   sudo -u blackcat blackcat gateway
    sudo useradd -m -s /bin/bash blackcat
    sudo -u blackcat blackcat gateway
    ```
@@ -169,15 +167,11 @@ For production use:
    chmod 700 ~/.blackcat
    chmod 600 ~/.blackcat/config.json
    chmod 700 ~/.blackcat/whatsapp-auth
-   chmod 700 ~/.blackcat
-   chmod 600 ~/.blackcat/config.json
-   chmod 700 ~/.blackcat/whatsapp-auth
    ```
 
 4. **Enable Logging**
    ```bash
    # Configure log monitoring
-   tail -f ~/.blackcat/logs/blackcat.log
    tail -f ~/.blackcat/logs/blackcat.log
    ```
 
@@ -189,7 +183,6 @@ For production use:
 6. **Regular Updates**
    ```bash
    # Check for updates weekly
-   pip install --upgrade blackcat-ai
    pip install --upgrade blackcat-ai
    ```
 
@@ -213,7 +206,6 @@ For production use:
 - **Logs may contain sensitive information** - secure log files appropriately
 - **LLM providers see your prompts** - review their privacy policies
 - **Chat history is stored locally** - protect the `~/.blackcat` directory
-- **Chat history is stored locally** - protect the `~/.blackcat` directory
 - **API keys are in plain text** - use OS keyring for production
 
 ### 10. Incident Response
@@ -223,7 +215,6 @@ If you suspect a security breach:
 1. **Immediately revoke compromised API keys**
 2. **Review logs for unauthorized access**
    ```bash
-   grep "Access denied" ~/.blackcat/logs/blackcat.log
    grep "Access denied" ~/.blackcat/logs/blackcat.log
    ```
 3. **Check for unexpected file modifications**
@@ -267,7 +258,6 @@ If you suspect a security breach:
 ## Security Checklist
 
 Before deploying blackcat:
-Before deploying blackcat:
 
 - [ ] API keys stored securely (not in code)
 - [ ] Config file permissions set to 0600
@@ -286,8 +276,6 @@ Before deploying blackcat:
 **Last Updated**: 2026-04-05
 
 For the latest security updates and announcements, check:
-- GitHub Security Advisories: https://github.com/HKUDS/blackcat/security/advisories
-- Release Notes: https://github.com/HKUDS/blackcat/releases
 - GitHub Security Advisories: https://github.com/HKUDS/blackcat/security/advisories
 - Release Notes: https://github.com/HKUDS/blackcat/releases
 

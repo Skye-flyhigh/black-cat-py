@@ -36,7 +36,7 @@ function wrap(client: ReturnType<typeof fakeClient>) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <ClientProvider
-        client={client as unknown as import("@/lib/blackcat-client").NanobotClient}
+        client={client as unknown as import("@/lib/blackcat-client").BlackcatClient}
         token="tok"
       >
         {children}

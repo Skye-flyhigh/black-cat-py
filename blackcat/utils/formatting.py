@@ -108,3 +108,4 @@ def strip_think(text: str) -> str:
     text = re.sub(r"<thought>[\s\S]*?</thought>", "", text)
     text = re.sub(r"^\s*<thought>[\s\S]*$", "", text)
     return text.strip()
+

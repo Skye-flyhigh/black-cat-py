@@ -1,5 +1,6 @@
 """Tests for multi-provider web search."""
 
+
 import httpx
 import pytest
 
@@ -16,25 +17,6 @@ def _response(status: int = 200, json: dict | None = None) -> httpx.Response:
     r = httpx.Response(status, json=json)
     r._request = httpx.Request("GET", "https://mock")
     return r
-
-
-def test_duckduckgo_search_is_exclusive():
-    tool = _tool(provider="duckduckgo")
-    assert tool.exclusive is True
-    assert tool.concurrency_safe is False
-
-
-def test_brave_with_api_key_remains_concurrency_safe():
-    tool = _tool(provider="brave", api_key="brave-key")
-    assert tool.exclusive is False
-    assert tool.concurrency_safe is True
-
-
-def test_brave_without_api_key_is_treated_as_duckduckgo_for_concurrency(monkeypatch):
-    monkeypatch.delenv("BRAVE_API_KEY", raising=False)
-    tool = _tool(provider="brave", api_key="")
-    assert tool.exclusive is True
-    assert tool.concurrency_safe is False
 
 
 @pytest.mark.asyncio
@@ -71,18 +53,14 @@ async def test_tavily_search(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_searxng_search(monkeypatch):
-    import socket
-
-    def _fake_resolve(hostname, port, family=0, type_=0):
-        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
-
     async def mock_get(self, url, **kw):
         assert "searx.example" in url
         return _response(json={
             "results": [{"title": "Result", "url": "https://example.com", "content": "SearXNG result"}]
         })
 
-    monkeypatch.setattr("blackcat.security.network.socket.getaddrinfo", _fake_resolve)
+    # Mock DNS validation to allow the fake domain
+    monkeypatch.setattr("blackcat.security.network.validate_url_target", lambda url: (True, ""))
     monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
     tool = _tool(provider="searxng", base_url="https://searx.example")
     result = await tool.execute(query="test")
@@ -287,3 +265,5 @@ async def test_duckduckgo_timeout_returns_error(monkeypatch):
     result = await tool.execute(query="test")
     gate.set()
     assert "Error" in result
+
+

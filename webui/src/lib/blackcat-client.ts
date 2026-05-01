@@ -1,8 +1,8 @@
 import type {
-  ConnectionStatus,
-  InboundEvent,
-  Outbound,
-  OutboundMedia,
+    ConnectionStatus,
+    InboundEvent,
+    Outbound,
+    OutboundMedia,
 } from "./types";
 
 /** WebSocket readyState constants, referenced by value to stay portable
@@ -36,7 +36,7 @@ interface PendingNewChat {
   timer: ReturnType<typeof setTimeout>;
 }
 
-export interface NanobotClientOptions {
+export interface BlackcatClientOptions {
   url: string;
   reconnect?: boolean;
   /** Called when a connection drops so the app can refresh its token. */
@@ -54,7 +54,7 @@ export interface NanobotClientOptions {
  * ``chat_id``, and this class fans those events out to handlers registered
  * per chat. Reconnects are transparent and re-attach every known chat_id.
  */
-export class NanobotClient {
+export class BlackcatClient {
   private socket: WebSocket | null = null;
   private statusHandlers = new Set<StatusHandler>();
   private errorHandlers = new Set<ErrorHandler>();
@@ -77,7 +77,7 @@ export class NanobotClient {
   // and must not schedule a reconnect or flip status back to "reconnecting".
   private intentionallyClosed = false;
 
-  constructor(private options: NanobotClientOptions) {
+  constructor(private options: BlackcatClientOptions) {
     this.shouldReconnect = options.reconnect ?? true;
     this.maxBackoffMs = options.maxBackoffMs ?? 15_000;
     this.socketFactory =

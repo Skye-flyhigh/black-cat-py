@@ -24,7 +24,7 @@ def _resolve_version() -> str:
         return _pkg_version("blackcat-ai")
     except PackageNotFoundError:
         # Source checkouts often import blackcat without installed dist-info.
-        return _read_pyproject_version() or "0.1.5.post2"
+        return _read_pyproject_version() or "0.1.5.post3"
 
 
 __version__ = _resolve_version()

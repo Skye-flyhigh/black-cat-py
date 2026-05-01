@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 /**
  * blackcat WhatsApp Bridge
- * blackcat WhatsApp Bridge
  * 
- * This bridge connects WhatsApp Web to blackcat's Python backend
  * This bridge connects WhatsApp Web to blackcat's Python backend
  * via WebSocket. It handles authentication, message forwarding,
  * and reconnection logic.
@@ -12,7 +10,6 @@
  *   npm run build && npm start
  *   
  * Or with custom settings:
- *   BRIDGE_PORT=3001 AUTH_DIR=~/.blackcat/whatsapp npm start
  *   BRIDGE_PORT=3001 AUTH_DIR=~/.blackcat/whatsapp npm start
  */
 
@@ -35,8 +32,7 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-console.log('🐈 blackcat WhatsApp Bridge');
-console.log('🐈 blackcat WhatsApp Bridge');
+console.log('🐈‍⬛ blackcat WhatsApp Bridge');
 console.log('========================\n');
 
 const server = new BridgeServer(PORT, AUTH_DIR, TOKEN);

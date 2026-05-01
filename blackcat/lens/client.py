@@ -112,12 +112,20 @@ class LensClient:
             except Exception:
                 return False
 
-    def resolve_path(self, file_path: str, workspace: str | None = None) -> Path:
-        """Resolve file path, handling workspace aliases."""
+    def resolve_path(self, path: str, workspace: str | None = None) -> Path:
+        """Resolve a path, optionally relative to a workspace.
+
+        Args:
+            path: File path to resolve
+            workspace: Workspace alias to resolve against
+
+        Returns:
+            Resolved Path object
+        """
+        p = Path(path).expanduser()
         if workspace and workspace in self.workspace_paths:
-            base = Path(self.workspace_paths[workspace])
-            return base / file_path
-        return Path(file_path).expanduser().resolve()
+            p = Path(self.workspace_paths[workspace]) / p
+        return p.resolve()
 
     def _make_file_uri(self, file_path: str | Path) -> str:
         """Convert path to file:// URI."""

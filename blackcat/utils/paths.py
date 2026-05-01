@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from blackcat.config.loader import get_config_path
-from blackcat.utils.helpers import ensure_dir
 
 
 def get_data_dir() -> Path:
@@ -60,3 +59,44 @@ def get_bridge_install_dir() -> Path:
 def get_legacy_sessions_dir() -> Path:
     """Return the legacy global session directory used for migration fallback."""
     return Path.home() / ".blackcat" / "sessions"
+
+def get_sessions_path() -> Path:
+    """Get the sessions storage directory."""
+    return ensure_dir(get_data_path() / "sessions")
+
+
+def get_memory_path(workspace: Path | None = None) -> Path:
+    """Get the memory directory within the workspace."""
+    ws = workspace or get_workspace_path()
+    return ensure_dir(ws / "memory")
+
+
+def get_skills_path(workspace: Path | None = None) -> Path:
+    """Get the skills directory within the workspace."""
+    ws = workspace or get_workspace_path()
+    return ensure_dir(ws / "skills")
+
+
+def get_data_path() -> Path:
+    """Get the blackcat data directory (~/.blackcat)."""
+    return ensure_dir(Path.home() / ".blackcat")
+
+def resolve_path(
+    path: str, workspace: Path | None = None, allowed_dir: Path | None = None
+) -> Path:
+    """Resolve path against workspace (if relative) and enforce directory restriction."""
+    p = Path(path).expanduser()
+    if not p.is_absolute() and workspace:
+        p = workspace / p
+    resolved = p.resolve()
+    if allowed_dir:
+        try:
+            resolved.relative_to(allowed_dir.resolve())
+        except ValueError:
+            raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
+    return resolved
+
+def ensure_dir(path: Path) -> Path:
+    """Ensure directory exists, return it."""
+    path.mkdir(parents=True, exist_ok=True)
+    return path

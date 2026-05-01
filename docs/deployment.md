@@ -4,7 +4,11 @@
 
 > [!TIP]
 > The `-v ~/.blackcat:/home/blackcat/.blackcat` flag mounts your local config directory into the container, so your config and workspace persist across container restarts.
-> The container runs as user `blackcat` (UID 1000). If you get **Permission denied**, fix ownership on the host first: `sudo chown -R 1000:1000 ~/.blackcat`, or pass `--user $(id -u):$(id -g)` to match your host UID. Podman users can use `--userns=keep-id` instead.
+> The container runs as the non-root user `blackcat` (UID 1000) and reads config from `/home/blackcat/.blackcat`. Always mount your host config directory to `/home/blackcat/.blackcat`, not `/root/.blackcat`.
+> If you get **Permission denied**, fix ownership on the host first: `sudo chown -R 1000:1000 ~/.blackcat`, or pass `--user $(id -u):$(id -g)` to match your host UID. Podman users can use `--userns=keep-id` instead.
+>
+> [!IMPORTANT]
+> Official Docker usage currently means building from this repository with the included `Dockerfile`. Docker Hub images under third-party namespaces are not maintained or verified by HKUDS/blackcat; do not mount API keys or bot tokens into them unless you trust the publisher.
 
 ### Docker Compose
 
@@ -54,7 +58,7 @@ which blackcat   # e.g. /home/user/.local/bin/blackcat
 
 ```ini
 [Unit]
-Description=Nanobot Gateway
+Description=Blackcat Gateway
 After=network.target
 
 [Service]

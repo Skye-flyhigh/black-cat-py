@@ -22,9 +22,9 @@ from pydantic import Field
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
-from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
 from blackcat.utils.helpers import safe_filename
+from blackcat.utils.paths import get_media_dir
 
 
 class EmailConfig(Base):

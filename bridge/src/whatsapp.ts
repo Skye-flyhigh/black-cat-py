@@ -16,7 +16,7 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom';
 import { randomBytes } from 'crypto';
 import { mkdir, readFile, writeFile } from 'fs/promises';
-import { basename, join } from 'path';
+import { basename, join, resolve, sep } from 'path';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 
@@ -90,7 +90,6 @@ export class WhatsAppClient {
       version,
       logger,
       printQRInTerminal: false,
-      browser: ['blackcat', 'cli', VERSION],
       browser: ['blackcat', 'cli', VERSION],
       syncFullHistory: false,
       markOnlineOnConnect: false,
@@ -197,17 +196,18 @@ export class WhatsAppClient {
 
       let outFilename: string;
       if (fileName) {
-        // Documents have a filename — use it with a unique prefix to avoid collisions
-        const prefix = `wa_${Date.now()}_${randomBytes(4).toString('hex')}_`;
-        outFilename = prefix + fileName;
+        const safeName = basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
+        outFilename = `wa_${Date.now()}_${randomBytes(4).toString('hex')}_${safeName}`;
       } else {
         const mime = mimetype || 'application/octet-stream';
-        // Derive extension from mimetype subtype (e.g. "image/png" → ".png", "application/pdf" → ".pdf")
         const ext = '.' + (mime.split('/').pop()?.split(';')[0] || 'bin');
         outFilename = `wa_${Date.now()}_${randomBytes(4).toString('hex')}${ext}`;
       }
 
-      const filepath = join(mediaDir, outFilename);
+      const filepath = resolve(mediaDir, outFilename);
+      if (!filepath.startsWith(resolve(mediaDir) + sep)) {
+        throw new Error(`Path traversal blocked: ${outFilename}`);
+      }
       await writeFile(filepath, buffer);
 
       return filepath;

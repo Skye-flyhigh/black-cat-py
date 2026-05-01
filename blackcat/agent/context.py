@@ -15,10 +15,10 @@ from loguru import logger
 from blackcat.agent.skills import SkillsLoader
 from blackcat.memory.memory import MemoryStore
 from blackcat.session.manager import SessionManager
+from blackcat.utils.formatting import truncate_text
 from blackcat.utils.helpers import (
     current_time_str,
     detect_image_mime,
-    truncate_text,
 )
 from blackcat.utils.prompt_templates import render_template
 
@@ -127,7 +127,7 @@ class ContextBuilder:
         with open(identity_path, "rb") as f:
             return tomllib.load(f)
 
-    def _get_guidlines(self, channel: str | None = None) -> str:
+    def _get_guidelines(self, channel: str | None = None) -> str:
         """Get the core identity section."""
         workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
@@ -459,7 +459,7 @@ class ContextBuilder:
 
         system = platform.system()
         workspace_string = render_template("agent/platform_policy.md", system=system)
-        guidelines_string = self._get_guidlines()
+        guidelines_string = self._get_guidelines()
         # Add guideline and workspace blocks (static content)
         blocks.append({"type": "text", "text": guidelines_string})
         blocks.append({"type": "text", "text": workspace_string})

@@ -56,11 +56,11 @@ def test_prepare_call_read_file_rejects_non_object_params_with_actionable_hint()
 
     tool, params, error = registry.prepare_call("read_file", ["foo.txt"])
 
-    # Tool is resolved but validation fails
-    assert tool is not None
+    # Tool is NOT resolved when params is not a dict for read_file/write_file
+    assert tool is None
     assert params == ["foo.txt"]
     assert error is not None
-    assert "parameters must be an object" in error
+    assert "parameters must be a JSON object" in error
 
 
 def test_prepare_call_other_tools_keep_generic_object_validation() -> None:
