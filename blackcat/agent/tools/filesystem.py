@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+<<<<<<< HEAD:blackcat/agent/tools/filesystem.py
 from blackcat.agent.tools import file_state
 from blackcat.agent.tools.base import Tool, tool_parameters
 from blackcat.agent.tools.schema import (
@@ -17,6 +18,13 @@ from blackcat.agent.tools.schema import (
 )
 from blackcat.utils.media import build_image_content_blocks, detect_image_mime
 from blackcat.utils.paths import get_media_dir
+=======
+from nanobot.agent.tools.base import Tool, tool_parameters
+from nanobot.agent.tools.schema import BooleanSchema, IntegerSchema, StringSchema, tool_parameters_schema
+from nanobot.agent.tools.file_state import FileStates, _hash_file, current_file_states
+from nanobot.utils.helpers import build_image_content_blocks, detect_image_mime
+from nanobot.config.paths import get_media_dir
+>>>>>>> fae38319 (fix(tools): scope file state by session):nanobot/agent/tools/filesystem.py
 
 
 def _resolve_path(
@@ -59,7 +67,21 @@ class _FsTool(Tool):
         self._workspace = workspace
         self._allowed_dir = allowed_dir
         self._extra_allowed_dirs = extra_allowed_dirs
+<<<<<<< HEAD:blackcat/agent/tools/filesystem.py
         self._file_states = file_states or file_state._default
+=======
+        # Explicit state is used by isolated runners like Dream/subagents.
+        # Main AgentLoop tools leave this unset and resolve state from the
+        # current async task, which keeps shared tool instances session-safe.
+        self._explicit_file_states = file_states
+        self._fallback_file_states = FileStates()
+
+    @property
+    def _file_states(self) -> FileStates:
+        if self._explicit_file_states is not None:
+            return self._explicit_file_states
+        return current_file_states(self._fallback_file_states)
+>>>>>>> fae38319 (fix(tools): scope file state by session):nanobot/agent/tools/filesystem.py
 
     def _resolve(self, path: str) -> Path:
         return _resolve_path(path, self._workspace, self._allowed_dir, self._extra_allowed_dirs)
