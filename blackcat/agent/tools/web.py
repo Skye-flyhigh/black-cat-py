@@ -15,10 +15,7 @@ from blackcat.agent.tools.base import Tool, tool_parameters
 from blackcat.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
 from blackcat.utils.helpers import build_image_content_blocks
 
-if TYPE_CHECKING:
-    from blackcat.config.schema import WebFetchConfig, WebSearchConfig
-
-from blackcat.config.schema import WebSearchConfig
+from blackcat.config.schema import WebFetchConfig, WebSearchConfig
 
 # ========== Schema definitions ==========
 

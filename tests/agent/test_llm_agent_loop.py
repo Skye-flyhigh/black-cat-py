@@ -10,6 +10,7 @@ Run explicitly:
 
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -73,6 +74,7 @@ async def test_run_agent_loop_simple_response(provider):
     agent.workspace = None
     agent.provider_retry_mode = "standard"
     agent._unified_session = False
+    agent.subagents = MagicMock()
 
     # Bypass the full context manager — just raw messages
     from blackcat.agent.context import ContextBuilder
@@ -114,6 +116,7 @@ async def test_run_agent_loop_with_read_file(provider, tmp_path):
     agent.workspace = workspace
     agent.provider_retry_mode = "standard"
     agent._unified_session = False
+    agent.subagents = MagicMock()
 
     from blackcat.agent.context import ContextBuilder
 
@@ -155,6 +158,7 @@ async def test_run_agent_loop_with_write_file(provider, tmp_path):
     agent.workspace = workspace
     agent.provider_retry_mode = "standard"
     agent._unified_session = False
+    agent.subagents = MagicMock()
 
     from blackcat.agent.context import ContextBuilder
 
