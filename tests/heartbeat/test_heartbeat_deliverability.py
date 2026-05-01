@@ -1,6 +1,7 @@
 """Tests for HeartbeatService._is_deliverable and _tick suppression."""
 
 import pytest
+
 from blackcat.heartbeat.service import HeartbeatService
 from blackcat.providers.base import LLMResponse, ToolCallRequest
 

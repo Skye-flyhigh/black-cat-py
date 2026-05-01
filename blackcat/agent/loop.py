@@ -64,7 +64,6 @@ from blackcat.utils.progress_events import (
     invoke_on_progress,
     on_progress_accepts_tool_events,
 )
-from blackcat.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
 if TYPE_CHECKING:
     from blackcat.config.schema import ChannelsConfig, ExecToolConfig, ToolsConfig, WebToolsConfig
@@ -230,7 +229,7 @@ class AgentLoop:
         provider_signature: tuple[object, ...] | None = None,
         config: Config | None = None,
     ):
-        from blackcat.config.schema import ExecToolConfig, ToolsConfig, WebToolsConfig
+        from blackcat.config.schema import ExecToolConfig, WebToolsConfig
 
         self.config = config or Config()
         self.tools_config = self.config.tools
@@ -294,8 +293,8 @@ class AgentLoop:
         # When a session has an active task, new messages for that session
         # are routed here instead of creating a new task.
         self._pending_queues: dict[str, asyncio.Queue] = {}
-        # NANOBOT_MAX_CONCURRENT_REQUESTS: <=0 means unlimited; default 3.
-        _max = int(os.environ.get("NANOBOT_MAX_CONCURRENT_REQUESTS", "3"))
+        # BLACKCAT_MAX_CONCURRENT_REQUESTS: <=0 means unlimited; default 3.
+        _max = int(os.environ.get("BLACKCAT_MAX_CONCURRENT_REQUESTS", "3"))
         self._concurrency_gate: asyncio.Semaphore | None = (
             asyncio.Semaphore(_max) if _max > 0 else None
         )

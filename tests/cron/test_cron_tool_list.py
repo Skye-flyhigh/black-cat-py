@@ -389,7 +389,7 @@ def test_add_job_captures_metadata_and_session_key(tmp_path) -> None:
     meta = {"slack": {"thread_ts": "111.222", "channel_type": "channel"}}
     tool.set_context("slack", "C99", metadata=meta, session_key="slack:C99:111.222")
 
-    result = tool._add_job("test", "say hi", 60, None, None, None)
+    result = tool._add_job("test", "say hi", 60, None, None, None, None, None)
     assert "Created job" in result
 
     jobs = tool._cron.list_jobs()

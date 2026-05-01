@@ -251,6 +251,8 @@ class CronTool(Tool):
             deliver=True,
             channel=channel,
             to=chat_id,
+            channel_meta=self._metadata.get() or None,
+            session_key=self._session_key.get() or None,
             delete_after_run=delete_after,
             metadata=job_metadata,
         )

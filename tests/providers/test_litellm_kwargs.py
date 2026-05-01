@@ -770,7 +770,7 @@ def test_openai_compat_defaults_missing_tool_arguments_to_empty_object() -> None
 
 @pytest.mark.asyncio
 async def test_openai_compat_stream_watchdog_returns_error_on_stall(monkeypatch) -> None:
-    monkeypatch.setenv("NANOBOT_STREAM_IDLE_TIMEOUT_S", "0")
+    monkeypatch.setenv("BLACKCAT_STREAM_IDLE_TIMEOUT_S", "0")
     mock_create = AsyncMock(return_value=_StalledStream())
     spec = find_by_name("openai")
 
@@ -1061,7 +1061,7 @@ def test_kimi_k2_thinking_series_no_thinking_injection() -> None:
 
 
 # ---------------------------------------------------------------------------
-# reasoning_effort="none" — treated as thinking disabled 
+# reasoning_effort="none" — treated as thinking disabled
 # ---------------------------------------------------------------------------
 
 def test_deepseek_thinking_disabled_for_none_string() -> None:

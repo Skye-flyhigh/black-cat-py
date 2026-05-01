@@ -1,4 +1,5 @@
 """Tests for Feishu message reply (quote) feature."""
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace

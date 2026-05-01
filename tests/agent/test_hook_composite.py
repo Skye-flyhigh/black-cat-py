@@ -342,7 +342,7 @@ async def test_agent_loop_extra_hook_error_isolation(tmp_path):
 @pytest.mark.asyncio
 async def test_agent_loop_extra_hooks_do_not_swallow_loop_hook_errors(tmp_path):
     """Extra hooks must not change the core LoopHook failure behavior."""
-    from blackcat.providers.base import LLMResponse, ToolCallRequest
+    from blackcat.providers.base import LLMResponse
 
     loop = _make_loop(tmp_path, hooks=[AgentHook()])
     loop.provider.chat_with_retry = AsyncMock(return_value=LLMResponse(

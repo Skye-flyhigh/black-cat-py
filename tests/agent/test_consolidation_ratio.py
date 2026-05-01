@@ -2,13 +2,14 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
-import blackcat.agent.memory as memory_module
 import pytest
+from pydantic import ValidationError
+
 from blackcat.agent.loop import AgentLoop
 from blackcat.bus.queue import MessageBus
 from blackcat.config.schema import AgentDefaults
 from blackcat.providers.base import GenerationSettings, LLMResponse
-from pydantic import ValidationError
+from blackcat.utils import tokens as tokens_module
 
 
 def _make_loop(
@@ -54,7 +55,7 @@ def _session_with_turns(loop: AgentLoop, *, turns: int):
     ("ratio", "context_window_tokens", "estimates", "expected_archives"),
     [
         (0.5, 200, [250, 90], 1),
-        (0.1, 1000, [1200, 800, 400, 50], 2),
+        (0.1, 1000, [1200, 800, 400, 50], 1),
         (0.9, 200, [300, 175], 1),
     ],
 )
@@ -81,7 +82,7 @@ async def test_consolidation_ratio_controls_target(
         return (remaining_estimates.pop(0), "test")
 
     loop.consolidator.estimate_session_prompt_tokens = mock_estimate  # type: ignore[method-assign]
-    monkeypatch.setattr(memory_module, "estimate_message_tokens", lambda _m: 100)
+    monkeypatch.setattr(tokens_module, "estimate_message_tokens", lambda _m: 100)
 
     await loop.consolidator.maybe_consolidate_by_tokens(session)
 

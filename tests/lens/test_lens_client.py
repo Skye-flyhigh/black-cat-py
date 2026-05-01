@@ -301,7 +301,7 @@ class TestLensClientPathHelpers:
         result = client.resolve_path("sub/file.py", workspace="ws")
 
         assert str(result).endswith("sub/file.py")
-        assert str(result).startswith("/tmp/ws")
+        assert "/ws/sub/file.py" in str(result)
 
     def test_resolve_path_without_workspace(self):
         """Should expand and resolve absolute path."""

@@ -638,7 +638,7 @@ def test_agent_workspace_override_does_not_migrate_legacy_cron(
     monkeypatch.setattr("blackcat.cli.commands.sync_workspace_templates", lambda _path: None)
     monkeypatch.setattr("blackcat.cli.commands._make_provider", lambda _config: object())
     monkeypatch.setattr("blackcat.bus.queue.MessageBus", lambda: object())
-    monkeypatch.setattr("blackcat.config.paths.get_cron_dir", lambda: legacy_dir)
+    monkeypatch.setattr("blackcat.utils.paths.get_cron_dir", lambda: legacy_dir)
 
     class _FakeCron:
         def __init__(self, store_path: Path) -> None:
@@ -691,7 +691,7 @@ def test_agent_custom_config_workspace_does_not_migrate_legacy_cron(
     monkeypatch.setattr("blackcat.cli.commands.sync_workspace_templates", lambda _path: None)
     monkeypatch.setattr("blackcat.cli.commands._make_provider", lambda _config: object())
     monkeypatch.setattr("blackcat.bus.queue.MessageBus", lambda: object())
-    monkeypatch.setattr("blackcat.config.paths.get_cron_dir", lambda: legacy_dir)
+    monkeypatch.setattr("blackcat.utils.paths.get_cron_dir", lambda: legacy_dir)
 
     class _FakeCron:
         def __init__(self, store_path: Path) -> None:
@@ -830,7 +830,7 @@ def _patch_cli_command_runtime(
     if cron_service is not None:
         monkeypatch.setattr("blackcat.cron.service.CronService", cron_service)
     if get_cron_dir is not None:
-        monkeypatch.setattr("blackcat.config.paths.get_cron_dir", get_cron_dir)
+        monkeypatch.setattr("blackcat.utils.paths.get_cron_dir", get_cron_dir)
 
 
 def _patch_serve_runtime(monkeypatch, config: Config, seen: dict[str, object]) -> None:
@@ -1278,7 +1278,7 @@ def test_migrate_cron_store_moves_legacy_file(tmp_path: Path) -> None:
     config.agents.defaults.workspace = str(tmp_path / "workspace")
     workspace_cron = config.workspace_path / "cron" / "jobs.json"
 
-    with patch("blackcat.config.paths.get_cron_dir", return_value=legacy_dir):
+    with patch("blackcat.utils.paths.get_cron_dir", return_value=legacy_dir):
         _migrate_cron_store(config)
 
     assert workspace_cron.exists()
@@ -1300,7 +1300,7 @@ def test_migrate_cron_store_skips_when_workspace_file_exists(tmp_path: Path) -> 
     workspace_cron.parent.mkdir(parents=True)
     workspace_cron.write_text('{"new": true}')
 
-    with patch("blackcat.config.paths.get_cron_dir", return_value=legacy_dir):
+    with patch("blackcat.utils.paths.get_cron_dir", return_value=legacy_dir):
         _migrate_cron_store(config)
 
     assert workspace_cron.read_text() == '{"new": true}'
@@ -1361,7 +1361,7 @@ def test_gateway_health_endpoint_binds_and_serves_expected_responses(
             return 0
 
     class _FakeAgentLoop:
-        def __init__(self, **_kwargs) -> None:
+        def __init__(self, *args, **_kwargs) -> None:
             self.model = "test-model"
             self.dream = _FakeDream()
             self.sessions = _FakeSessionManager()

@@ -37,7 +37,6 @@ from blackcat.command.builtin import build_help_text
 from blackcat.config.schema import Base
 from blackcat.security.network import validate_url_target
 from blackcat.utils.formatting import split_message
-from blackcat.utils.helpers import split_message
 from blackcat.utils.paths import get_media_dir
 
 TELEGRAM_MAX_MESSAGE_LEN = 4000  # Telegram message character limit

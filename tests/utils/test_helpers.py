@@ -2,11 +2,11 @@
 
 
 from blackcat.utils.helpers import (
-    ensure_dir,
     parse_session_key,
     safe_filename,
     truncate_string,
 )
+from blackcat.utils.paths import ensure_dir
 
 # ── ensure_dir ─────────────────────────────────────────────────────
 

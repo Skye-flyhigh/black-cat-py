@@ -23,13 +23,15 @@ from blackcat.utils.helpers import (
     truncate_string,
 )
 from blackcat.utils.paths import (
-    ensure_dir,
-    get_data_path,
-    get_memory_path,
-    get_sessions_path,
-    get_skills_path,
+    get_cli_history_path,
+    get_cron_dir,
+    get_data_dir,
+    get_legacy_sessions_dir,
+    get_logs_dir,
+    get_media_dir,
+    get_runtime_subdir,
     get_workspace_path,
-    resolve_path,
+    is_default_workspace,
 )
 
 # Runtime utilities
@@ -67,12 +69,15 @@ from blackcat.utils.tools import (
 
 __all__ = [
     # Path utilities
-    "ensure_dir",
-    "get_data_path",
+    "get_data_dir",
+    "get_runtime_subdir",
+    "get_media_dir",
+    "get_cron_dir",
+    "get_logs_dir",
     "get_workspace_path",
-    "get_sessions_path",
-    "get_memory_path",
-    "get_skills_path",
+    "is_default_workspace",
+    "get_cli_history_path",
+    "get_legacy_sessions_dir",
     "safe_filename",
     "safe_json_dumps",
     "parse_session_key",

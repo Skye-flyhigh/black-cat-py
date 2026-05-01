@@ -6,11 +6,10 @@ import json
 import os
 import re
 from asyncio.log import logger
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlparse
 
 import httpx
-from loguru import logger
 
 from blackcat.agent.tools.base import Tool, tool_parameters
 from blackcat.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
@@ -19,14 +18,7 @@ from blackcat.utils.helpers import build_image_content_blocks
 if TYPE_CHECKING:
     from blackcat.config.schema import WebFetchConfig, WebSearchConfig
 
-from blackcat.agent.tools.base import Tool, tool_parameters
-from blackcat.agent.tools.schema import (
-    IntegerSchema,
-    StringSchema,
-    tool_parameters_schema,
-)
 from blackcat.config.schema import WebSearchConfig
-from blackcat.utils.media import build_image_content_blocks
 
 # ========== Schema definitions ==========
 
@@ -283,6 +275,14 @@ class WebSearchTool(Tool):
             api_key = self.config.api_key or os.environ.get("OLOSTEP_API_KEY", "")
             return "olostep" if api_key else "duckduckgo"
         return provider
+
+    @property
+    def name(self) -> str:
+        return "web_search"
+
+    @property
+    def description(self) -> str:
+        return "Search the web using the configured provider. Returns titles, URLs, and snippets."
 
     @property
     def read_only(self) -> bool:

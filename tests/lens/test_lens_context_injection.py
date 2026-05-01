@@ -1,8 +1,9 @@
 """Tests for Lens context injection - how lens metadata is injected into LLM context."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from blackcat.agent.context import ContextBuilder
 from blackcat.config.schema import LensConfig

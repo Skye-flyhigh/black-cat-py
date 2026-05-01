@@ -108,7 +108,6 @@ class Consolidator:
             current_message="[token-probe]",
             channel=channel,
             chat_id=chat_id,
-            session_summary=session_summary,
         )
         return estimate_prompt_tokens_chain(
             self.provider,

@@ -14,7 +14,7 @@ except ImportError:
 
 from blackcat.bus.events import OutboundMessage
 from blackcat.bus.queue import MessageBus
-from blackcat.channels.slack import SlackChannel, SlackConfig
+from blackcat.channels.slack import SLACK_MAX_MESSAGE_LEN, SlackChannel, SlackConfig
 
 
 class _FakeAsyncWebClient:

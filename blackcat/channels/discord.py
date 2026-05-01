@@ -783,7 +783,7 @@ class DiscordChannel(BaseChannel):
         author = getattr(referenced_message, "author", None)
         return str(getattr(author, "id", "")) == bot_user_id
 
-    async def _start_typing(self, channel: Messageable) -> None:
+    async def _start_typing(self, chat_id: str) -> None:
         """Start periodic typing indicator for a channel."""
         channel_id = self._channel_key(chat_id)
         await self._stop_typing(chat_id)

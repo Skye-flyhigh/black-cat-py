@@ -1432,7 +1432,7 @@ class FeishuChannel(BaseChannel):
         if buf is None:
             buf = _FeishuStreamBuf()
             self._stream_bufs[stream_key] = buf
-        buf.text += delta
+        buf.text += content
         if not buf.text.strip():
             return
 

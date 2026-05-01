@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
 from blackcat.agent.loop import AgentLoop
 from blackcat.bus.queue import MessageBus
 from blackcat.providers.base import LLMResponse, ToolCallRequest

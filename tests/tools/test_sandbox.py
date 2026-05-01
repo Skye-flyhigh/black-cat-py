@@ -3,10 +3,7 @@
 import shlex
 
 import pytest
-<<<<<<< HEAD
-=======
 
->>>>>>> blackcat
 from blackcat.agent.tools.sandbox import wrap_command
 
 

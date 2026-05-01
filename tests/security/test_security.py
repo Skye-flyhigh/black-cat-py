@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from blackcat.utils.helpers import resolve_path
+from blackcat.utils.paths import resolve_path
 
 # ── Deny-by-default is_allowed ────────────────────────────────────
 
@@ -19,6 +19,7 @@ def _make_channel(allow_from: list[str]):
         async def start(self): pass
         async def stop(self): pass
         async def _send_impl(self, msg): pass
+        async def send(self, msg): pass
 
     config = MagicMock()
     config.allow_from = allow_from

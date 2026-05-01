@@ -393,6 +393,8 @@ class CronService:
         deliver: bool = False,
         channel: str | None = None,
         to: str | None = None,
+        channel_meta: dict | None = None,
+        session_key: str | None = None,
         delete_after_run: bool = False,
         metadata: dict | None = None,
     ) -> CronJob:

@@ -352,7 +352,7 @@ async def test_process_message_does_not_duplicate_early_persisted_user_message(t
 async def test_process_message_uses_context_chat_id_for_runtime_prompt(tmp_path: Path) -> None:
     loop = _make_full_loop(tmp_path)
     loop.consolidator.maybe_consolidate_by_tokens = AsyncMock(return_value=False)  # type: ignore[method-assign]
-    loop.context.build_messages = MagicMock(  # type: ignore[method-assign]
+    loop.context.build_messages = AsyncMock(  # type: ignore[method-assign]
         return_value=[
             {"role": "system", "content": "system"},
             {"role": "user", "content": "runtime + hello"},

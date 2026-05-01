@@ -113,7 +113,7 @@ class MessageHandler:
         if isinstance(message_tool, MessageTool):
             message_tool.start_turn()
 
-        history = session.get_history(max_messages=0)
+        history = session.get_history(max_messages=loop._max_messages, include_timestamps=True)
 
         # Handle pending ask_user response
         pending_ask_id = pending_ask_user_id(history)
@@ -135,7 +135,7 @@ class MessageHandler:
                 current_message=msg.content,
                 media=msg.media if msg.media else None,
                 channel=msg.channel,
-                chat_id=msg.chat_id,
+                chat_id=loop._runtime_chat_id(msg),
                 author=author,
             )
 
@@ -253,7 +253,8 @@ class MessageHandler:
             msg.chat_id.split(":", 1) if ":" in msg.chat_id else ("cli", msg.chat_id)
         )
         logger.info("Processing system message from {}", msg.sender_id)
-        key = f"{channel}:{chat_id}"
+        # Use session_key_override if provided (for thread-scoped sessions)
+        key = getattr(msg, "session_key_override", None) or f"{channel}:{chat_id}"
         session = loop.sessions.get_or_create(key)
 
         # Restore checkpoint state from crash recovery
@@ -274,9 +275,13 @@ class MessageHandler:
             loop.sessions.save(session)
 
         # Set tool context for this turn
-        loop._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
+        loop._set_tool_context(
+            channel, chat_id, msg.metadata.get("message_id"),
+            metadata=msg.metadata.get("channel_meta"),
+            session_key=getattr(msg, "session_key_override", None),
+        )
 
-        history = session.get_history(max_messages=0)
+        history = session.get_history(max_messages=loop._max_messages, include_timestamps=True)
 
         # Subagent content is already in `history`; passing it again would double-project
         # System messages use "system" as author since they're not from a user
@@ -302,6 +307,15 @@ class MessageHandler:
         loop.sessions.save(session)
         loop._schedule_background(loop.consolidator.maybe_consolidate_by_tokens(session))
 
+        # Restore channel metadata from session context for outbound routing
+        # (e.g., Slack thread_ts from session_key like "slack:C123:1700.42")
+        outbound_meta: dict = {}
+        session_key = getattr(msg, "session_key_override", None) or f"{channel}:{chat_id}"
+        if channel == "slack" and ":" in session_key:
+            parts = session_key.split(":")
+            if len(parts) >= 3:
+                outbound_meta["slack"] = {"thread_ts": parts[2]}
+
         options = ask_user_options_from_messages(all_msgs) if stop_reason == "ask_user" else []
         content, buttons = ask_user_outbound(
             final_content or "Background task completed.",
@@ -312,5 +326,6 @@ class MessageHandler:
             channel=channel,
             chat_id=chat_id,
             content=content,
+            metadata=outbound_meta,
             buttons=buttons,
         )

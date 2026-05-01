@@ -712,7 +712,6 @@ def _run_gateway(
                 logger.exception("Dream cron job failed")
             return None
 
-        from blackcat.agent.tools.cron import CronTool
         from blackcat.agent.tools.message import MessageTool
         from blackcat.utils.evaluator import evaluate_response
 
@@ -1005,7 +1004,7 @@ def agent(
     from blackcat.bus.queue import MessageBus
     from blackcat.cron.service import CronService
 
-    config = _load_runtime_config(config, workspace)
+    config = _load_runtime_config(config_file, workspace)
     sync_workspace_templates(config.workspace_path)
 
     bus = MessageBus()

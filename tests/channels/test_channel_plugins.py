@@ -263,7 +263,7 @@ async def test_manager_propagates_openai_transcription_api_base_to_channels():
 @pytest.mark.asyncio
 async def test_base_channel_passes_api_base_to_openai_transcription_provider():
     """BaseChannel.transcribe_audio must forward transcription_api_base to OpenAI."""
-    from blackcat.channels import base as base_mod
+    from blackcat.providers import transcription as transcription_mod
 
     channel = _FakePlugin({"enabled": True, "allowFrom": ["*"]}, MessageBus())
     channel.transcription_provider = "openai"
@@ -282,7 +282,7 @@ async def test_base_channel_passes_api_base_to_openai_transcription_provider():
         async def transcribe(self, file_path):
             return "ok"
 
-    with patch.object(base_mod, "OpenAITranscriptionProvider", _StubOpenAI):
+    with patch.object(transcription_mod, "OpenAITranscriptionProvider", _StubOpenAI):
         result = await channel.transcribe_audio("/tmp/does-not-matter.wav")
 
     assert result == "ok"
@@ -306,7 +306,7 @@ def test_openai_transcription_provider_honors_api_base_argument():
 @pytest.mark.asyncio
 async def test_base_channel_passes_language_to_groq_transcription_provider():
     """BaseChannel.transcribe_audio must forward transcription_language to Groq."""
-    from blackcat.channels import base as base_mod
+    from blackcat.providers import transcription as transcription_mod
 
     channel = _FakePlugin({"enabled": True, "allowFrom": ["*"]}, MessageBus())
     channel.transcription_provider = "groq"
@@ -325,7 +325,7 @@ async def test_base_channel_passes_language_to_groq_transcription_provider():
         async def transcribe(self, file_path):
             return "ok"
 
-    with patch.object(base_mod, "GroqTranscriptionProvider", _StubGroq):
+    with patch.object(transcription_mod, "GroqTranscriptionProvider", _StubGroq):
         result = await channel.transcribe_audio("/tmp/does-not-matter.wav")
 
     assert result == "ok"

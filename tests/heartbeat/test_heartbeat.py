@@ -1,13 +1,10 @@
 """Tests for the heartbeat service."""
 
-import asyncio
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from blackcat.heartbeat.service import HeartbeatService
-
 
 # ── _decide (Phase 1) ───────────────────────────────────────────────
 

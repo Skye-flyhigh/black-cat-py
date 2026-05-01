@@ -146,8 +146,8 @@ class ExecTool(Tool):
             if _IS_WINDOWS:
                 env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
             else:
-                env["NANOBOT_PATH_APPEND"] = self.path_append
-                command = f'export PATH="$PATH{os.pathsep}$NANOBOT_PATH_APPEND"; {command}'
+                env["BLACKCAT_PATH_APPEND"] = self.path_append
+                command = f'export PATH="$PATH{os.pathsep}$BLACKCAT_PATH_APPEND"; {command}'
 
         try:
             process = await self._spawn(command, cwd, env)

@@ -141,19 +141,19 @@ def _build_matrix_text_content(
 ) -> dict[str, object]:
     """
     Constructs and returns a dictionary representing the matrix text content with optional
-    HTML formatting and reference to an existing event for replacement. This function is 
+    HTML formatting and reference to an existing event for replacement. This function is
     primarily used to create content payloads compatible with the Matrix messaging protocol.
 
     :param text: The plain text content to include in the message.
     :type text: str
-    :param event_id: Optional ID of the event to replace. If provided, the function will 
-        include information indicating that the message is a replacement of the specified 
+    :param event_id: Optional ID of the event to replace. If provided, the function will
+        include information indicating that the message is a replacement of the specified
         event.
     :type event_id: str | None
     :param thread_relates_to: Optional Matrix thread relation metadata. For edits this is
         stored in ``m.new_content`` so the replacement remains in the same thread.
     :type thread_relates_to: dict[str, object] | None
-    :return: A dictionary containing the matrix text content, potentially enriched with 
+    :return: A dictionary containing the matrix text content, potentially enriched with
         HTML formatting and replacement metadata if applicable.
     :rtype: dict[str, object]
     """
