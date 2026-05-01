@@ -147,7 +147,7 @@ class SessionParser:
                         timestamp=parsed_ts,
                     )
                     # Attach tool calls from this assistant message
-                    for tc in record.get("tool_calls", []):
+                    for tc in record.get("tool_calls") or []:
                         fn = tc.get("function", {})
                         current_turn.tool_calls.append(
                             ToolCall(
