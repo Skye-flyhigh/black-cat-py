@@ -94,7 +94,7 @@ class Consolidator:
 
         return last_boundary
 
-    def estimate_session_prompt_tokens(
+    async def estimate_session_prompt_tokens(
         self,
         session: Session,
         *,
@@ -103,7 +103,7 @@ class Consolidator:
         """Estimate current prompt size for the normal session history view."""
         history = session.get_history(max_messages=0, include_timestamps=True)
         channel, chat_id = (session.key.split(":", 1) if ":" in session.key else (None, None))
-        probe_messages = self._build_messages(
+        probe_messages = await self._build_messages(
             history=history,
             current_message="[token-probe]",
             channel=channel,
@@ -189,7 +189,7 @@ class Consolidator:
             budget = self._input_token_budget
             target = int(budget * self.consolidation_ratio)
             try:
-                estimated, source = self.estimate_session_prompt_tokens(
+                estimated, source = await self.estimate_session_prompt_tokens(
                     session,
                     session_summary=session_summary,
                 )
@@ -254,7 +254,7 @@ class Consolidator:
                     break
 
                 try:
-                    estimated, source = self.estimate_session_prompt_tokens(
+                    estimated, source = await self.estimate_session_prompt_tokens(
                         session,
                         session_summary=session_summary,
                     )

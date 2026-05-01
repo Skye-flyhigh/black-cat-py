@@ -629,7 +629,6 @@ def _run_gateway(
 
     # Create agent with cron service
     agent = AgentLoop(
-        config,
         bus=bus,
         provider=provider,
         workspace=config.workspace_path,
@@ -655,6 +654,7 @@ def _run_gateway(
         tools_config=config.tools,
         provider_snapshot_loader=load_provider_snapshot,
         provider_signature=provider_snapshot.signature,
+        config=config,
     )
 
     from blackcat.agent.loop import UNIFIED_SESSION_KEY
