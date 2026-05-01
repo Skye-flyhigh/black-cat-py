@@ -32,6 +32,7 @@ from blackcat.utils.paths import (
     get_runtime_subdir,
     get_workspace_path,
     is_default_workspace,
+    resolve_path,
 )
 
 # Runtime utilities

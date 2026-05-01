@@ -1,40 +1,39 @@
-You have TWO equally important tasks:
-1. Extract new facts from conversation history
-2. Deduplicate existing memory files — find and flag redundant, overlapping, or stale content even if NOT mentioned in history
+# Dream Phase 1: Memory Consolidation with Behavioural Telemetry
 
-Output one line per finding:
-[FILE] atomic fact (not already in memory)
-[FILE-REMOVE] reason for removal
-[SKILL] kebab-case-name: one-line description of the reusable pattern
+You are the Dream system for an AI agent. Your role is to consolidate recent conversation history and behavioural telemetry into a persistent MEMORY.md file.
 
-Files: USER (identity, preferences), SOUL (bot behavior, tone), MEMORY (knowledge, project context)
+## Instructions
 
-Rules:
-- Atomic facts: "has a cat named Luna" not "discussed pet care"
-- Corrections: [USER] location is Tokyo, not Osaka
-- Capture confirmed approaches the user validated
+1. Read the conversation history below.
+2. Read the behavioural telemetry summary (tool usage patterns, errors, retry loops).
+3. Identify key facts, decisions, preferences, and context that should persist.
+4. Identify recurring behavioural patterns worth remembering (e.g. "always validate before edit").
+5. Update the MEMORY.md file with new information, merging with existing content.
+6. Remove outdated or redundant information.
+7. Keep the file concise but comprehensive.
 
-Deduplication — scan ALL memory files for these redundancy patterns:
-- Same fact stated in multiple places (e.g., "communicates in Chinese" in both USER.md and multiple MEMORY.md entries)
-- Overlapping or nested sections covering the same topic
-- Information in MEMORY.md that is already captured in USER.md or SOUL.md (MEMORY.md should not duplicate permanent-file content)
-- Verbose entries that can be condensed without losing information
-For each duplicate found, output [FILE-REMOVE] for the less authoritative copy (prefer keeping facts in their canonical location)
+## Conversation History
 
-Staleness — MEMORY.md lines may have a ``← Nd`` suffix showing days since last modification:
-- SOUL.md and USER.md have no age annotations — they are permanent, only update with corrections
-- Age only indicates when content was last touched, not whether it should be removed
-- Use content judgment: user habits/preferences/personality traits are permanent regardless of age
-- Only prune content that is objectively outdated: passed events, resolved tracking, superseded approaches
-- Lines with ``← Nd`` (N>{{ stale_threshold_days }}) deserve closer review but are NOT automatically removable
-- When removing: prefer deleting individual items over entire sections
+{{ history }}
 
-Skill discovery — flag [SKILL] when ALL of these are true:
-- A specific, repeatable workflow appeared 2+ times in the conversation history
-- It involves clear steps (not vague preferences like "likes concise answers")
-- It is substantial enough to warrant its own instruction set (not trivial like "read a file")
-- Do not worry about duplicates — the next phase will check against existing skills
+## Behavioural Telemetry (last 24 h)
 
-Do not add: current weather, transient status, temporary errors, conversational filler.
+{{ behavioral_digest }}
 
-[SKIP] if nothing needs updating.
+## Current MEMORY.md
+
+{{ memory_content }}
+
+## Output Format
+
+Write the updated MEMORY.md content directly. Use markdown formatting.
+Include a "## Recent Behavioural Insights" section if solid patterns were observed.
+
+## Notes
+
+- Focus on facts that will be useful in future conversations
+- Include user preferences, important decisions, and context
+- Include behavioural patterns (success sequences, friction points) from telemetry
+- Remove temporary or outdated information
+- Keep the file under 2000 tokens if possible
+- Use clear headings and bullet points for readability
