@@ -5,7 +5,6 @@ from pathlib import Path
 
 from loguru import logger
 
-from blackcat.utils.helpers import detect_image_mime
 from blackcat.utils.media import detect_image_mime
 
 # Supported file extensions for text extraction

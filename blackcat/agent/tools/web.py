@@ -6,16 +6,15 @@ import json
 import os
 import re
 from asyncio.log import logger
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import quote, urlparse
 
 import httpx
 
 from blackcat.agent.tools.base import Tool, tool_parameters
 from blackcat.agent.tools.schema import IntegerSchema, StringSchema, tool_parameters_schema
-from blackcat.utils.helpers import build_image_content_blocks
-
 from blackcat.config.schema import WebFetchConfig, WebSearchConfig
+from blackcat.utils.helpers import build_image_content_blocks
 
 # ========== Schema definitions ==========
 
