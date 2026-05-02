@@ -447,13 +447,13 @@ class Config(BaseSettings):
             channel: The channel name (telegram, whatsapp, discord, cli).
 
         Returns:
-            Author name if found in config, otherwise "unknown".
+            Author name if found in config, otherwise sender_id.
         """
         for author_name, identity in self.authors.items():
             platform_id = getattr(identity, channel, None)
             if platform_id and platform_id == sender_id:
                 return author_name
-        return "unknown"
+        return sender_id
 
     model_config = SettingsConfigDict(
         env_prefix="BLACKCAT_",

@@ -417,8 +417,8 @@ class ContextBuilder:
         return f"""## Runtime
 {runtime}
 
-## Author
-- Author: {author}
+## Relational
+- Message author: {author}
 - Trust level: {trust_level}
 - Autonomous tools: {", ".join(permissions["autonomous"]) or "none"}
 - Requires confirmation: {", ".join(permissions["confirmation_required"]) or "none"}
@@ -527,7 +527,7 @@ class ContextBuilder:
             Complete system prompt string, sections joined by "---".
         """
         intro_block = [{"type": "text", "text": """# Blackcat 🐈‍⬛
-You are within blackcat harness/structure.
+You are within blackcat harness/structure (a fork from nanobot).
 """}]
         static_blocks = self._build_static_blocks(skill_names, enable_caching)
         dynamic_blocks = await self._build_dynamic_blocks(author, channel, chat_id, history)
@@ -605,7 +605,7 @@ You are within blackcat harness/structure.
             author, channel, chat_id, skill_names, history, enable_caching=True if use_prompt_caching else False
             )
 
-        messages = [{"role": "system", "content": system_prompt}]
+        messages = [{"role": "system", "content": system_prompt, "author": "prompt_builder"}]
 
         messages.extend(history)
 
@@ -616,7 +616,7 @@ You are within blackcat harness/structure.
             last["content"] = self._merge_message_content(last.get("content"), user_content)
             messages[-1] = last
         else:
-            messages.append({"role": "user", "content": user_content})
+            messages.append({"role": "user", "content": user_content, "author": author})
 
         return messages
 

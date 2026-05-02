@@ -179,6 +179,7 @@ class MessageHandler:
         has_text = isinstance(msg.content, str) and msg.content.strip()
         if not pending_ask_id and (has_text or media_paths):
             extra: dict[str, Any] = {"media": list(media_paths)} if media_paths else {}
+            extra["author"] = author
             text = msg.content if isinstance(msg.content, str) else ""
             session.add_message("user", text, **extra)
             loop._mark_pending_user_turn(session)
@@ -188,6 +189,7 @@ class MessageHandler:
         # Run agent loop
         final_content, _, all_msgs, stop_reason, had_injections = await loop._run_agent_loop(
             initial_messages,
+            author=author,
             on_progress=on_progress or _bus_progress,
             on_stream=on_stream,
             on_stream_end=on_stream_end,

@@ -22,6 +22,7 @@ from rich.table import Table
 from rich.text import Text
 
 from blackcat import __logo__, __version__
+from blackcat.agent.context import ContextBuilder
 from blackcat.cli.stream import StreamRenderer, ThinkingSpinner
 from blackcat.config.schema import Config
 from blackcat.utils.helpers import sync_workspace_templates
@@ -692,7 +693,9 @@ def _run_gateway(
         ):
             key = session_key or _channel_session_key(msg.channel, msg.chat_id)
             session = session_manager.get_or_create(key)
-            session.add_message("assistant", msg.content, _channel_delivery=True)
+            context = ContextBuilder(workspace=config.workspace_path)
+            author = context.get_identity().get("name") or "blackcat"
+            session.add_message("assistant", msg.content, author=author, _channel_delivery=True)
             session_manager.save(session)
         await bus.publish_outbound(msg)
 

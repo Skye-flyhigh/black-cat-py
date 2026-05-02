@@ -566,6 +566,7 @@ class AgentLoop:
         on_retry_wait: Callable[[str], Awaitable[None]] | None = None,
         *,
         session: Session | None = None,
+        author: str = "unknown",
         channel: str = "cli",
         chat_id: str = "direct",
         message_id: str | None = None,
@@ -632,7 +633,7 @@ class AgentLoop:
                     merged: str | list[dict[str, Any]] = f"{runtime_ctx}\n\n{user_content}"
                 else:
                     merged = [{"type": "text", "text": runtime_ctx}] + user_content
-                return {"role": "user", "content": merged}
+                return {"role": "user", "content": merged, "author": author}
 
             items: list[dict[str, Any]] = []
             while len(items) < limit:
@@ -1029,6 +1030,7 @@ class AgentLoop:
         session.add_message(
             "assistant",
             msg.content,
+            author="subagent",
             sender_id=msg.sender_id,
             injected_event="subagent_result",
             subagent_task_id=task_id,
