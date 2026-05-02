@@ -281,13 +281,19 @@ class ExecTool(Tool):
         cmd = command.strip()
         lower = cmd.lower()
 
-        for pattern in self.deny_patterns:
-            if re.search(pattern, lower):
-                return "Error: Command blocked by safety guard (dangerous pattern detected)"
+        # allow_patterns take priority over deny_patterns so that users can
+        # exempt specific commands (e.g. "rm -rf" inside a build directory)
+        # from the hardcoded deny list via configuration.
+        explicitly_allowed = bool(self.allow_patterns) and any(
+            re.search(p, lower) for p in self.allow_patterns
+        )
+        if not explicitly_allowed:
+            for pattern in self.deny_patterns:
+                if re.search(pattern, lower):
+                    return "Error: Command blocked by deny pattern filter"
 
-        if self.allow_patterns:
-            if not any(re.search(p, lower) for p in self.allow_patterns):
-                return "Error: Command blocked by safety guard (not in allowlist)"
+            if self.allow_patterns:
+                return "Error: Command blocked by allowlist filter (not in allowlist)"
 
         from blackcat.security.network import contains_internal_url
         if contains_internal_url(cmd):
