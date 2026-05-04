@@ -636,3 +636,32 @@ class SessionManager:
                 continue
 
         return sorted(sessions, key=lambda x: x.get("updated_at", ""), reverse=True)
+
+    def get_session_context(self, max_sessions: int = 5, max_messages_per_session: int = 3) -> str:
+        """Build a lightweight context string of recent cross-session activity.
+
+        Used by Dream to give the agent awareness of what happened in other
+        recent sessions without loading full histories.
+        """
+        sessions = self.list_sessions()[:max_sessions]
+        if not sessions:
+            return "(no recent sessions)"
+        lines = ["## Recent Sessions\n"]
+        for info in sessions:
+            key = info.get("key", "unknown")
+            updated = info.get("updated_at", "unknown")
+            lines.append(f"- **{key}** (last active: {updated})")
+            # Try to peek at the last few messages for flavour.
+            try:
+                msgs = self.get_or_create(key).get_history(max_messages=5)
+                for m in msgs:
+                    role = m.get("role", "?")
+                    content = m.get("content", "")
+                    author = m.get("author", "")
+                    if isinstance(content, str):
+                        snippet = content.replace("\n", " ")[:120]
+                        lines.append(f"  - [{author if author else role}] {snippet}{'...' if len(content) > 120 else ''}")
+            except Exception:
+                pass
+            lines.append("")
+        return "\n".join(lines)

@@ -16,6 +16,7 @@ from blackcat.agent.runner import AgentRunner, AgentRunSpec
 from blackcat.agent.tools.registry import ToolRegistry
 from blackcat.memory.memory import MemoryStore
 from blackcat.providers.base import LLMProvider
+from blackcat.session.manager import SessionManager
 from blackcat.utils.formatting import truncate_text
 from blackcat.utils.prompt_templates import render_template
 
@@ -60,6 +61,14 @@ class Dream:
         self.annotate_line_ages = annotate_line_ages
         self._runner = AgentRunner(provider)
         self._tools = self._build_tools()
+        self._session_manager = SessionManager(
+            workspace=self.store.workspace,
+        )
+        
+    def set_provider(self, provider: LLMProvider, model: str) -> None:
+        self.provider = provider
+        self.model = model
+        self._runner.provider = provider
 
     # -- tool registry -------------------------------------------------------
 
@@ -112,6 +121,23 @@ class Dream:
                 desc = m.group(1).strip() if m else "(no description)"
                 entries[d.name] = desc
         return [f"{name} — {desc}" for name, desc in sorted(entries.items())]
+    
+    # -- session logging ------------------------------------------------------
+
+    def _log_session(self, phase: str, data: dict[str, Any]) -> None:
+        """Append a structured entry to the Dream session log."""
+        import json
+
+        log_dir = self.store.workspace / "logs" / "dream-sessions"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / f"{datetime.datetime.now():%Y-%m-%d}.jsonl"
+        entry = {
+            "ts": datetime.datetime.now().isoformat(),
+            "phase": phase,
+            "data": data,
+        }
+        with log_file.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     # -- main entry ----------------------------------------------------------
 
@@ -161,6 +187,8 @@ class Dream:
             result += "\n"
         return result
 
+    # -- public API -----------------------------------------------------------
+
     async def run(self) -> bool:
         """Process unprocessed history entries. Returns True if work was done."""
         from blackcat.agent.skills import BUILTIN_SKILLS_DIR
@@ -174,6 +202,16 @@ class Dream:
         logger.info(
             "Dream: processing {} entries (cursor {}→{}), batch={}",
             len(entries), last_cursor, batch[-1]["cursor"], len(batch),
+        )
+
+        self._log_session(
+            "start",
+            {
+                "batch_size": len(batch),
+                "cursor_from": last_cursor,
+                "cursor_to": batch[-1]["cursor"],
+                "total_entries": len(entries),
+            },
         )
 
         # Build history text for LLM — cap each entry so a legacy oversized
@@ -202,11 +240,14 @@ class Dream:
             self.store.read_user() or "(empty)", self._USER_FILE_MAX_CHARS,
         )
 
+        session_context = self._session_manager.get_session_context()
+
         file_context = (
             f"## Current Date\n{current_date}\n\n"
             f"## Current MEMORY.md ({len(current_memory)} chars)\n{current_memory}\n\n"
             f"## Current SOUL.md ({len(current_soul)} chars)\n{current_soul}\n\n"
-            f"## Current USER.md ({len(current_user)} chars)\n{current_user}"
+            f"## Current USER.md ({len(current_user)} chars)\n{current_user}\n\n"
+            f"## Session Context\n{session_context}"
         )
 
         # Phase 1: Analyze (no skills list — dedup is Phase 2's job)
@@ -232,8 +273,13 @@ class Dream:
                 tool_choice=None,
             )
             analysis = phase1_response.content or ""
+            self._log_session(
+                "phase1_complete",
+                {"analysis_chars": len(analysis)},
+            )
             logger.debug("Dream Phase 1 analysis ({} chars): {}", len(analysis), analysis[:500])
         except Exception:
+            self._log_session("phase1_failed", {})
             logger.exception("Dream Phase 1 failed")
             return False
 
@@ -274,9 +320,17 @@ class Dream:
                 "Dream Phase 2 complete: stop_reason={}, tool_events={}",
                 result.stop_reason, len(result.tool_events),
             )
+            self._log_session(
+                "phase2_complete",
+                {
+                    "stop_reason": result.stop_reason,
+                    "tool_events": len(result.tool_events or []),
+                },
+            )
             for ev in (result.tool_events or []):
                 logger.info("Dream tool_event: name={}, status={}, detail={}", ev.get("name"), ev.get("status"), ev.get("detail", "")[:200])
         except Exception:
+            self._log_session("phase2_failed", {})
             logger.exception("Dream Phase 2 failed")
             result = None
 
@@ -290,6 +344,14 @@ class Dream:
         # Advance cursor — always, to avoid re-processing Phase 1
         new_cursor = batch[-1]["cursor"]
         self.store.set_last_dream_cursor(new_cursor)
+        self._log_session(
+            "done",
+            {
+                "cursor": new_cursor,
+                "changelog_entries": len(changelog),
+                "stop_reason": result.stop_reason if result else "exception",
+            },
+        )
         self.store.compact_history()
 
         if result and result.stop_reason == "completed":
