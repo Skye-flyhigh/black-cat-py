@@ -379,13 +379,16 @@ class AgentLoop:
         )
         extra_read = [BUILTIN_SKILLS_DIR] if allowed_dir else None
         self.tools.register(AskUserTool())
+        # Per-session file state to prevent leakage across sessions (issue #3571)
+        from blackcat.agent.tools.file_state import FileStates
+        file_states = FileStates()
         self.tools.register(
             ReadFileTool(
-                workspace=self.workspace, allowed_dir=allowed_dir, extra_allowed_dirs=extra_read
+                workspace=self.workspace, allowed_dir=allowed_dir, extra_allowed_dirs=extra_read, file_states=file_states
             )
         )
         for cls in (WriteFileTool, EditFileTool, ListDirTool):
-            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
+            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir, file_states=file_states))
         for cls in (GlobTool, GrepTool):
             self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
         self.tools.register(NotebookEditTool(workspace=self.workspace, allowed_dir=allowed_dir))

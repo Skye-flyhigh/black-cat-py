@@ -54,10 +54,12 @@ class _FsTool(Tool):
         workspace: Path | None = None,
         allowed_dir: Path | None = None,
         extra_allowed_dirs: list[Path] | None = None,
+        file_states: file_state.FileStates | None = None,
     ):
         self._workspace = workspace
         self._allowed_dir = allowed_dir
         self._extra_allowed_dirs = extra_allowed_dirs
+        self._file_states = file_states or file_state._default
 
     def _resolve(self, path: str) -> Path:
         return _resolve_path(path, self._workspace, self._allowed_dir, self._extra_allowed_dirs)
@@ -192,7 +194,7 @@ class ReadFileTool(_FsTool):
 
             # Read dedup: same path + offset + limit + unchanged mtime → stub
             # Always check for external modifications before dedup
-            entry = file_state._state.get(str(fp.resolve()))
+            entry = self._file_states.get(str(fp.resolve()))
             try:
                 current_mtime = os.path.getmtime(fp)
             except OSError:
@@ -201,21 +203,21 @@ class ReadFileTool(_FsTool):
                 if current_mtime != entry.mtime:
                     # File was modified externally - force full read and mark as not dedupable
                     entry.can_dedup = False
-                    file_state.record_read(fp, offset=offset, limit=limit)  # Update state with new mtime
+                    self._file_states.record_read(fp, offset=offset, limit=limit)  # Update state with new mtime
                     # Continue to read full content (don't return dedup message)
                 else:
                     # File unchanged - return dedup message
                     # But only if content is actually unchanged (not just mtime)
-                    current_hash = file_state._hash_file(str(fp))
+                    current_hash = self._file_states._hash_file(str(fp))
                     if current_hash == entry.content_hash:
                         return f"[File unchanged since last read: {path}]"
                     else:
                         # Content changed despite same mtime - force full read
                         entry.can_dedup = False
-                        file_state.record_read(fp, offset=offset, limit=limit)
+                        self._file_states.record_read(fp, offset=offset, limit=limit)
             else:
                 # No previous state or marked as not dedupable - read full content
-                file_state.record_read(fp, offset=offset, limit=limit)
+                self._file_states.record_read(fp, offset=offset, limit=limit)
                 # Force full read by setting can_dedup to False for this read
                 if entry:
                     entry.can_dedup = False
@@ -264,7 +266,7 @@ class ReadFileTool(_FsTool):
                 result += f"\n\n(Showing lines {offset}-{end} of {total}. Use offset={end + 1} to continue.)"
             else:
                 result += f"\n\n(End of file — {total} lines total)"
-            file_state.record_read(fp, offset=offset, limit=limit)
+            self._file_states.record_read(fp, offset=offset, limit=limit)
             return result
         except PermissionError as e:
             return f"Error: {e}"
@@ -375,7 +377,7 @@ class WriteFileTool(_FsTool):
             fp = self._resolve(path)
             fp.parent.mkdir(parents=True, exist_ok=True)
             fp.write_text(content, encoding="utf-8")
-            file_state.record_write(fp)
+            self._file_states.record_write(fp)
             return f"Successfully wrote {len(content)} characters to {fp}"
         except PermissionError as e:
             return f"Error: {e}"
@@ -712,7 +714,7 @@ class EditFileTool(_FsTool):
                 if old_text == "":
                     fp.parent.mkdir(parents=True, exist_ok=True)
                     fp.write_text(new_text, encoding="utf-8")
-                    file_state.record_write(fp)
+                    self._file_states.record_write(fp)
                     return f"Successfully created {fp}"
                 return self._file_not_found_msg(path, fp)
 
@@ -731,11 +733,11 @@ class EditFileTool(_FsTool):
                 if content.strip():
                     return f"Error: Cannot create file — {path} already exists and is not empty."
                 fp.write_text(new_text, encoding="utf-8")
-                file_state.record_write(fp)
+                self._file_states.record_write(fp)
                 return f"Successfully edited {fp}"
 
             # Read-before-edit check
-            warning = file_state.check_read(fp)
+            warning = self._file_states.check_read(fp)
 
             raw = fp.read_bytes()
             uses_crlf = b"\r\n" in raw
@@ -780,7 +782,7 @@ class EditFileTool(_FsTool):
                 new_content = new_content.replace("\n", "\r\n")
 
             fp.write_bytes(new_content.encode("utf-8"))
-            file_state.record_write(fp)
+            self._file_states.record_write(fp)
             msg = f"Successfully edited {fp}"
             if warning:
                 msg = f"{warning}\n{msg}"
