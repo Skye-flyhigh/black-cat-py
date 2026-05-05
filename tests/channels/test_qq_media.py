@@ -182,6 +182,35 @@ async def test_send_media_failure_falls_back_to_text() -> None:
     assert "bad.png" in failure_calls[0]["content"]
 
 
+@pytest.mark.asyncio
+async def test_on_message_ignores_unauthorized_sender_before_attachments_and_ack() -> None:
+    channel = QQChannel(
+        QQConfig(
+            app_id="app",
+            secret="secret",
+            allow_from=["allowed-user"],
+            ack_message="Processing...",
+        ),
+        MessageBus(),
+    )
+    channel._client = _FakeClient()
+    channel._handle_attachments = AsyncMock(return_value=(["/tmp/a.png"], ["file"], []))
+    channel._handle_message = AsyncMock()
+
+    data = SimpleNamespace(
+        id="msg-blocked",
+        content="hello",
+        author=SimpleNamespace(user_openid="blocked-user"),
+        attachments=[SimpleNamespace(filename="a.png")],
+    )
+
+    await channel._on_message(data, is_group=False)
+
+    channel._handle_attachments.assert_not_awaited()
+    channel._handle_message.assert_not_awaited()
+    assert channel._client.api.c2c_calls == []
+
+
 # ── _on_message() exception handling ────────────────────────────────
 
 

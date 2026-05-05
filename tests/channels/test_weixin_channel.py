@@ -129,6 +129,34 @@ async def test_process_message_caches_context_token_and_send_uses_it() -> None:
 
 
 @pytest.mark.asyncio
+async def test_process_message_ignores_unauthorized_sender_before_side_effects(tmp_path) -> None:
+    bus = MessageBus()
+    channel = WeixinChannel(
+        WeixinConfig(enabled=True, allow_from=["allowed-user"], state_dir=str(tmp_path)),
+        bus,
+    )
+    channel._download_media_item = AsyncMock(return_value="/tmp/test.jpg")
+    channel._start_typing = AsyncMock()
+
+    await channel._process_message(
+        {
+            "message_type": 1,
+            "message_id": "m-unauthorized",
+            "from_user_id": "blocked-user",
+            "context_token": "ctx-blocked",
+            "item_list": [
+                {"type": ITEM_IMAGE, "image_item": {"media": {"encrypt_query_param": "x"}}},
+            ],
+        }
+    )
+
+    assert channel._context_tokens == {}
+    channel._download_media_item.assert_not_awaited()
+    channel._start_typing.assert_not_awaited()
+    assert bus.inbound_size == 0
+
+
+@pytest.mark.asyncio
 async def test_process_message_persists_context_token_to_state_file(tmp_path) -> None:
     bus = MessageBus()
     channel = WeixinChannel(
