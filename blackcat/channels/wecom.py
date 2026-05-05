@@ -10,14 +10,14 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-from loguru import logger
-from pydantic import Field
+ from loguru import logger
+ from pydantic import Field
 
-from blackcat.bus.events import OutboundMessage
-from blackcat.bus.queue import MessageBus
-from blackcat.channels.base import BaseChannel
-from blackcat.config.schema import Base
-from blackcat.utils.paths import get_media_dir
+ from blackcat.bus.events import OutboundMessage
+ from blackcat.bus.queue import MessageBus
+ from blackcat.channels.base import BaseChannel
+ from blackcat.config.schema import Base
+ from blackcat.utils.paths import get_media_dir
 
 WECOM_AVAILABLE = importlib.util.find_spec("wecom_aibot_sdk") is not None
 
