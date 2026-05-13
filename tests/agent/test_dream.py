@@ -306,3 +306,142 @@ class TestDreamPromptCaps:
         history_section = user_msg.split("## Conversation History\n")[1].split("\n\n## Current Date")[0]
         assert len(history_section) < dream._HISTORY_ENTRY_PREVIEW_MAX_CHARS + 500
 
+
+class TestSummariseSession:
+    """Tests for _summarise_session — JSONL parsing into telemetry summary."""
+
+    def _write_session_jsonl(self, dream, lines: list[str], model: str | None = None) -> None:
+        """Helper: write a fake session JSONL in the sessions dir.
+
+        If *model* is given, injects it into the metadata line's
+        ``metadata.runtime_checkpoint.model`` to match the real session format
+        (model lives in metadata, not per-message).
+        """
+        dream._session_manager.sessions_dir.mkdir(parents=True, exist_ok=True)
+        safe = dream._session_manager.safe_key("discord:1499311065706791033")
+        path = dream._session_manager.sessions_dir / f"{safe}.jsonl"
+
+        # First line is always the metadata line — inject model if provided
+        metadata_line = lines[0] if lines else '{}'
+        if model:
+            metadata = json.loads(metadata_line)
+            meta = metadata.setdefault("metadata", {})
+            meta["runtime_checkpoint"] = {"model": model}
+            lines[0] = json.dumps(metadata)
+
+        path.write_text("\n".join(lines) + "\n")
+
+    def test_no_session_file(self, dream):
+        """Returns empty string when session file doesn't exist."""
+        dream._session_manager.get_session_context = MagicMock(
+            return_value="Channel: discord\nChat ID: 1499311065706791033"
+        )
+        result = dream._summarise_session()
+        assert result == ""
+
+    def test_no_channel_in_context(self, dream):
+        """Returns empty string when session context lacks Channel/Chat ID."""
+        dream._session_manager.get_session_context = MagicMock(
+            return_value="No channel info here"
+        )
+        result = dream._summarise_session()
+        assert result == ""
+
+    def test_empty_session(self, dream):
+        """Returns empty string when session has only metadata line, no messages."""
+        dream._session_manager.get_session_context = MagicMock(
+            return_value="Channel: discord\nChat ID: 1499311065706791033"
+        )
+        self._write_session_jsonl(dream, [
+            '{"metadata": "session start"}',
+        ])
+        result = dream._summarise_session()
+        assert result == ""
+
+    def test_counts_tool_calls(self, dream):
+        """Counts tool calls from assistant messages."""
+        dream._session_manager.get_session_context = MagicMock(
+            return_value="Channel: discord\nChat ID: 1499311065706791033"
+        )
+        self._write_session_jsonl(dream, [
+            '{"metadata": {}}',
+            json.dumps({
+                "role": "assistant",
+                "iteration": 1,
+                "tool_calls": [
+                    {"function": {"name": "read_file"}},
+                    {"function": {"name": "edit_file"}},
+                ],
+            }),
+            json.dumps({
+                "role": "assistant",
+                "iteration": 2,
+                "tool_calls": [
+                    {"function": {"name": "exec"}},
+                ],
+            }),
+        ], model="test-model")
+        result = dream._summarise_session()
+        assert "Tool calls: 3" in result
+        assert "read_file" in result
+        assert "edit_file" in result
+        assert "exec" in result
+
+    def test_counts_errors(self, dream):
+        """Counts tool errors and includes detail snippets."""
+        dream._session_manager.get_session_context = MagicMock(
+            return_value="Channel: discord\nChat ID: 1499311065706791033"
+        )
+        self._write_session_jsonl(dream, [
+            '{"metadata": {}}',
+            json.dumps({
+                "role": "assistant",
+                "iteration": 1,
+                "tool_calls": [{"function": {"name": "exec"}}],
+            }),
+            json.dumps({
+                "role": "tool",
+                "name": "exec",
+                "content": "Error: command not found: foo\nsome more context",
+            }),
+            json.dumps({
+                "role": "tool",
+                "name": "read_file",
+                "content": "some normal output",
+            }),
+            json.dumps({
+                "role": "tool",
+                "name": "grep",
+                "content": "Error: pattern syntax invalid",
+            }),
+        ], model="test-model")
+        result = dream._summarise_session()
+        assert "Errors: 2" in result
+        assert "exec" in result
+        assert "grep" in result
+        assert "command not found" in result
+
+    def test_tracks_iterations_and_models(self, dream):
+        """Tracks unique iterations and models across messages."""
+        dream._session_manager.get_session_context = MagicMock(
+            return_value="Channel: discord\nChat ID: 1499311065706791033"
+        )
+        self._write_session_jsonl(dream, [
+            '{"metadata": {}}',
+            json.dumps({"role": "assistant", "iteration": 1, "tool_calls": [{"function": {"name": "read_file"}}]}),
+            json.dumps({"role": "assistant", "iteration": 1, "tool_calls": [{"function": {"name": "edit_file"}}]}),
+            json.dumps({"role": "assistant", "iteration": 2, "tool_calls": [{"function": {"name": "exec"}}]}),
+            json.dumps({"role": "assistant", "iteration": 3, "tool_calls": [{"function": {"name": "grep"}}]}),
+        ], model="claude")
+        result = dream._summarise_session()
+        assert "Iterations: 3" in result
+        assert "claude" in result
+
+    def test_exception_returns_empty(self, dream):
+        """Returns empty string on unexpected exceptions."""
+        dream._session_manager.get_session_context = MagicMock(
+            side_effect=RuntimeError("boom")
+        )
+        result = dream._summarise_session()
+        assert result == ""
+

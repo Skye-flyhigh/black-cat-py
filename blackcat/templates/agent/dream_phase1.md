@@ -29,7 +29,11 @@ Staleness — MEMORY.md lines may have a ``← Nd`` suffix showing days since la
 - Lines with ``← Nd`` (N>{{ stale_threshold_days }}) deserve closer review but are NOT automatically removable
 - When removing: prefer deleting individual items over entire sections
 
-Behavioural Telemetry — review the telemetry summary for recurring patterns:
+## Behavioural Telemetry
+
+{{ telemetry }}
+
+Review the telemetry above for recurring patterns:
 - Success sequences: workflows that completed without errors and produced good outcomes
 - Friction points: repeated errors, retry loops, or tool misuse patterns
 - Decision patterns: choices the agent made that led to good vs bad outcomes

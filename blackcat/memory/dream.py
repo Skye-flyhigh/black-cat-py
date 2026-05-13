@@ -76,6 +76,12 @@ class Dream:
         """Build a minimal tool registry for the Dream agent."""
         from blackcat.agent.skills import BUILTIN_SKILLS_DIR
         from blackcat.agent.tools.filesystem import EditFileTool, ReadFileTool, WriteFileTool
+        from blackcat.agent.tools.skills import (
+            SkillCreateTool,
+            SkillGetReferenceTool,
+            SkillListReferencesTool,
+            SkillListTool,
+        )
 
         tools = ToolRegistry()
         workspace = self.store.workspace
@@ -92,6 +98,11 @@ class Dream:
         skills_dir = workspace / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
         tools.register(WriteFileTool(workspace=workspace, allowed_dir=skills_dir))
+
+        tools.register(SkillListTool(workspace=workspace))
+        tools.register(SkillCreateTool(workspace=workspace))
+        tools.register(SkillListReferencesTool(workspace=workspace))
+        tools.register(SkillGetReferenceTool(workspace=workspace))
         return tools
 
     # -- skill listing --------------------------------------------------------
@@ -121,7 +132,17 @@ class Dream:
                 desc = m.group(1).strip() if m else "(no description)"
                 entries[d.name] = desc
         return [f"{name} — {desc}" for name, desc in sorted(entries.items())]
-    
+
+    def _get_users_files(self) -> dict[str, str]: # TODO: TASK: #53
+        """Get the docs of specific users blackcat has interacted with"""
+        entries: dict[str, str] = {}
+        user_files = list(sorted((self.store.workspace / "users").glob("*.md")))
+        for user in user_files:
+            if not user.exists():
+                continue
+            entries[user.name] = truncate_text(self.store.read_file(user), self._USER_FILE_MAX_CHARS)
+        return entries
+
     # -- session logging ------------------------------------------------------
 
     def _log_session(self, phase: str, data: dict[str, Any]) -> None:
@@ -138,6 +159,85 @@ class Dream:
         }
         with log_file.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    # -- session telemetry ---------------------------------------------------
+
+    def _summarise_session(self) -> str:
+        """Parse the current session's JSONL and return a one-paragraph telemetry summary, tool calls and errors."""
+        import json
+
+        try:
+            session_key = self._session_manager.get_session_context()
+            # session_context looks like "Channel: discord\nChat ID: 1499311065706791033\n..."
+            # Extract channel:chat_id to build the filename
+            channel = chat_id = None
+            for line in session_key.split("\n"):
+                if line.startswith("Channel:"):
+                    channel = line.split(":", 1)[1].strip()
+                elif line.startswith("Chat ID:"):
+                    chat_id = line.split(":", 1)[1].strip()
+            if not channel or not chat_id:
+                return ""
+
+            safe_key = self._session_manager.safe_key(f"{channel}:{chat_id}")
+            session_path = self._session_manager.sessions_dir / f"{safe_key}.jsonl"
+            if not session_path.exists():
+                return ""
+
+            tool_count = 0
+            error_count = 0
+            iterations: set[int] = set()
+            models: set[str] = set()
+            tool_names: list[str] = []
+            errors_detail: list[str] = []
+
+            with open(session_path) as f:
+                metadata_line = f.readline()
+                metadata = json.loads(metadata_line)
+                # Model lives in the runtime checkpoint, not per-message
+                checkpoint = metadata.get("metadata", {}).get("runtime_checkpoint", {})
+                if "model" in checkpoint:
+                    models.add(checkpoint["model"])
+
+                for line in f:
+                    obj = json.loads(line)
+                    if "tool_calls" in obj:
+                        for tc in obj["tool_calls"]:
+                            tool_count += 1
+                            tool_names.append(tc.get("function", {}).get("name", "?"))
+                    if obj.get("role") == "tool":
+                        content = obj.get("content", "")
+                        if isinstance(content, str) and content.startswith("Error:"):
+                            error_count += 1
+                            errors_detail.append(
+                                f"{obj.get('name', '?')}: {content.split(chr(10))[0][:100]}"
+                            )
+                    if "iteration" in obj:
+                        iterations.add(obj["iteration"])
+
+            if tool_count == 0:
+                return ""
+
+            model_str = ", ".join(sorted(models)) if models else "unknown"
+            iter_str = str(len(iterations)) if iterations else "?"
+            unique_tools = sorted(set(tool_names))
+
+            summary = (
+                f"## Session Telemetry\n"
+                f"- Tool calls: {tool_count}\n"
+                f"- Errors: {error_count}\n"
+                f"- Iterations: {iter_str} (model: {model_str})\n"
+                f"- Tools used: {', '.join(unique_tools)}"
+            )
+            if errors_detail:
+                summary += "\n- Error details:\n"
+                for e in errors_detail[:5]:
+                    summary += f"  - {e}\n"
+
+            return summary
+        except Exception:
+            logger.debug("Failed to summarise session telemetry", exc_info=True)
+            return ""
 
     # -- main entry ----------------------------------------------------------
 
@@ -241,6 +341,7 @@ class Dream:
         )
 
         session_context = self._session_manager.get_session_context()
+        session_telemetry = self._summarise_session()
 
         file_context = (
             f"## Current Date\n{current_date}\n\n"
@@ -252,7 +353,8 @@ class Dream:
 
         # Phase 1: Analyze (no skills list — dedup is Phase 2's job)
         phase1_prompt = (
-            f"## Conversation History\n{history_text}\n\n{file_context}"
+            f"## Conversation History\n{history_text}\n\n"
+            f"{file_context}"
         )
 
         try:
@@ -265,6 +367,7 @@ class Dream:
                             "agent/dream_phase1.md",
                             strip=True,
                             stale_threshold_days=_STALE_THRESHOLD_DAYS,
+                            telemetry=session_telemetry or "(no telemetry available)",
                         ),
                     },
                     {"role": "user", "content": phase1_prompt},
@@ -275,11 +378,17 @@ class Dream:
             analysis = phase1_response.content or ""
             self._log_session(
                 "phase1_complete",
-                {"analysis_chars": len(analysis)},
+                {
+                    "analysis_chars": len(analysis),
+                    "analysis": analysis
+                },
             )
             logger.debug("Dream Phase 1 analysis ({} chars): {}", len(analysis), analysis[:500])
         except Exception:
-            self._log_session("phase1_failed", {})
+            self._log_session("phase1_failed", {
+                "reason": phase1_response.finish_reason or "Undefined",
+                "error": phase1_response.error_kind + phase1_response.error_type
+            })
             logger.exception("Dream Phase 1 failed")
             return False
 
@@ -323,6 +432,7 @@ class Dream:
             self._log_session(
                 "phase2_complete",
                 {
+                    "content": result.final_content,
                     "stop_reason": result.stop_reason,
                     "tool_events": len(result.tool_events or []),
                 },
@@ -343,13 +453,14 @@ class Dream:
 
         # Advance cursor — always, to avoid re-processing Phase 1
         new_cursor = batch[-1]["cursor"]
+        reason = result.stop_reason if result else "exception"
         self.store.set_last_dream_cursor(new_cursor)
         self._log_session(
             "done",
             {
                 "cursor": new_cursor,
                 "changelog_entries": len(changelog),
-                "stop_reason": result.stop_reason if result else "exception",
+                "stop_reason": reason,
             },
         )
         self.store.compact_history()
@@ -360,7 +471,7 @@ class Dream:
                 len(changelog), new_cursor,
             )
         else:
-            reason = result.stop_reason if result else "exception"
+            
             logger.warning(
                 "Dream incomplete ({}): cursor advanced to {}",
                 reason, new_cursor,
