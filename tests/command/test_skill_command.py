@@ -12,6 +12,13 @@ from blackcat.bus.queue import MessageBus
 from blackcat.command.builtin import cmd_skill, register_builtin_commands
 from blackcat.command.router import CommandContext, CommandRouter
 from blackcat.config.schema import ModelPresetConfig
+from blackcat.agent.loop import AgentLoop
+from blackcat.agent.skills import SkillsLoader
+from blackcat.bus.events import InboundMessage
+from blackcat.bus.queue import MessageBus
+from blackcat.command.builtin import cmd_skill, register_builtin_commands
+from blackcat.command.router import CommandContext, CommandRouter
+from blackcat.config.schema import ModelPresetConfig
 
 
 def _provider(default_model: str = "test-model") -> MagicMock:
