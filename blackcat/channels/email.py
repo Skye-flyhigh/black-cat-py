@@ -17,6 +17,7 @@ from email.parser import BytesParser
 from email.utils import parseaddr
 from fnmatch import fnmatch
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from loguru import logger
