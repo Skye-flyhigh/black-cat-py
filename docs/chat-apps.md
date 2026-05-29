@@ -582,30 +582,6 @@ Give blackcat its own email account. It polls **IMAP** for incoming mail and rep
 > - `postActionMoveMailbox`: Destination mailbox used when `postAction` is `"move"` (for example `"Processed"` or `"[Gmail]/Trash"`).
 > - `postActionIgnoreSkipped`: If `true` (default), skipped emails are ignored for post-action and not moved/deleted.
 > - `postActionExpunge`: When `true`, the channel allows a full-mailbox `EXPUNGE` fallback if UID-scoped expunge is unavailable or fails (default `false`). Enable only on very old IMAP servers that lack modern UIDPLUS support. Note that this fallback will expunge **all** messages marked as deleted in the mailbox, including ones not handled by the agent. Leaving this off is safe for all modern IMAP servers.
-> - `allowedAttachmentTypes`: Save inbound attachments matching these MIME types — `["*"]` for all, e.g. `["application/pdf", "image/*"]` (default `[]` = disabled).
-> - `maxAttachmentSize`: Max size per attachment in bytes (default `2000000` / 2MB).
-> - `maxAttachmentsPerEmail`: Max attachments to save per email (default `5`).
-
-```json
-{
-  "channels": {
-    "email": {
-      "enabled": true,
-      "consentGranted": true,
-      "imapHost": "imap.gmail.com",
-      "imapPort": 993,
-      "imapUsername": "my-blackcat@gmail.com",
-      "imapPassword": "your-app-password",
-      "smtpHost": "smtp.gmail.com",
-      "smtpPort": 587,
-      "smtpUsername": "my-blackcat@gmail.com",
-      "smtpPassword": "your-app-password",
-      "fromAddress": "my-blackcat@gmail.com",
-      "allowFrom": ["your-real-email@gmail.com"],
-      "postAction": "move",
-      "postActionMoveMailbox": "[Gmail]/Trash",
-      "postActionIgnoreSkipped": true,
-      "postActionExpunge": false,
       "allowedAttachmentTypes": ["application/pdf", "image/*"]
     }
   }
