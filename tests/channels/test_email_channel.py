@@ -172,32 +172,6 @@ def test_apply_post_actions_batch_delete_uses_one_connection(monkeypatch) -> Non
         def __init__(self) -> None:
             self.search_calls: list[tuple] = []
             self.uid_calls: list[tuple] = []
-            self.store_calls: list[tuple[bytes, str, str]] = []
-            self.expunge_calls = 0
-
-        def login(self, _user: str, _pw: str):
-            return "OK", [b"logged in"]
-
-        def select(self, _mailbox: str):
-            return "OK", [b"1"]
-
-        def search(self, *_args):
-            self.search_calls.append(_args)
-            if len(_args) >= 3 and _args[1] == "UID":
-                return "OK", [b"1"]
-            return "OK", [b"1"]
-
-        def capability(self):
-            return "OK", [b"IMAP4rev1 UIDPLUS"]
-
-        def uid(self, command: str, *args):
-            self.uid_calls.append((command, *args))
-            if command == "STORE":
-                return "OK", [b""]
-            if command == "EXPUNGE":
-                return "OK", [b""]
-            return "BAD", [b""]
-
         def fetch(self, _imap_id: bytes, _parts: str):
             return "OK", [(b"1 (UID 123 BODY[] {200})", raw), b")"]
 
