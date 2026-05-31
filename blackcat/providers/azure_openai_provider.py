@@ -3,6 +3,7 @@
 Uses ``AsyncOpenAI`` pointed at ``https://{endpoint}/openai/v1/`` which
 routes to the Responses API (``/responses``).  Reuses shared conversion
 helpers from :mod:`blackcat.providers.openai_responses`.
+helpers from :mod:`blackcat.providers.openai_responses`.
 
 Authentication
 --------------
@@ -15,6 +16,7 @@ Two modes are supported, selected automatically:
    acquires a bearer token scoped to
    ``https://cognitiveservices.azure.com/.default``.  ``azure-identity``
    is an optional dependency installed via ``pip install blackcat-ai[azure]``.
+   is an optional dependency installed via ``pip install nanobot-ai[azure]``.
 """
 
 from __future__ import annotations
@@ -56,6 +58,7 @@ class _AzureTokenProvider:
             raise RuntimeError(
                 "Azure OpenAI AAD authentication requires the 'azure-identity' package. "
                 "Install it with: pip install 'blackcat-ai[azure]'"
+                "Install it with: pip install 'nanobot-ai[azure]'"
             ) from exc
 
         self._scope = scope

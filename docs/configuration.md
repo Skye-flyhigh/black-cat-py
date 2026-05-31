@@ -291,6 +291,10 @@ The `azure_openai` provider talks to your Azure OpenAI resource via the OpenAI *
   "agents": {
     "defaults": {
       "modelPreset": "azure"
+  "agents": {
+    "defaults": {
+      "provider": "azure_openai",
+      "model": "my-gpt-5-deployment"
     }
   }
 }
@@ -316,6 +320,10 @@ Omit `apiKey` (or leave it empty / unset). The provider falls back to [`DefaultA
   "agents": {
     "defaults": {
       "modelPreset": "azure"
+  "agents": {
+    "defaults": {
+      "provider": "azure_openai",
+      "model": "my-gpt-5-deployment"
     }
   }
 }
@@ -325,6 +333,7 @@ Install the optional dependency:
 
 ```bash
 pip install 'blackcat-ai[azure]'
+pip install 'nanobot-ai[azure]'
 ```
 
 `DefaultAzureCredential` walks this chain in order and uses the first identity that succeeds:
@@ -340,6 +349,7 @@ pip install 'blackcat-ai[azure]'
 The identity that ends up signing the request **must be assigned the `Cognitive Services OpenAI User` RBAC role** (or higher) on the Azure OpenAI resource. Without that role you will see `401`/`403` errors at the first request.
 
 > `apiBase` remains mandatory in both modes — it's your Azure resource endpoint and cannot be inferred. If neither `apiKey` is set nor `azure-identity` is installed, the provider raises a clear error pointing you at `pip install 'blackcat-ai[azure]'`.
+> `apiBase` remains mandatory in both modes — it's your Azure resource endpoint and cannot be inferred. If neither `apiKey` is set nor `azure-identity` is installed, the provider raises a clear error pointing you at `pip install 'nanobot-ai[azure]'`.
 
 </details>
 

@@ -12,6 +12,11 @@ from blackcat.providers.azure_openai_provider import (
     _AzureTokenProvider,
 )
 from blackcat.providers.base import LLMResponse
+from blackcat.providers.azure_openai_provider import (
+    AzureOpenAIProvider,
+    _AzureTokenProvider,
+)
+from blackcat.providers.base import LLMResponse
 
 # ---------------------------------------------------------------------------
 # Init & validation
@@ -138,6 +143,10 @@ async def test_aad_token_provider_wires_into_sdk_auth_headers(monkeypatch):
     await provider._client._refresh_api_key()
     assert provider._client.auth_headers == {"Authorization": "Bearer token-B"}
     credential_factory.assert_called_once_with()
+    # The SDK client must have received the token provider as its api_key
+    # (the SDK stores it on the auth wrapper, not directly accessible — so
+    # we assert the callable was wired in via the provider attribute).
+    assert provider._token_provider._credential is credential_instance
 
 
 def test_init_explicit_key_does_not_construct_credential(monkeypatch):
@@ -167,6 +176,7 @@ def test_init_missing_key_without_azure_identity_raises(monkeypatch):
 
     with patch("builtins.__import__", side_effect=fake_import):
         with pytest.raises(RuntimeError, match=r"pip install 'blackcat-ai\[azure\]'"):
+        with pytest.raises(RuntimeError, match=r"pip install 'nanobot-ai\[azure\]'"):
             AzureOpenAIProvider(api_key="", api_base="https://res.openai.azure.com")
 
 
