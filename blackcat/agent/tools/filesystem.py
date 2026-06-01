@@ -32,6 +32,12 @@ class FileToolsConfig(Base):
     enable: bool = True  # built-in file tools on by default
 
 
+class FileToolsConfig(Base):
+    """Filesystem tools configuration."""
+
+    enable: bool = True  # built-in file tools on by default; set false to act only through MCP servers
+
+
 class _FsTool(Tool):
     """Shared base for filesystem tools — common init and path resolution."""
 
