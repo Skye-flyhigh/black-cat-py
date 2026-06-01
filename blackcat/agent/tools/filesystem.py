@@ -29,7 +29,7 @@ class FileToolsConfig(Base):
 class FileToolsConfig(Base):
     """Filesystem tools configuration."""
 
-    enable: bool = True  # built-in file tools on by default; set false to act only through MCP servers
+    enable: bool = True  # built-in file tools on by default
 
 
 class _FsTool(Tool):
