@@ -750,6 +750,7 @@ class CliAppManager:
                 prefix.extend(["--upgrade", "--force-reinstall"])
             else:
                 prefix.extend(["--upgrade", "--reinstall"])
+                prefix.append("--upgrade")
         return prefix + args
 
     def _pip_uninstall_argv(
@@ -761,6 +762,7 @@ class CliAppManager:
             prefix = [sys.executable, "-m", "pip", "uninstall", "-y"]
         elif shutil.which("uv"):
             prefix = ["uv", "pip", "uninstall", "--python", sys.executable]
+            prefix = ["uv", "pip", "uninstall", "--python", sys.executable, "-y"]
         else:
             raise CliAppError("pip is not available and uv is not installed")
         distribution = str((installed_entry or {}).get("pip_distribution") or "").strip()
