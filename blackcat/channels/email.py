@@ -85,6 +85,234 @@ class EmailChannel(BaseChannel):
     display_name = "Email"
 
     def fetch_unseen_messages(self) -> list[EmailMessage]:
+    @classmethod
+    def default_config(cls) -> dict[str, Any]:
+        return EmailConfig().model_dump(by_alias=True)
+
+    def __init__(self, config: Any, bus: MessageBus):
+        if isinstance(config, dict):
+            config = EmailConfig.model_validate(config)
+        super().__init__(config, bus)
+        self.config: EmailConfig = config
+        self._self_addresses = self._collect_self_addresses()
+        self._last_subject_by_chat: dict[str, str] = {}
+        self._last_message_id_by_chat: dict[str, str] = {}
+        self._processed_uids: set[str] = set()  # Capped to prevent unbounded growth
+        self._MAX_PROCESSED_UIDS = 100000
+
+    async def start(self) -> None:
+        """Start polling IMAP for inbound emails."""
+        if not self.config.consent_granted:
+            self.logger.warning(
+                "Email channel disabled: consent_granted is false. "
+                "Set channels.email.consentGranted=true after explicit user permission."
+            )
+            return
+
+        if not self._validate_config():
+            return
+
+        self._running = True
+        if not self.config.verify_dkim and not self.config.verify_spf:
+            self.logger.warning(
+                "DKIM and SPF verification are both DISABLED. "
+                "Emails with spoofed From headers will be accepted. "
+                "Set verify_dkim=true and verify_spf=true for anti-spoofing protection."
+            )
+        self.logger.info("Starting Email channel (IMAP polling mode)...")
+
+        poll_seconds = max(5, int(self.config.poll_interval_seconds))
+        while self._running:
+            try:
+                inbound_items, skipped_uids = await asyncio.to_thread(self._fetch_new_messages)
+                should_apply_post_action = self._should_apply_post_action()
+                post_actions_uids: set[str] = set()
+                for item in inbound_items:
+                    sender = item["sender"]
+                    subject = item.get("subject", "")
+                    message_id = item.get("message_id", "")
+
+                    if subject:
+                        self._last_subject_by_chat[sender] = subject
+                    if message_id:
+                        self._last_message_id_by_chat[sender] = message_id
+
+                    try:
+                        await self._handle_message(
+                            sender_id=sender,
+                            chat_id=sender,
+                            content=item["content"],
+                            media=item.get("media") or None,
+                            metadata=item.get("metadata", {}),
+                        )
+                    except Exception:
+                        self.logger.exception("Error delivering email from {}", sender)
+                        continue
+
+                    uid = str((item.get("metadata") or {}).get("uid") or "")
+                    if uid and should_apply_post_action:
+                        post_actions_uids.add(uid)
+
+                if should_apply_post_action and not self.config.post_action_ignore_skipped:
+                    post_actions_uids.update(skipped_uids)
+
+                if post_actions_uids:
+                    await asyncio.to_thread(self._apply_post_actions_batch, sorted(post_actions_uids))
+            except Exception:
+                self.logger.exception("Polling error")
+
+            await asyncio.sleep(poll_seconds)
+
+    async def stop(self) -> None:
+        """Stop polling loop."""
+        self._running = False
+
+    async def send(self, msg: OutboundMessage) -> None:
+        """Send email via SMTP."""
+        if not self.config.consent_granted:
+            self.logger.warning("Skip email send: consent_granted is false")
+            return
+
+        if not self.config.smtp_host:
+            self.logger.warning("SMTP host not configured")
+            return
+
+        # Skip progress messages to prevent sending an empty email after each tool call
+        if (msg.metadata or {}).get("_progress"):
+            self.logger.debug("Skip progress message to {}", msg.chat_id)
+            return
+
+        to_addr = msg.chat_id.strip()
+        if not to_addr:
+            self.logger.warning("Missing recipient address")
+            return
+
+        # Determine if this is a reply (recipient has sent us an email before)
+        is_reply = to_addr in self._last_subject_by_chat
+        force_send = bool((msg.metadata or {}).get("force_send"))
+
+        # autoReplyEnabled only controls automatic replies, not proactive sends
+        if is_reply and not self.config.auto_reply_enabled and not force_send:
+            self.logger.info("Skip automatic reply to {}: auto_reply_enabled is false", to_addr)
+            return
+
+        base_subject = self._last_subject_by_chat.get(to_addr, "nanobot reply")
+        subject = self._reply_subject(base_subject)
+        if msg.metadata and isinstance(msg.metadata.get("subject"), str):
+            override = msg.metadata["subject"].strip()
+            if override:
+                subject = override
+
+        attachments: list[tuple[bytes, str, str, str]] = []
+        failed_attachments: list[str] = []
+        max_attachment_size = max(0, int(self.config.max_attachment_size))
+        max_attachment_count = max(0, int(self.config.max_attachments_per_email))
+        for media_path in msg.media or []:
+            path = Path(media_path)
+            filename = path.name or "attachment"
+            if len(attachments) >= max_attachment_count:
+                failed_attachments.append(f"[attachment: {filename} - too many attachments]")
+                self.logger.warning("Attachment count limit reached, skipping: {}", media_path)
+                continue
+            if not path.is_file():
+                failed_attachments.append(f"[attachment: {filename} - send failed]")
+                self.logger.warning("Attachment not found, skipping: {}", media_path)
+                continue
+            try:
+                size = path.stat().st_size
+                if max_attachment_size <= 0 or size > max_attachment_size:
+                    failed_attachments.append(f"[attachment: {filename} - too large]")
+                    self.logger.warning(
+                        "Attachment too large, skipping: {} ({} > {} bytes)",
+                        media_path,
+                        size,
+                        max_attachment_size,
+                    )
+                    continue
+                data = path.read_bytes()
+                ctype, _ = mimetypes.guess_type(str(path))
+                if ctype is None:
+                    ctype = "application/octet-stream"
+                maintype, subtype = ctype.split("/", 1)
+                attachments.append((data, maintype, subtype, filename))
+                self.logger.info("Attached file: {}", filename)
+            except Exception:
+                failed_attachments.append(f"[attachment: {filename} - send failed]")
+                self.logger.exception("Failed to attach file {}", media_path)
+
+        content = msg.content or ""
+        if failed_attachments:
+            fallback = "\n".join(failed_attachments)
+            content = f"{content.rstrip()}\n\n{fallback}" if content.strip() else fallback
+
+        email_msg = EmailMessage()
+        email_msg["From"] = self.config.from_address or self.config.smtp_username or self.config.imap_username
+        email_msg["To"] = to_addr
+        email_msg["Subject"] = subject
+        email_msg.set_content(content)
+
+        for data, maintype, subtype, filename in attachments:
+            email_msg.add_attachment(
+                data,
+                maintype=maintype,
+                subtype=subtype,
+                filename=filename,
+            )
+
+        in_reply_to = self._last_message_id_by_chat.get(to_addr)
+        if in_reply_to:
+            email_msg["In-Reply-To"] = in_reply_to
+            email_msg["References"] = in_reply_to
+
+        try:
+            await asyncio.to_thread(self._smtp_send, email_msg)
+        except Exception:
+            self.logger.exception("Error sending to {}", to_addr)
+            raise
+
+    def _validate_config(self) -> bool:
+        missing = []
+        if not self.config.imap_host:
+            missing.append("imap_host")
+        if not self.config.imap_username:
+            missing.append("imap_username")
+        if not self.config.imap_password:
+            missing.append("imap_password")
+        if not self.config.smtp_host:
+            missing.append("smtp_host")
+        if not self.config.smtp_username:
+            missing.append("smtp_username")
+        if not self.config.smtp_password:
+            missing.append("smtp_password")
+
+        if self.config.post_action == "move" and not (self.config.post_action_move_mailbox or "").strip():
+            missing.append("post_action_move_mailbox")
+
+        if missing:
+            self.logger.error("Channel not configured, missing: {}", ', '.join(missing))
+            return False
+        return True
+
+    def _smtp_send(self, msg: EmailMessage) -> None:
+        timeout = 30
+        if self.config.smtp_use_ssl:
+            with smtplib.SMTP_SSL(
+                self.config.smtp_host,
+                self.config.smtp_port,
+                timeout=timeout,
+            ) as smtp:
+                smtp.login(self.config.smtp_username, self.config.smtp_password)
+                smtp.send_message(msg)
+            return
+
+        with smtplib.SMTP(self.config.smtp_host, self.config.smtp_port, timeout=timeout) as smtp:
+            if self.config.smtp_use_tls:
+                smtp.starttls(context=ssl.create_default_context())
+            smtp.login(self.config.smtp_username, self.config.smtp_password)
+            smtp.send_message(msg)
+
+    def _fetch_new_messages(self) -> tuple[list[dict[str, Any]], set[str]]:
+        """Poll IMAP and return parsed unread messages plus skipped message UIDs."""
         return self._fetch_messages(
             search_criteria=("UNSEEN",),
             mark_seen=self.config.mark_seen,
