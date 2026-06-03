@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import fields
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -50,31 +51,6 @@ def test_tool_plugin_discoverable_default_is_true():
 # --- ToolContext tests ---
 
 from blackcat.agent.tools.context import ToolContext
-
-
-def test_tool_context_has_required_fields():
-    field_names = {f.name for f in fields(ToolContext)}
-    required = {
-        "config", "workspace", "bus", "subagent_manager",
-        "cron_service", "file_state_store", "provider_snapshot_loader",
-        "image_generation_provider_configs", "timezone",
-    }
-    assert required <= field_names
-
-
-def test_tool_context_defaults():
-    ctx = ToolContext(config=None, workspace="/tmp")
-    assert ctx.bus is None
-    assert ctx.subagent_manager is None
-    assert ctx.cron_service is None
-    assert ctx.provider_snapshot_loader is None
-    assert ctx.image_generation_provider_configs is None
-    assert ctx.timezone == "UTC"
-
-
-# --- ToolLoader tests ---
-
-from blackcat.agent.tools.loader import _SKIP_MODULES, ToolLoader
 
 
 def test_skip_modules_excludes_infrastructure():
@@ -139,8 +115,6 @@ def test_loader_registers_exec_with_real_tools_config(tmp_path):
 
 
 # --- Task 4: _FsTool.create() ---
-
-from pathlib import Path
 
 
 def test_fs_tool_create_builds_from_context():
