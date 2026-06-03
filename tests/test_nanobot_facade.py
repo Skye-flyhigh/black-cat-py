@@ -305,6 +305,8 @@ async def test_run_restores_extra_hooks_even_on_populated_iterations(tmp_path):
 async def test_sdk_capture_prefers_run_level_snapshot():
     from blackcat.agent.hook import AgentHookContext, AgentRunHookContext, SDKCaptureHook
     from blackcat.providers.base import ToolCallRequest
+    from blackcat.agent.hook import AgentHookContext, AgentRunHookContext, SDKCaptureHook
+    from blackcat.providers.base import ToolCallRequest
 
     hook = SDKCaptureHook()
     iter_messages = [{"role": "user", "content": "work"}]

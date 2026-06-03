@@ -317,12 +317,14 @@ class AgentRunner:
             result = await self._run_core(spec, hook, messages)
         except asyncio.CancelledError as exc:
             context.messages = deepcopy(messages)
+            context.messages = list(messages)
             context.stop_reason = "cancelled"
             context.error = None
             context.exception = exc
             raise
         except Exception as exc:
             context.messages = deepcopy(messages)
+            context.messages = list(messages)
             context.stop_reason = "error"
             context.error = f"Error: {type(exc).__name__}: {exc}"
             context.exception = exc

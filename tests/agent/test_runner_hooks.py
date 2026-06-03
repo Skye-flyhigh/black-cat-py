@@ -475,6 +475,11 @@ async def test_runner_does_not_report_cancellation_as_error():
 
     from blackcat.agent.hook import AgentHook, AgentRunHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+async def test_runner_does_not_report_cancellation_as_error():
+    import asyncio
+
+    from blackcat.agent.hook import AgentHook, AgentRunHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock(spec=LLMProvider)
     events: list[tuple] = []
