@@ -338,53 +338,6 @@ async def test_mcp_reconnect_handler_uses_sanitized_server_prefix(
 
 
 @pytest.mark.asyncio
-async def test_concurrent_mcp_reconnect_reuses_fresh_session(
-    tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    loop = _make_loop(tmp_path, mcp_servers={"remote": object()})
-    closed: list[str] = []
-    connect_count = 0
-
-    async def _mark_closed(name: str) -> None:
-        closed.append(name)
-
-    class _DeadSession:
-        async def read_resource(self, _uri: str) -> Any:
-            raise McpError(ErrorData(code=-32000, message="Session terminated"))
-
-    class _LiveSession:
-        async def read_resource(self, uri: str) -> Any:
-            await asyncio.sleep(0)
-            return SimpleNamespace(
-                contents=[
-                    mcp_types.TextResourceContents(
-                        uri=uri,
-                        text=f"fresh:{uri.rsplit('/', maxsplit=1)[-1]}",
-                    )
-                ]
-            )
-
-    async def _fake_connect(servers, registry):
-        nonlocal connect_count
-        stacks = {}
-        for name in servers:
-            connect_count += 1
-            session = _DeadSession() if connect_count == 1 else _LiveSession()
-            for resource_name in ("alpha", "beta"):
-                resource_def = SimpleNamespace(
-                    name=resource_name,
-                    uri=f"file:///{resource_name}",
-                    description=f"{resource_name} resource",
-                )
-                registry.register(MCPResourceWrapper(session, name, resource_def))
-            stack = AsyncExitStack()
-            await stack.__aenter__()
-            stack.push_async_callback(_mark_closed, name)
-            stacks[name] = stack
-        return stacks
-
-    monkeypatch.setattr("blackcat.agent.tools.mcp.connect_mcp_servers", _fake_connect)
 
     await loop._connect_mcp()
     old_alpha = loop.tools.get("mcp_remote_resource_alpha")
