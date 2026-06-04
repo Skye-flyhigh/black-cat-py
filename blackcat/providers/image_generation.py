@@ -1096,8 +1096,10 @@ class CustomImageGenerationClient(ImageGenerationProvider):
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            **self.extra_headers,
         }
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        headers.update(self.extra_headers)
 
         body: dict[str, Any] = {
             "model": model,

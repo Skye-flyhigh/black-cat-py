@@ -128,6 +128,7 @@ The `apiBase` is required. The provider sends requests to `{apiBase}/images/gene
 
 For compatibility with the default nanobot setting, custom maps `defaultImageSize: "1K"` to `1024x1024`. Other explicit size hints are passed through unchanged.
 The `apiBase` is required. The provider sends requests to `{apiBase}/images/generations` using the OpenAI Images API format with `response_format: "b64_json"`.
+The `apiBase` is required. The provider sends requests to `{apiBase}/images/generations` using the OpenAI Images API format with `response_format: "b64_json"`. The `apiKey` is optional for local or unauthenticated endpoints.
 
 ### AIHubMix
 
@@ -372,5 +373,7 @@ Use the reference image. Keep the same robot and composition, change the palette
 | `unsupported image generation provider` | Use `openrouter`, `aihubmix`, `minimax`, `gemini`, `ollama`, `stepfun`, or `zhipu` |
 | AIHubMix says `Incorrect model ID` | Use `model: "gpt-image-2-free"`; blackcat expands it to the required `openai/gpt-image-2-free` model path internally |
 | `unsupported image generation provider` | Use `openrouter`, `custom`, `aihubmix`, `minimax`, `gemini`, `ollama`, `stepfun`, or `zhipu` |
+| `unsupported image generation provider` | Use `openrouter`, `custom`, `aihubmix`, `minimax`, `gemini`, `ollama`, `stepfun`, or `zhipu` |
+| AIHubMix says `Incorrect model ID` | Use `model: "gpt-image-2-free"`; nanobot expands it to the required `openai/gpt-image-2-free` model path internally |
 | Generation times out | Try a smaller/default image size, set AIHubMix `extraBody.quality` to `"low"`, or retry later |
 | Reference image rejected | Reference image paths must be inside the workspace or blackcat media directory and must be valid image files |
