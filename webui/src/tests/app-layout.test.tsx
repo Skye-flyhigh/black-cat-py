@@ -220,10 +220,8 @@ describe("App layout", () => {
     attachSpy.mockReset();
     runStatusHandlers.clear();
     window.history.replaceState(null, "", "/");
-    localStorage.removeItem("blackcat-webui.sidebar.completed-runs.v1");
     setNavigatorPlatform("Linux x86_64");
-    localStorage.removeItem("blackcat-webui.sidebar");
-    localStorage.removeItem("blackcat-webui.sidebar.completed-runs.v1");
+    localStorage.removeItem("nanobot-webui.sidebar.completed-runs.v1");
     vi.mocked(fetchBootstrap).mockReset().mockResolvedValue({
       token: "tok",
       ws_path: "/",
