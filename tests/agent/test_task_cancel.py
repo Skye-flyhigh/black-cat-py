@@ -29,6 +29,10 @@ def _make_loop(*, tools_config=None):
          patch("blackcat.agent.loop.SessionManager"), \
          patch("blackcat.agent.loop.SubagentManager") as MockSubMgr:
         MockSubMgr.return_value.cancel_by_session = AsyncMock(return_value=0)
+    with patch("blackcat.agent.loop.ContextBuilder"), \
+         patch("blackcat.agent.loop.SessionManager"), \
+         patch("blackcat.agent.loop.SubagentManager") as mock_sub_mgr:
+        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
         loop = AgentLoop(bus=bus, provider=provider, workspace=workspace, tools_config=tools_config)
     return loop, bus
 
@@ -103,6 +107,8 @@ class TestHandleStop:
 
 class TestDispatch:
     def test_exec_tool_not_registered_when_disabled(self):
+        from blackcat.agent.tools.shell import ExecToolConfig
+        from blackcat.config.schema import ToolsConfig
         from blackcat.agent.tools.shell import ExecToolConfig
         from blackcat.config.schema import ToolsConfig
 
@@ -294,6 +300,10 @@ class TestSubagentCancellation:
 
     @pytest.mark.asyncio
     async def test_subagent_exec_tool_not_registered_when_disabled(self, tmp_path):
+        from blackcat.agent.subagent import SubagentManager
+        from blackcat.agent.tools.shell import ExecToolConfig
+        from blackcat.bus.queue import MessageBus
+        from blackcat.config.schema import ToolsConfig
         from blackcat.agent.subagent import SubagentManager
         from blackcat.agent.tools.shell import ExecToolConfig
         from blackcat.bus.queue import MessageBus

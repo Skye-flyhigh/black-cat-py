@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from blackcat.session.manager import Session, SessionManager
+from blackcat.session.manager import Session, SessionManager
 
 # Test constants
 MEMORY_WINDOW = 50
@@ -613,6 +614,7 @@ class TestNewCommandArchival:
 
         async def _slow_summarize(_messages, *, session_key=None) -> bool:
             assert session_key == "cli:test"
+        async def _slow_summarize(_messages) -> bool:
             await release_archive.wait()
             archived.set()
             return True

@@ -15,6 +15,8 @@ import pytest
 
 from blackcat.agent.tools import file_state
 from blackcat.agent.tools.filesystem import EditFileTool, ReadFileTool, _find_match
+from blackcat.agent.tools import file_state
+from blackcat.agent.tools.filesystem import EditFileTool, ReadFileTool, _find_match
 
 
 @pytest.fixture(autouse=True)

@@ -36,12 +36,17 @@ def _make_loop(tmp_path):
          patch("blackcat.agent.loop.SessionManager"), \
          patch("blackcat.agent.loop.SubagentManager") as MockSubMgr:
         MockSubMgr.return_value.cancel_by_session = AsyncMock(return_value=0)
+    with patch("blackcat.agent.loop.ContextBuilder"), \
+         patch("blackcat.agent.loop.SessionManager"), \
+         patch("blackcat.agent.loop.SubagentManager") as mock_sub_mgr:
+        mock_sub_mgr.return_value.cancel_by_session = AsyncMock(return_value=0)
         loop = AgentLoop(bus=bus, provider=provider, workspace=tmp_path)
     return loop
 
 @pytest.mark.asyncio
 async def test_drain_injections_returns_empty_when_no_callback():
     """No injection_callback → empty list."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -60,6 +65,8 @@ async def test_drain_injections_returns_empty_when_no_callback():
 @pytest.mark.asyncio
 async def test_drain_injections_extracts_content_from_inbound_messages():
     """Should extract .content from InboundMessage objects."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -91,6 +98,8 @@ async def test_drain_injections_extracts_content_from_inbound_messages():
 @pytest.mark.asyncio
 async def test_drain_injections_passes_limit_to_callback_when_supported():
     """Limit-aware callbacks can preserve overflow in their own queue."""
+    from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -126,6 +135,8 @@ async def test_drain_injections_passes_limit_to_callback_when_supported():
 @pytest.mark.asyncio
 async def test_drain_injections_skips_empty_content():
     """Messages with blank content should be filtered out."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -220,6 +231,7 @@ async def test_drain_injections_skips_objects_with_none_content():
 async def test_drain_injections_handles_callback_exception():
     """If the callback raises, return empty list (error is logged)."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     runner = AgentRunner(provider)
@@ -241,6 +253,8 @@ async def test_drain_injections_handles_callback_exception():
 @pytest.mark.asyncio
 async def test_checkpoint1_injects_after_tool_execution():
     """Follow-up messages are injected after tool execution, before next LLM call."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -294,6 +308,9 @@ async def test_checkpoint1_injects_after_tool_execution():
 @pytest.mark.asyncio
 async def test_checkpoint2_injects_after_final_response_with_resuming_stream():
     """After final response, if injections exist, stream_end should get resuming=True."""
+    from blackcat.agent.hook import AgentHook, AgentHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.hook import AgentHook, AgentHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
@@ -353,6 +370,8 @@ async def test_checkpoint2_injects_after_final_response_with_resuming_stream():
 @pytest.mark.asyncio
 async def test_checkpoint2_preserves_final_response_in_history_before_followup():
     """A follow-up injected after a final answer must still see that answer in history."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -469,6 +488,7 @@ async def test_loop_injected_followup_preserves_image_media(tmp_path):
 async def test_runner_merges_multiple_injected_user_messages_without_losing_media():
     """Multiple injected follow-ups should not create lossy consecutive user messages."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -533,6 +553,8 @@ async def test_injection_cycles_capped_at_max():
     """Injection cycles should be capped at _MAX_INJECTION_CYCLES."""
     from blackcat.agent.runner import _MAX_INJECTION_CYCLES, AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import _MAX_INJECTION_CYCLES, AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -572,6 +594,7 @@ async def test_injection_cycles_capped_at_max():
 @pytest.mark.asyncio
 async def test_no_injections_flag_is_false_by_default():
     """had_injections should be False when no injection callback or no messages."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -773,6 +796,10 @@ async def test_pending_queue_preserves_overflow_for_next_injection_cycle(tmp_pat
     from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN
     from blackcat.bus.events import InboundMessage
     from blackcat.bus.queue import MessageBus
+    from blackcat.agent.loop import AgentLoop
+    from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN
+    from blackcat.bus.events import InboundMessage
+    from blackcat.bus.queue import MessageBus
 
     bus = MessageBus()
     provider = MagicMock()
@@ -900,6 +927,8 @@ async def test_drain_injections_on_fatal_tool_error():
     """Pending injections should be drained even when a fatal tool error occurs."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -951,6 +980,8 @@ async def test_drain_injections_on_fatal_tool_error():
 @pytest.mark.asyncio
 async def test_drain_injections_on_llm_error():
     """Pending injections should be drained when the LLM returns an error finish_reason."""
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 
@@ -1008,6 +1039,8 @@ async def test_drain_injections_on_empty_final_response():
     """Pending injections should be drained when the runner exits due to empty response."""
     from blackcat.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import _MAX_EMPTY_RETRIES, AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1063,6 +1096,8 @@ async def test_drain_injections_on_max_iterations():
     """
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -1112,6 +1147,9 @@ async def test_drain_injections_on_max_iterations():
 @pytest.mark.asyncio
 async def test_drain_injections_set_flag_when_followup_arrives_after_last_iteration():
     """Late follow-ups drained in max_iterations should still flip had_injections."""
+    from blackcat.agent.hook import AgentHook
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.hook import AgentHook
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
@@ -1175,6 +1213,8 @@ async def test_drain_injections_set_flag_when_followup_arrives_after_last_iterat
 @pytest.mark.asyncio
 async def test_injection_cycle_cap_on_error_path():
     """Injection cycles should be capped even when every iteration hits an LLM error."""
+    from blackcat.agent.runner import _MAX_INJECTION_CYCLES, AgentRunner, AgentRunSpec
+    from blackcat.bus.events import InboundMessage
     from blackcat.agent.runner import _MAX_INJECTION_CYCLES, AgentRunner, AgentRunSpec
     from blackcat.bus.events import InboundMessage
 

@@ -11,6 +11,9 @@ from blackcat.agent.memory import (
 from blackcat.providers.base import LLMResponse
 from blackcat.session.manager import Session
 from blackcat.utils.prompt_templates import render_template
+from blackcat.providers.base import LLMResponse
+from blackcat.session.manager import Session
+from blackcat.utils.prompt_templates import render_template
 
 
 @pytest.fixture

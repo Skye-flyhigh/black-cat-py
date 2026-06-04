@@ -16,6 +16,8 @@ from blackcat.agent.subagent import (
 )
 from blackcat.bus.queue import MessageBus
 from blackcat.providers.base import LLMProvider
+from blackcat.bus.queue import MessageBus
+from blackcat.providers.base import LLMProvider
 
 # ---------------------------------------------------------------------------
 # Helpers

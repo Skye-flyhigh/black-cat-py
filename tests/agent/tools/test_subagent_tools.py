@@ -19,6 +19,10 @@ async def test_subagent_exec_tool_receives_allowed_env_keys(tmp_path):
     from blackcat.agent.tools.shell import ExecToolConfig
     from blackcat.bus.queue import MessageBus
     from blackcat.config.schema import ToolsConfig
+    from blackcat.agent.subagent import SubagentManager, SubagentStatus
+    from blackcat.agent.tools.shell import ExecToolConfig
+    from blackcat.bus.queue import MessageBus
+    from blackcat.config.schema import ToolsConfig
 
     bus = MessageBus()
     provider = MagicMock()
@@ -475,6 +479,7 @@ async def test_drain_pending_timeout(tmp_path):
         awaitable.close()
         raise asyncio.TimeoutError
 
+    with patch("blackcat.agent.loop.asyncio.wait_for", side_effect=_timeout):
     with patch("blackcat.agent.loop.asyncio.wait_for", side_effect=_timeout):
         results = await injection_callback()
         assert results == []
