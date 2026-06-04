@@ -139,7 +139,8 @@ export function Sidebar(props: SidebarProps) {
           label={t("sidebar.newChat")}
           onClick={props.onNewChat}
           icon={<SquarePen className="h-4 w-4" />}
-          shortcut="Cmd/Ctrl+Shift+O"
+          shortcut={newChatShortcut}
+          ariaKeyShortcuts="Meta+Shift+O Control+Shift+O"
         />
         <SidebarActionButton
           collapsed={collapsed}
@@ -244,6 +245,7 @@ function SidebarActionButton({
   active = false,
   className,
   shortcut,
+  ariaKeyShortcuts,
 }: {
   collapsed: boolean;
   label: string;
@@ -252,6 +254,7 @@ function SidebarActionButton({
   active?: boolean;
   className?: string;
   shortcut?: string;
+  ariaKeyShortcuts?: string;
 }) {
   const title = shortcut ? `${label} (${shortcut})` : collapsed ? label : undefined;
 
@@ -261,6 +264,7 @@ function SidebarActionButton({
       variant="ghost"
       aria-label={label}
       aria-current={active ? "page" : undefined}
+      aria-keyshortcuts={ariaKeyShortcuts}
       title={title}
       onClick={() => onClick()}
       className={cn(
