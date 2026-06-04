@@ -1047,6 +1047,8 @@ class CustomImageGenerationClient(ImageGenerationProvider):
     provider_name = "custom"
     missing_base_message = (
         "Custom image generation API base is not configured. Set providers.custom.apiBase."
+    missing_key_message = (
+        "Custom image generation API key is not configured. Set providers.custom.apiKey."
     )
 
     def _default_base_url(self) -> str:
@@ -1061,6 +1063,7 @@ class CustomImageGenerationClient(ImageGenerationProvider):
                     return "1024x1024"
                 return requested
         return _openai_size("gpt-image-2", aspect_ratio, None)
+        return _openai_size("gpt-image-2", aspect_ratio, image_size)
 
     async def generate(
         self,
@@ -1073,6 +1076,8 @@ class CustomImageGenerationClient(ImageGenerationProvider):
     ) -> GeneratedImageResponse:
         if not self.api_base:
             raise ImageGenerationError(self.missing_base_message)
+        if not self.api_key:
+            raise ImageGenerationError(self.missing_key_message)
 
         if reference_images:
             logger.warning(
@@ -1088,6 +1093,11 @@ class CustomImageGenerationClient(ImageGenerationProvider):
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         headers.update(self.extra_headers)
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            **self.extra_headers,
+        }
 
         body: dict[str, Any] = {
             "model": model,
