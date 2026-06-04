@@ -290,6 +290,8 @@ async def test_runner_calls_run_level_hooks_on_success():
 async def test_runner_run_level_context_is_detached_snapshot():
     from blackcat.agent.hook import AgentHook, AgentRunHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.hook import AgentHook, AgentRunHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock(spec=LLMProvider)
     call_count = {"n": 0}
@@ -443,6 +445,8 @@ async def test_runner_calls_on_error_and_finally_for_unhandled_exception():
 async def test_runner_preserves_original_exception_when_finally_hook_fails():
     from blackcat.agent.hook import AgentHook, AgentRunHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
+    from blackcat.agent.hook import AgentHook, AgentRunHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock(spec=LLMProvider)
 
@@ -530,6 +534,8 @@ async def test_runner_does_not_report_cancellation_as_error():
 async def test_runner_preserves_cancellation_when_finally_hook_fails():
     import asyncio
 
+    from blackcat.agent.hook import AgentHook, AgentRunHookContext
+    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.hook import AgentHook, AgentRunHookContext
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
