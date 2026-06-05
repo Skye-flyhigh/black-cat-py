@@ -76,7 +76,23 @@ describe("MessageBubble", () => {
 
     expect(row).toHaveClass("ml-auto", "flex");
     expect(pill).toHaveClass("ml-auto", "w-fit", "rounded-[18px]");
-    expect(screen.queryByRole("button", { name: "Fork" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy message" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy reply" })).not.toBeInTheDocument();
+  });
+
+  it("does not render fork control for user messages", () => {
+    const onForkFromHere = vi.fn();
+    const message: UIMessage = {
+      id: "u-fork",
+      role: "user",
+      content: "continue from here",
+      createdAt: new Date("2026-06-06T09:04:00Z").getTime(),
+    };
+
+    render(<MessageBubble message={message} onForkFromHere={onForkFromHere} />);
+
+    expect(screen.getByRole("button", { name: "Copy message" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Fork from here" })).not.toBeInTheDocument();
   });
 
   it("renders fork control in completed assistant action rows", () => {
@@ -91,7 +107,7 @@ describe("MessageBubble", () => {
 
     render(<MessageBubble message={message} onForkFromHere={onForkFromHere} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Fork" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fork from here" }));
     expect(onForkFromHere).toHaveBeenCalledTimes(1);
   });
 

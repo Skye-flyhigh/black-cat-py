@@ -7,12 +7,14 @@ import type { CliAppInfo, McpPresetInfo, UIMessage } from "@/lib/types";
 
 interface ThreadMessagesProps {
   messages: UIMessage[];
+  allMessages?: UIMessage[];
   /** When true, agent turn still in flight — keeps activity timeline expanded. */
   isStreaming?: boolean;
   hiddenUserMessageCount?: number;
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
   onOpenFilePreview?: (path: string) => void;
+  onForkFromMessage?: (beforeUserIndex: number) => void;
 }
 
 export type DisplayUnit = TurnUnit;
@@ -60,14 +62,20 @@ export function assistantCopyFlags(units: DisplayUnit[]): boolean[] {
 
 export function ThreadMessages({
   messages,
+  allMessages,
   isStreaming = false,
   hiddenUserMessageCount = 0,
   cliApps = [],
   mcpPresets = [],
   onOpenFilePreview,
+  onForkFromMessage,
 }: ThreadMessagesProps) {
   const { t } = useTranslation();
   const units = useMemo(() => buildDisplayUnits(messages, isStreaming), [isStreaming, messages]);
+  const assistantForkIndexById = useMemo(
+    () => assistantForkIndexByMessageId(allMessages ?? messages),
+    [allMessages, messages],
+  );
   const copyFlags = useMemo(() => assistantCopyFlags(units), [units]);
   const liveActivityClusterIndices = useMemo(
     () => isStreaming ? currentActivityClusterIndices(units) : new Set<number>(),
@@ -126,6 +134,16 @@ export function ThreadMessages({
                 cliApps={cliApps}
                 mcpPresets={mcpPresets}
                 onOpenFilePreview={onOpenFilePreview}
+                onForkFromHere={
+                  onForkFromMessage
+                    ? forkHandlerForAssistantMessage(
+                        unit.message,
+                        copyFlags[index],
+                        assistantForkIndexById,
+                        onForkFromMessage,
+                      )
+                    : undefined
+                }
               />
             )}
           </div>
@@ -135,28 +153,32 @@ export function ThreadMessages({
   );
 }
 
-function unitIndexAfterMessageCount(
-  units: DisplayUnit[],
-  messageCount: number | null | undefined,
-): number | null {
-  if (messageCount == null || messageCount <= 0) return null;
-  let seen = 0;
-  for (let i = 0; i < units.length; i += 1) {
-    const unit = units[i];
-    seen += unit.type === "activity" ? unit.messages.length : 1;
-    if (seen >= messageCount) return i;
+function assistantForkIndexByMessageId(messages: UIMessage[]): Map<string, number> {
+  const out = new Map<string, number>();
+  let nextUserIndex = 0;
+  for (const message of messages) {
+    if (message.role === "user") {
+      nextUserIndex += 1;
+    } else if (message.role === "assistant") {
+      out.set(message.id, nextUserIndex);
+    }
   }
-  return null;
+  return out;
 }
 
-function ForkBoundaryDivider({ label }: { label: string }) {
-  return (
-    <div className="my-5 flex items-center gap-3 text-[11px] text-muted-foreground/80">
-      <span aria-hidden className="h-px flex-1 bg-border/70" />
-      <span className="shrink-0">{label}</span>
-      <span aria-hidden className="h-px flex-1 bg-border/70" />
-    </div>
-  );
+function forkHandlerForAssistantMessage(
+  message: UIMessage,
+  canForkAssistant: boolean,
+  assistantForkIndexById: Map<string, number>,
+  onForkFromMessage: NonNullable<ThreadMessagesProps["onForkFromMessage"]>,
+): (() => void) | undefined {
+  if (message.role === "assistant" && canForkAssistant) {
+    const beforeUserIndex = assistantForkIndexById.get(message.id);
+    return beforeUserIndex === undefined
+      ? undefined
+      : () => onForkFromMessage(beforeUserIndex);
+  }
+  return undefined;
 }
 
 function currentActivityClusterIndices(units: DisplayUnit[]): Set<number> {

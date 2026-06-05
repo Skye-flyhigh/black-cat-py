@@ -287,6 +287,8 @@ export function ThreadShell({
   const [filePreviewPath, setFilePreviewPath] = useState<string | null>(null);
   const [filePreviewClosing, setFilePreviewClosing] = useState(false);
   const [filePreviewWidth, setFilePreviewWidth] = useState(FILE_PREVIEW_DEFAULT_WIDTH);
+  const [forkError, setForkError] = useState<string | null>(null);
+  const [forkHydratingChatId, setForkHydratingChatId] = useState<string | null>(null);
   const shellRef = useRef<HTMLElement | null>(null);
   const filePreviewWidthRef = useRef(FILE_PREVIEW_DEFAULT_WIDTH);
   const filePreviewCloseTimerRef = useRef<number | null>(null);
@@ -295,6 +297,7 @@ export function ThreadShell({
   const messageCacheRef = useRef<Map<string, UIMessage[]>>(new Map());
   /** Last chatId we associated with the in-memory thread (for cache-on-switch). */
   const prevChatIdForCacheRef = useRef<string | null>(null);
+  const prevChatIdForComposerRef = useRef<string | null>(chatId);
   /** Skip one message-cache write right after chatId changes (messages may not match yet). */
   const skipLayoutCacheRef = useRef(false);
   const appliedHistoryVersionRef = useRef<Map<string, number>>(new Map());
@@ -345,6 +348,12 @@ export function ThreadShell({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (prevChatIdForComposerRef.current === chatId) return;
+    prevChatIdForComposerRef.current = chatId;
+    setForkError(null);
+  }, [chatId]);
 
   const displayMessages = useMemo(() => projectWebuiThreadMessages(messages), [messages]);
 
@@ -463,6 +472,12 @@ export function ThreadShell({
     setMessages(projectWebuiThreadMessages(historical));
   }, [chatId, historical, setMessages]);
 
+  useEffect(() => {
+    if (!chatId || loading || forkHydratingChatId !== chatId) return;
+    setForkHydratingChatId(null);
+    setScrollToBottomSignal((value) => value + 1);
+  }, [chatId, forkHydratingChatId, loading]);
+
   useLayoutEffect(() => {
     if (chatId) {
       const prev = prevChatIdForCacheRef.current;
@@ -541,6 +556,7 @@ export function ThreadShell({
 
   const handleThreadSend = useCallback(
     (content: string, images?: SendImage[], options?: SendOptions) => {
+      setForkError(null);
       setScrollToBottomSignal((value) => value + 1);
       send(content, images, withWorkspaceScope(options));
     },
@@ -635,6 +651,26 @@ export function ThreadShell({
     };
   }, [filePreviewPath]);
 
+  const handleForkFromMessage = useCallback(
+    async (beforeUserIndex: number) => {
+      if (!chatId || !onForkChat) return;
+      setForkError(null);
+      const forkedChatId = await onForkChat(chatId, beforeUserIndex);
+      if (!forkedChatId) {
+        setForkError(t("thread.fork.failed", {
+          defaultValue: "Could not fork this chat. Try again.",
+        }));
+        return;
+      }
+      messageCacheRef.current.delete(forkedChatId);
+      appliedHistoryVersionRef.current.delete(forkedChatId);
+      pendingCanonicalHydrateRef.current.add(forkedChatId);
+      setForkHydratingChatId(forkedChatId);
+      setForkError(null);
+    },
+    [chatId, onForkChat, t],
+  );
+
   const composer = (
     <>
       {streamError ? (
@@ -646,7 +682,7 @@ export function ThreadShell({
       {session ? (
         <ThreadComposer
           onSend={handleThreadSend}
-          disabled={!chatId}
+          disabled={!chatId || forkHydratingChatId === chatId}
           isStreaming={isStreaming}
           placeholder={
             showHeroComposer
@@ -673,6 +709,7 @@ export function ThreadShell({
           workspaceError={workspaceError}
           onWorkspaceScopeChange={onWorkspaceScopeChange}
           pendingQueueKey={chatId}
+          externalError={forkError}
         />
       ) : (
         <ThreadComposer
@@ -756,7 +793,9 @@ export function ThreadShell({
           showScrollToBottomButton={!!session}
           cliApps={cliApps}
           mcpPresets={mcpPresets}
+          allMessages={displayMessages}
           onOpenFilePreview={historyKey ? handleOpenFilePreview : undefined}
+          onForkFromMessage={onForkChat ? handleForkFromMessage : undefined}
         />
       </div>
       {filePreviewPath && historyKey ? (
