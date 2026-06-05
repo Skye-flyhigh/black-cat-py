@@ -90,6 +90,7 @@ Use a model that supports image generation and image editing if you want referen
 ### Custom (OpenAI-compatible)
 
 The `custom` image provider fits services that implement the synchronous OpenAI Images API:
+Use the `custom` provider for services that implement the synchronous OpenAI Images API:
 
 ```text
 POST /v1/images/generations
