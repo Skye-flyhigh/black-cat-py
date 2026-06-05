@@ -172,6 +172,7 @@ interface ThreadComposerProps {
   workspaceError?: string | null;
   onWorkspaceScopeChange?: (scope: WorkspaceScopePayload) => void;
   pendingQueueKey?: string | null;
+  externalError?: string | null;
 }
 
 const COMMAND_ICONS: Record<string, LucideIcon> = {
@@ -782,6 +783,7 @@ export function ThreadComposer({
   workspaceError = null,
   onWorkspaceScopeChange,
   pendingQueueKey = null,
+  externalError = null,
 }: ThreadComposerProps) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
@@ -799,6 +801,7 @@ export function ThreadComposer({
   const chipRefs = useRef(new Map<string, HTMLButtonElement>());
   const queuedPromptCounterRef = useRef(0);
   const draggedQueuedPromptIdRef = useRef<string | null>(null);
+  const previousPendingQueueKeyRef = useRef(pendingQueueKey);
   const wasStreamingRef = useRef(isStreaming);
   const skipNextQueuedFlushRef = useRef(false);
   const skipQueuedPromptPersistRef = useRef(false);
@@ -1149,6 +1152,28 @@ export function ThreadComposer({
       el.focus();
     });
   }, []);
+
+  // Runs before paint so switching sessions never flashes stale draft text.
+  useLayoutEffect(() => {
+    if (previousPendingQueueKeyRef.current === pendingQueueKey) return;
+    previousPendingQueueKeyRef.current = pendingQueueKey;
+    setValue("");
+    setInlineError(null);
+    setSlashMenuDismissed(false);
+    setCliAppMenuDismissed(false);
+    setCursorPosition(0);
+    clear();
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 260)}px`;
+    });
+  }, [clear, pendingQueueKey]);
+
+  useEffect(() => {
+    if (externalError) setInlineError(externalError);
+  }, [externalError]);
 
   const appendTranscription = useCallback((text: string) => {
     const transcript = text.trim();

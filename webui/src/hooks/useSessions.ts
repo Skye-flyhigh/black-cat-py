@@ -12,17 +12,63 @@ import { deriveTitle } from "@/lib/format";
 import type { ChatSummary, UIMessage, WorkspaceScopePayload } from "@/lib/types";
 
 const EMPTY_MESSAGES: UIMessage[] = [];
-  const forkChat = useCallback(async (
-    sourceChatId: string,
-    beforeUserIndex: number,
-    title?: string,
-  ): Promise<string> => {
-    const chatId = await client.forkChat(
-      sourceChatId,
-      beforeUserIndex,
-      title,
-      CHAT_CREATE_TIMEOUT_MS,
-    );
+
+/** Sidebar state: fetches the full session list and exposes create / delete actions. */
+export function useSessions(): {
+  sessions: ChatSummary[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+  createChat: (workspaceScope?: WorkspaceScopePayload | null) => Promise<string>;
+  forkChat: (sourceChatId: string, beforeUserIndex: number) => Promise<string>;
+  deleteChat: (key: string) => Promise<void>;
+} {
+  const { client, token } = useClient();
+  const [sessions, setSessions] = useState<ChatSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const tokenRef = useRef(token);
+  const optimisticKeysRef = useRef<Set<string>>(new Set());
+  tokenRef.current = token;
+
+  const refresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      const rows = await listSessions(tokenRef.current);
+      const serverKeys = new Set(rows.map((row) => row.key));
+      setSessions((prev) => [
+        ...rows,
+        ...prev.filter(
+          (session) =>
+            optimisticKeysRef.current.has(session.key) &&
+            !serverKeys.has(session.key),
+        ),
+      ]);
+      for (const key of Array.from(optimisticKeysRef.current)) {
+        if (serverKeys.has(key)) optimisticKeysRef.current.delete(key);
+      }
+      setError(null);
+    } catch (e) {
+      const msg =
+        e instanceof ApiError ? `HTTP ${e.status}` : (e as Error).message;
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    return client.onSessionUpdate(() => {
+      void refresh();
+    });
+  }, [client, refresh]);
+
+  const createChat = useCallback(async (workspaceScope?: WorkspaceScopePayload | null): Promise<string> => {
+    const chatId = await client.newChat(5_000, workspaceScope);
     const key = `websocket:${chatId}`;
     optimisticKeysRef.current.add(key);
     setSessions((prev) => [
@@ -41,6 +87,29 @@ const EMPTY_MESSAGES: UIMessage[] = [];
     return chatId;
   }, [client]);
 
+  const forkChat = useCallback(async (
+    sourceChatId: string,
+    beforeUserIndex: number,
+  ): Promise<string> => {
+    const chatId = await client.forkChat(sourceChatId, beforeUserIndex);
+    const key = `websocket:${chatId}`;
+    optimisticKeysRef.current.add(key);
+    setSessions((prev) => [
+      {
+        key,
+        channel: "websocket",
+        chatId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        title: "",
+        preview: "",
+        workspaceScope: null,
+      },
+      ...prev.filter((s) => s.key !== key),
+    ]);
+    return chatId;
+  }, [client]);
+
   const deleteChat = useCallback(
     async (key: string) => {
       await apiDeleteSession(tokenRef.current, key);
@@ -50,7 +119,7 @@ const EMPTY_MESSAGES: UIMessage[] = [];
     [],
   );
 
-  return { sessions, loading, error, refresh, createChat, deleteChat };
+  return { sessions, loading, error, refresh, createChat, forkChat, deleteChat };
 }
 
 /** Lazy-load a session's on-disk messages the first time the UI displays it. */
