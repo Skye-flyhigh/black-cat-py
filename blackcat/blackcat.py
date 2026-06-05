@@ -106,6 +106,7 @@ class Blackcat:
         await self._loop.close_mcp()
 
     async def __aenter__(self) -> Blackcat:
+    async def __aenter__(self) -> Nanobot:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
