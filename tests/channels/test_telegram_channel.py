@@ -1511,11 +1511,6 @@ async def test_on_message_pairs_unauthorized_private_user_before_side_effects(
     started_typing: list[str] = []
     handled: list[dict] = []
     channel._start_typing = AsyncMock(side_effect=lambda chat_id: started_typing.append(chat_id))
-    channel._start_typing = lambda chat_id: started_typing.append(chat_id)
-    channel._add_reaction = AsyncMock(return_value=None)
-    channel._download_message_media = AsyncMock(return_value=([], []))
-    monkeypatch.setattr(
-        "blackcat.channels.base.generate_code", lambda _ch, _sid: "ABCD-EFGH"
     )
 
     await channel._on_message(_make_telegram_update(text="hello", chat_type="private"), None)
