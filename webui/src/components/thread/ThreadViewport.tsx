@@ -34,6 +34,7 @@ export interface ThreadViewportHandle {
 
 interface ThreadViewportProps {
   messages: UIMessage[];
+  allMessages?: UIMessage[];
   isStreaming: boolean;
   composer: ReactNode;
   emptyState?: ReactNode;
@@ -43,6 +44,7 @@ interface ThreadViewportProps {
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
   onOpenFilePreview?: (path: string) => void;
+  onForkFromMessage?: (beforeUserIndex: number) => void;
 }
 
 const NEAR_BOTTOM_PX = 48;
@@ -69,6 +71,7 @@ export function windowMessages(messages: UIMessage[], visibleCount: number): UIM
 
 export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportProps>(function ThreadViewport({
   messages,
+  allMessages,
   isStreaming,
   composer,
   emptyState,
@@ -78,6 +81,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   cliApps = [],
   mcpPresets = [],
   onOpenFilePreview,
+  onForkFromMessage,
 }, ref) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -438,11 +442,13 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
               <div className="mx-auto w-full max-w-[49.5rem]">
                 <ThreadMessages
                   messages={visibleMessages}
+                  allMessages={allMessages ?? messages}
                   isStreaming={isStreaming}
                   hiddenUserMessageCount={hiddenUserMessageCount}
                   cliApps={cliApps}
                   mcpPresets={mcpPresets}
                   onOpenFilePreview={onOpenFilePreview}
+                  onForkFromMessage={onForkFromMessage}
                 />
               </div>
             </div>

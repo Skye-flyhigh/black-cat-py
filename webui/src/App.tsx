@@ -525,15 +525,7 @@ function Shell({
   const { t, i18n } = useTranslation();
   const { client, token } = useClient();
   const { theme, toggle } = useTheme();
-  const {
-    sessions,
-    loading,
-    refresh,
-    createChat,
-    forkChat,
-    deleteChat,
-    getSessionAutomations,
-  } = useSessions();
+  const { sessions, loading, refresh, createChat, forkChat, deleteChat } = useSessions();
   const { state: sidebarState, update: updateSidebarState } =
     useSidebarState(sessions, !loading);
   const initialRouteRef = useRef<ShellRoute | null>(null);
@@ -911,15 +903,7 @@ function Shell({
     beforeUserIndex: number,
   ) => {
     try {
-      const sourceSession = sessions.find((session) => session.chatId === sourceChatId);
-      const sourceTitle = sourceSession
-        ? displayTitle(sourceSession, sidebarState.title_overrides, t("chat.newChat"))
-        : t("chat.newChat");
-      const chatId = await forkChat(
-        sourceChatId,
-        beforeUserIndex,
-        t("chat.forkTitle", { title: sourceTitle }),
-      );
+      const chatId = await forkChat(sourceChatId, beforeUserIndex);
       navigate({
         view: "chat",
         activeKey: `websocket:${chatId}`,
@@ -931,7 +915,7 @@ function Shell({
       console.error("Failed to fork chat", e);
       return null;
     }
-  }, [forkChat, navigate, sessions, sidebarState.title_overrides, t]);
+  }, [forkChat, navigate]);
 
   const onNewChat = useCallback(() => {
     navigate(defaultShellRoute());
