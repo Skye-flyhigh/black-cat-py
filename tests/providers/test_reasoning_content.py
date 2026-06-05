@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 from blackcat.utils.formatting import build_assistant_message
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
 # ── _parse: non-streaming ─────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ def test_parse_dict_reasoning_content_empty_string_preserved() -> None:
     be present in subsequent requests even when empty.  Coercing \"\" to
     None drops the key downstream and causes API errors.
     """
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
