@@ -55,7 +55,6 @@
       "ariaLabel": "Changer de langue"
     },
     "apps": "Apps",
-    "automations": "Automatisations",
     "skills": {
       "title": "Compétences"
     }
@@ -81,7 +80,6 @@
       "cliApps": "Apps CLI",
       "mcp": "MCP",
       "apps": "Applications",
-      "automations": "Automatisations",
       "skills": "Compétences"
     },
     "sections": {
@@ -631,11 +629,6 @@
       "rawInstructions": "SKILL.md brut",
       "rawInstructionsEmpty": "Aucune instruction brute.",
       "detailDescription": "Détails de {{name}}."
-    },
-    "voice": {
-      "selectProvider": "Choisir un fournisseur",
-      "configureProvider": "Configurer le fournisseur",
-      "languageAuto": "Auto"
     }
   },
   "chat": {
@@ -795,7 +788,6 @@
       },
       "next": {
         "label": "Prochaine {{time}}",
-        "pending": "Exécution imminente",
         "disabled": "En pause",
         "none": "Aucune prochaine exécution"
       }
@@ -959,7 +951,6 @@
     },
     "scrollToBottom": "Faire défiler vers le bas",
     "loadEarlier": "Charger les messages précédents",
-    "forkedFromHistory": "Bifurqué depuis l'historique",
     "promptNavigator": {
       "open": "Ouvrir le navigateur de prompts",
       "title": "Prompts",

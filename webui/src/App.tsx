@@ -66,7 +66,7 @@ const SIDEBAR_RAIL_WIDTH = 56;
 const MOBILE_SIDEBAR_WIDTH = `min(${SIDEBAR_WIDTH}px, calc(100vw - 0.75rem))`;
 const TOKEN_REFRESH_MARGIN_MS = 30_000;
 const TOKEN_REFRESH_MIN_DELAY_MS = 5_000;
-type ShellView = "chat" | "settings" | "apps" | "automations" | "skills";
+type ShellView = "chat" | "settings" | "apps" | "skills";
 type ShellRoute = {
   view: ShellView;
   activeKey: string | null;
@@ -81,7 +81,6 @@ const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
   "voice",
   "browser",
   "apps",
-  "automations",
   "skills",
   "runtime",
   "advanced",
@@ -96,7 +95,7 @@ function defaultShellRoute(): ShellRoute {
 }
 
 function shellViewForSettingsSection(section: SettingsSectionKey): ShellView {
-  if (section === "apps" || section === "automations" || section === "skills") return section;
+  if (section === "apps" || section === "skills") return section;
   return "settings";
 }
 
@@ -124,9 +123,6 @@ function readShellRoute(): ShellRoute {
   }
   if (path === "/apps") {
     return { view: "apps", activeKey, settingsSection: "apps" };
-  }
-  if (path === "/automations") {
-    return { view: "automations", activeKey, settingsSection: "automations" };
   }
   if (path === "/skills") {
     return { view: "skills", activeKey, settingsSection: "skills" };
@@ -1179,12 +1175,6 @@ function Shell({
     setMobileSidebarOpen(false);
   }, [activeKey, navigate]);
 
-  const onOpenAutomations = useCallback(() => {
-    setSessionSearchOpen(false);
-    navigate({ view: "automations", activeKey, settingsSection: "automations" });
-    setMobileSidebarOpen(false);
-  }, [activeKey, navigate]);
-
   const onOpenSkills = useCallback(() => {
     setSessionSearchOpen(false);
     navigate({ view: "skills", activeKey, settingsSection: "skills" });
@@ -1360,12 +1350,6 @@ function Shell({
       });
       return;
     }
-    if (view === "automations") {
-      document.title = t("app.documentTitle.chat", {
-        title: t("settings.nav.automations", { defaultValue: "Automations" }),
-      });
-      return;
-    }
     if (view === "skills") {
       document.title = t("app.documentTitle.chat", {
         title: t("settings.nav.skills", { defaultValue: "Skills" }),
@@ -1392,10 +1376,9 @@ function Shell({
     onNewChatInProject,
     onOpenSettings,
     onOpenApps,
-    onOpenAutomations,
     onOpenSkills,
     onOpenSearch: onOpenSessionSearch,
-    activeUtility: view === "apps" || view === "automations" || view === "skills" ? view : null,
+    activeUtility: view === "apps" || view === "skills" ? view : null,
     onToggleArchived,
     pinnedKeys: sidebarState.pinned_keys,
     archivedKeys: sidebarState.archived_keys,

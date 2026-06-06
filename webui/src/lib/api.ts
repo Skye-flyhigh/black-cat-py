@@ -12,7 +12,6 @@ import type {
   NetworkSafetySettingsUpdate,
   ProviderModelsPayload,
   ProviderSettingsUpdate,
-  SessionDeleteResult,
   SessionAutomationsPayload,
   SettingsPayload,
   SettingsUpdate,
@@ -194,6 +193,44 @@ export async function fetchSessionAutomations(
   );
 }
 
+export async function fetchSkills(
+  token: string,
+  base: string = "",
+): Promise<SkillsPayload> {
+  return request<SkillsPayload>(
+    `${base}/api/webui/skills`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function fetchSkillDetail(
+  token: string,
+  name: string,
+  base: string = "",
+): Promise<SkillDetail> {
+  return request<SkillDetail>(
+    `${base}/api/webui/skills/${encodeURIComponent(name)}`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
+export async function deleteSession(
+  token: string,
+  key: string,
+  base: string = "",
+): Promise<SessionAutomationsPayload> {
+  return request<SessionAutomationsPayload>(
+    `${base}/api/sessions/${encodeURIComponent(key)}/automations`,
+    token,
+    undefined,
+    API_READ_TIMEOUT_MS,
+  );
+}
+
 export async function fetchAutomations(
   token: string,
   base: string = "",
@@ -303,26 +340,6 @@ export async function fetchSettingsUsage(
     token,
     undefined,
     API_READ_TIMEOUT_MS,
-  );
-}
-
-export interface VersionCheckResult {
-  updateAvailable: {
-    currentVersion: string;
-    latestVersion: string;
-    pypiUrl?: string;
-  } | null;
-}
-
-export async function checkVersion(
-  token: string,
-  base: string = "",
-): Promise<VersionCheckResult> {
-  return request<VersionCheckResult>(
-    `${base}/api/settings/version-check`,
-    token,
-    undefined,
-    10_000,
   );
 }
 

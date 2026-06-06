@@ -159,9 +159,7 @@ const installedAnyGen = {
 
 function renderSettingsView(
   options: {
-    initialSection?: "overview" | "apps" | "automations" | "advanced" | "models";
-    initialSettings?: SettingsPayload;
-    showSidebar?: boolean;
+    initialSection?: "overview" | "apps" | "advanced" | "models";
     onSettingsChange?: (payload: SettingsPayload) => void;
     onNativeEngineRestart?: () => Promise<string>;
   } = {},
@@ -335,45 +333,6 @@ describe("SettingsView Apps catalog", () => {
     expect(screen.queryByText("Peak tokens")).not.toBeInTheDocument();
   });
 
-  it("aligns token activity days with the configured timezone", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-02T18:00:00Z"));
-    const basePayload = settingsPayload();
-    const payload: SettingsPayload = {
-      ...basePayload,
-      agent: {
-        ...basePayload.agent,
-        timezone: "Asia/Shanghai",
-      },
-      usage: {
-        days: [
-          {
-            date: "2026-06-03",
-            prompt_tokens: 1200,
-            completion_tokens: 300,
-            cached_tokens: 500,
-            total_tokens: 1500,
-            requests: 2,
-          },
-        ],
-        total_tokens: 1500,
-        total_tokens_30d: 1500,
-        total_tokens_365d: 1500,
-        peak_day_tokens: 1500,
-        current_streak_days: 1,
-        longest_streak_days: 1,
-        active_days_30d: 1,
-        requests_30d: 2,
-        updated_at: "2026-06-03T00:00:00Z",
-      },
-    };
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
-
-    renderSettingsView({ initialSection: "overview", initialSettings: payload });
-
-    expect(screen.getByLabelText("2026-06-03: 1.5K tokens, 2 requests")).toBeInTheDocument();
-  });
-
   it("shows context window options in model settings", async () => {
     vi.stubGlobal(
       "fetch",
@@ -395,47 +354,6 @@ describe("SettingsView Apps catalog", () => {
     expect(await screen.findByText("Context window")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "64K" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "256K" })).toBeInTheDocument();
-  });
-
-  it("uses the resolved provider row for auto dynamic providers without api keys", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
-
-    renderSettingsView({
-      initialSection: "models",
-      initialSettings: autoDynamicProviderPayload({
-        configured: true,
-        hasApiKey: false,
-        apiBase: "https://proxy.example.test/v1",
-        apiKeyHint: null,
-      }),
-    });
-
-    const configurationButton = await screen.findByRole("button", {
-      name: "Current configuration",
-    });
-    expect(configurationButton).toHaveTextContent("companyProxy/gpt-4o");
-    expect(configurationButton).toHaveTextContent("Company Proxy");
-    expect(configurationButton).not.toHaveTextContent("Not configured");
-  });
-
-  it("does not treat auto dynamic provider api keys as configured without apiBase", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
-
-    renderSettingsView({
-      initialSection: "models",
-      initialSettings: autoDynamicProviderPayload({
-        configured: false,
-        hasApiKey: true,
-        apiBase: null,
-        apiKeyHint: "sk-...",
-      }),
-    });
-
-    const configurationButton = await screen.findByRole("button", {
-      name: "Current configuration",
-    });
-    expect(configurationButton).toHaveTextContent("Not configured");
-    expect(configurationButton).toHaveTextContent("Company Proxy · companyProxy/gpt-4o");
   });
 
   it("marks the current model as unconfigured when its provider needs setup", async () => {

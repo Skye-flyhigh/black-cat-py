@@ -55,7 +55,6 @@
       "ariaLabel": "Change language"
     },
     "apps": "Apps",
-    "automations": "Automations",
     "skills": {
       "title": "Skills"
     }
@@ -81,7 +80,6 @@
       "runtime": "System",
       "advanced": "Security",
       "apps": "Apps",
-      "automations": "Automations",
       "skills": "Skills"
     },
     "sections": {
@@ -631,11 +629,6 @@
       "rawInstructions": "Raw SKILL.md",
       "rawInstructionsEmpty": "No raw instructions.",
       "detailDescription": "Details for {{name}}."
-    },
-    "voice": {
-      "selectProvider": "Select provider",
-      "configureProvider": "Configure provider",
-      "languageAuto": "Auto"
     }
   },
   "chat": {
@@ -795,7 +788,6 @@
       },
       "next": {
         "label": "{{time}}",
-        "pending": "Runs shortly",
         "disabled": "Paused",
         "none": "No next run"
       }
@@ -959,7 +951,6 @@
     },
     "scrollToBottom": "Scroll to bottom",
     "loadEarlier": "Load earlier messages",
-    "forkedFromHistory": "Forked from history",
     "promptNavigator": {
       "open": "Open prompt navigator",
       "title": "Prompts",
@@ -999,9 +990,8 @@
     "imageAttachment": "Image attachment",
     "automationSourceFallback": "Automation",
     "automationTriggered": "Triggered automatically",
-    "forkFromHere": "Fork",
-    "copyReply": "Copy",
-    "copiedReply": "Copied",
+    "copyReply": "Copy reply",
+    "copiedReply": "Copied reply",
     "turnLatencyTitle": "Response time (end-to-end)"
   },
   "lightbox": {

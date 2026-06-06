@@ -143,7 +143,6 @@ import type {
   SessionAutomationJob,
   SettingsPayload,
   SkillSummary,
-  TranscriptionSettingsUpdate,
   WebSearchSettingsUpdate,
   WebuiDefaultAccessMode,
 } from "@/lib/types";
@@ -158,7 +157,6 @@ export type SettingsSectionKey =
   | "voice"
   | "browser"
   | "apps"
-  | "automations"
   | "skills"
   | "runtime"
   | "advanced"
@@ -372,13 +370,6 @@ function settingsProviderConfigured(
 ): boolean {
   const row = settingsProviderRow(payload, provider);
   if (row) return row.configured;
-  if (provider === "auto") {
-    const resolvedRow = settingsProviderRow(
-      payload,
-      payload.agent.resolved_provider ?? payload.agent.provider,
-    );
-    if (resolvedRow) return resolvedRow.configured;
-  }
   return payload.agent.has_api_key;
 }
 
@@ -410,26 +401,6 @@ const DEFAULT_IMAGE_GENERATION_FORM: ImageGenerationSettingsUpdate = {
   defaultAspectRatio: "1:1",
   defaultImageSize: "1K",
   maxImagesPerTurn: 4,
-};
-
-const DEFAULT_TRANSCRIPTION_FORM: TranscriptionSettingsUpdate = {
-  enabled: true,
-  provider: "groq",
-  model: "",
-  language: "",
-  maxDurationSec: 120,
-  maxUploadMb: 25,
-};
-
-const DEFAULT_TRANSCRIPTION_SETTINGS: NonNullable<SettingsPayload["transcription"]> = {
-  enabled: true,
-  provider: "groq",
-  provider_configured: false,
-  model: "whisper-large-v3",
-  language: null,
-  max_duration_sec: 120,
-  max_upload_mb: 25,
-  providers: [],
 };
 
 const DEFAULT_NETWORK_SAFETY_FORM: NetworkSafetySettingsUpdate = {
@@ -484,18 +455,6 @@ function imageGenerationFormFromPayload(payload: SettingsPayload): ImageGenerati
   };
 }
 
-function transcriptionFormFromPayload(payload: SettingsPayload): TranscriptionSettingsUpdate {
-  const transcription = payload.transcription ?? DEFAULT_TRANSCRIPTION_SETTINGS;
-  return {
-    enabled: transcription.enabled,
-    provider: transcription.provider,
-    model: transcription.model,
-    language: transcription.language ?? "",
-    maxDurationSec: transcription.max_duration_sec,
-    maxUploadMb: transcription.max_upload_mb,
-  };
-}
-
 function networkSafetyFormFromPayload(payload: SettingsPayload): NetworkSafetySettingsUpdate {
   return {
     webuiAllowLocalServiceAccess:
@@ -540,7 +499,6 @@ export function SettingsView({
   const [settings, setSettings] = useState<SettingsPayload | null>(() => initialSettings);
   const [cliApps, setCliApps] = useState<CliAppsPayload | null>(null);
   const [mcpPresets, setMcpPresets] = useState<McpPresetsPayload | null>(null);
-  const [automations, setAutomations] = useState<AutomationsPayload | null>(null);
   const [loading, setLoading] = useState(() => initialSettings === null);
   const [cliAppsLoading, setCliAppsLoading] = useState(true);
   const [mcpPresetsLoading, setMcpPresetsLoading] = useState(true);
@@ -600,9 +558,6 @@ export function SettingsView({
         ? imageGenerationFormFromPayload(initialSettings)
         : DEFAULT_IMAGE_GENERATION_FORM,
   );
-  const [transcriptionForm, setTranscriptionForm] = useState<TranscriptionSettingsUpdate>(
-    () => initialSettings ? transcriptionFormFromPayload(initialSettings) : DEFAULT_TRANSCRIPTION_FORM,
-  );
   const [networkSafetyForm, setNetworkSafetyForm] = useState<NetworkSafetySettingsUpdate>(() =>
     initialSettings ? networkSafetyFormFromPayload(initialSettings) : DEFAULT_NETWORK_SAFETY_FORM,
   );
@@ -635,7 +590,6 @@ export function SettingsView({
     setForm(agentDraftFromPayload(payload));
     setWebSearchForm((prev) => webSearchFormFromPayload(payload, prev));
     setImageGenerationForm(imageGenerationFormFromPayload(payload));
-    setTranscriptionForm(transcriptionFormFromPayload(payload));
     setNetworkSafetyForm(networkSafetyFormFromPayload(payload));
     if (payload.restart_required_sections) {
       setPendingRestartSections(pendingRestartSectionsFromPayload(payload));
@@ -1635,24 +1589,6 @@ export function SettingsView({
             isRestarting={isRestarting || hostEngineApplying}
           />
         );
-      case "automations":
-        return (
-          <AutomationsSettings
-            payload={automations}
-            loading={automationsLoading}
-            query={automationsQuery}
-            filter={automationsFilter}
-            sort={automationsSort}
-            actionKey={automationAction}
-            error={automationsError}
-            onQueryChange={setAutomationsQuery}
-            onFilterChange={setAutomationsFilter}
-            onSortChange={setAutomationsSort}
-            onAction={handleAutomationAction}
-            onRequestEdit={setAutomationPendingEdit}
-            onRequestDelete={setAutomationPendingDelete}
-          />
-        );
       case "skills":
         return <SkillsCatalogSettings skills={skills} />;
       case "runtime":
@@ -1754,11 +1690,9 @@ export function SettingsView({
                 {t("settings.backToChat")}
               </button>
             ) : null}
-            {showSidebar ? (
-              <p className="mb-2 text-[12px] font-normal text-muted-foreground">
-                {t("settings.sidebar.title")}
-              </p>
-            ) : null}
+            <p className="mb-2 text-[12px] font-normal text-muted-foreground">
+              {t("settings.sidebar.title")}
+            </p>
             <h1 className="text-[24px] font-normal leading-tight tracking-normal text-foreground sm:text-[28px]">
               {text(`settings.nav.${activeSection}`, titleForSection(activeSection))}
             </h1>
@@ -1942,15 +1876,6 @@ function OverviewSettings({
       ? tx("settings.values.configured", "Configured")
       : tx("settings.values.notConfigured", "Not configured")
   }`;
-  const transcription = settings.transcription ?? DEFAULT_TRANSCRIPTION_SETTINGS;
-  const voiceStatus = transcription.enabled
-    ? tx("settings.values.enabled", "Enabled")
-    : tx("settings.values.disabled", "Disabled");
-  const voiceCaption = `${providerDisplayLabel(transcription.providers, transcription.provider)} · ${
-    transcription.provider_configured
-      ? tx("settings.values.configured", "Configured")
-      : tx("settings.values.notConfigured", "Not configured")
-  }`;
   const isNativeHost = (settings.surface ?? settings.runtime_surface) === "native";
   const workspaceCaption = shortWorkspacePath(settings.runtime.workspace_path);
   const runtimeTitle = isNativeHost
@@ -1967,7 +1892,7 @@ function OverviewSettings({
   return (
     <div className="space-y-7">
       <section>
-        <TokenUsageHeatmap usage={settings.usage} timeZone={settings.agent.timezone} />
+        <TokenUsageHeatmap usage={settings.usage} />
       </section>
 
       <section>

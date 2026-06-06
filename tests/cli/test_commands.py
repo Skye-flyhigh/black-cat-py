@@ -2016,6 +2016,41 @@ def test_gateway_bound_cron_runs_as_session_turn(
     assert msg.metadata["message_id"] == "om_root123"
     assert msg.metadata["thread_id"] == "om_root123"
 
+    bus.publish_outbound.reset_mock()
+    old_turn_id = "turn-that-created-the-reminder"
+    websocket_job = CronJob(
+        id="drink-water",
+        name="drink water",
+        payload=CronPayload(
+            message="Remind me to drink water.",
+            deliver=True,
+            channel="websocket",
+            to="chat-1",
+            channel_meta={
+                "webui": True,
+                "webui_turn_id": old_turn_id,
+                "workspace_scope": {"mode": "default"},
+            },
+            session_key="websocket:chat-1",
+        ),
+    )
+
+    response = asyncio.run(cron.on_job(websocket_job))
+
+    assert response == "Time to stretch."
+    bus.publish_outbound.assert_awaited_once()
+    delivered = bus.publish_outbound.await_args.args[0]
+    assert delivered.channel == "websocket"
+    assert delivered.chat_id == "chat-1"
+    assert delivered.metadata["webui"] is True
+    assert delivered.metadata["workspace_scope"] == {"mode": "default"}
+    assert delivered.metadata["webui_turn_id"].startswith("cron:drink-water:")
+    assert delivered.metadata["webui_turn_id"] != old_turn_id
+    assert delivered.metadata["_webui_message_source"] == {
+        "kind": "cron",
+        "label": "drink water",
+    }
+
 
 def test_gateway_cron_job_suppresses_intermediate_progress(
     monkeypatch, tmp_path: Path

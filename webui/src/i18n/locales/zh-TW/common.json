@@ -55,7 +55,6 @@
       "ariaLabel": "切換語言"
     },
     "apps": "應用",
-    "automations": "自動任務",
     "skills": {
       "title": "技能"
     }
@@ -81,7 +80,6 @@
       "cliApps": "CLI 應用",
       "mcp": "MCP",
       "apps": "應用",
-      "automations": "自動任務",
       "skills": "技能"
     },
     "sections": {
@@ -631,11 +629,6 @@
       "rawInstructions": "原始 SKILL.md",
       "rawInstructionsEmpty": "沒有原始說明。",
       "detailDescription": "{{name}} 的詳細資訊。"
-    },
-    "voice": {
-      "selectProvider": "選擇提供商",
-      "configureProvider": "設定提供商",
-      "languageAuto": "自動"
     }
   },
   "chat": {
@@ -795,7 +788,6 @@
       },
       "next": {
         "label": "下次 {{time}}",
-        "pending": "即將執行",
         "disabled": "已暫停",
         "none": "沒有下次執行"
       }
@@ -959,7 +951,6 @@
     },
     "scrollToBottom": "捲動到底部",
     "loadEarlier": "載入更早訊息",
-    "forkedFromHistory": "從歷史訊息分叉",
     "promptNavigator": {
       "open": "開啟輸入導覽",
       "title": "輸入列表",
