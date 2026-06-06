@@ -35,6 +35,8 @@ Use `async with` when possible so MCP connections and background cleanup work ar
 
 Use `async with` when possible so MCP connections and background cleanup work are closed before the event loop exits. If you manage the instance manually, call `await bot.aclose()` in a `finally` block.
 
+Use `async with` when possible so MCP connections and background cleanup work are closed before the event loop exits. If you manage the instance manually, call `await bot.aclose()` in a `finally` block.
+
 ## Common Patterns
 
 ### Use a specific config or workspace
