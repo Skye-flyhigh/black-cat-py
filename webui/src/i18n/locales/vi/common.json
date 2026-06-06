@@ -508,11 +508,6 @@
       "rawInstructions": "SKILL.md gốc",
       "rawInstructionsEmpty": "Không có hướng dẫn gốc.",
       "detailDescription": "Chi tiết cho {{name}}."
-    },
-    "voice": {
-      "selectProvider": "Chon nha cung cap",
-      "configureProvider": "Cau hinh nha cung cap",
-      "languageAuto": "Tu dong"
     }
   },
   "chat": {
@@ -888,7 +883,7 @@
     "close": "Đóng xem trước tệp",
     "loading": "Đang tải bản xem trước...",
     "failed": "Không thể xem trước tệp này.",
-    "routeMissing": "Xem trước tệp cần gateway mới nhất. Hãy khởi động lại blackcat gateway rồi thử lại.",
+    "routeMissing": "Xem trước tệp cần gateway mới nhất. Hãy khởi động lại nanobot gateway rồi thử lại.",
     "resize": "Đổi kích thước bản xem trước tệp",
     "truncated": "Bản xem trước bị cắt vì tệp này lớn."
   },

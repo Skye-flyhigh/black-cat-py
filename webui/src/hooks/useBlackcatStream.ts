@@ -20,7 +20,7 @@ import type {
   UIImage,
   UIMessage,
   UITurnPhase,
-  WorkspaceScopePayload
+  WorkspaceScopePayload,
 } from "@/lib/types";
 import { useClient } from "@/providers/ClientProvider";
 

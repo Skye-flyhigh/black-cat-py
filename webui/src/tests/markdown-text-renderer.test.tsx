@@ -16,7 +16,67 @@ describe("MarkdownTextRenderer", () => {
     const onOpenFilePreview = vi.fn();
     render(
       <MarkdownTextRenderer onOpenFilePreview={onOpenFilePreview}>
-        {"Edited [hook.py](/Users/test/project/blackcat/agent/hook.py:12)"}
+        {"Edited [hook.py](/Users/test/project/nanobot/agent/hook.py:12)"}
+      </MarkdownTextRenderer>,
+    );
+
+    const reference = screen.getByTestId("inline-file-path");
+    expect(reference).toHaveTextContent("hook.py");
+    expect(reference).toHaveAttribute(
+      "aria-label",
+      "/Users/test/project/nanobot/agent/hook.py",
+    );
+
+    fireEvent.click(reference);
+
+    expect(onOpenFilePreview).toHaveBeenCalledWith(
+      "/Users/test/project/nanobot/agent/hook.py",
+    );
+  });
+
+  it("does not treat non-file hrefs as previews just because the label looks like a file", () => {
+    const onOpenFilePreview = vi.fn();
+    render(
+      <MarkdownTextRenderer onOpenFilePreview={onOpenFilePreview}>
+        {"Download [index.html](/api/media/sig/html)"}
+      </MarkdownTextRenderer>,
+    );
+
+    expect(screen.queryByTestId("inline-file-path")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "index.html" })).toHaveAttribute(
+      "href",
+      "/api/media/sig/html",
+    );
+  });
+
+  it("renders glob file links as plain text instead of preview targets", () => {
+    const onOpenFilePreview = vi.fn();
+    const { container } = render(
+      <MarkdownTextRenderer onOpenFilePreview={onOpenFilePreview}>
+        {"原始对话通常还在 [*.json](*.json)。"}
+      </MarkdownTextRenderer>,
+    );
+
+    expect(screen.queryByTestId("inline-file-path")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "*.json" })).not.toBeInTheDocument();
+    expect(container).toHaveTextContent("*.json");
+  });
+
+  it("keeps glob inline code as code instead of a file preview chip", () => {
+    render(
+      <MarkdownTextRenderer>
+        {"检查 `src/**/*.json`。"}
+      </MarkdownTextRenderer>,
+    );
+
+    expect(screen.queryByTestId("inline-file-path")).not.toBeInTheDocument();
+    expect(screen.getByText("src/**/*.json").tagName).toBe("CODE");
+  });
+
+  it("does not wrap complete fenced code blocks in an extra pre", () => {
+    const { container } = render(
+      <MarkdownTextRenderer highlightCode={false}>
+        {"当前目录:\n\n```text\n/Users/renxubin/.nanobot/workspace\n```"}
       </MarkdownTextRenderer>,
     );
 

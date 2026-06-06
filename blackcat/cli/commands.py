@@ -86,6 +86,34 @@ class SafeFileHistory(FileHistory):
 
     def store_string(self, string: str) -> None:
         super().store_string(_sanitize_surrogates(string))
+
+
+_WEBUI_TURN_META_KEY = "webui_turn_id"
+_WEBUI_MESSAGE_SOURCE_META_KEY = "_webui_message_source"
+_PROACTIVE_WEBUI_METADATA: ContextVar[dict[str, Any] | None] = ContextVar(
+    "proactive_webui_metadata",
+    default=None,
+)
+
+
+def _proactive_delivery_metadata(
+    channel: str,
+    metadata: dict[str, Any] | None,
+    *,
+    turn_seed: str,
+    source_label: str | None = None,
+) -> dict[str, Any]:
+    """Return channel metadata for a fresh proactive delivery turn."""
+    out = dict(metadata or {})
+    out.pop(_WEBUI_TURN_META_KEY, None)
+    if channel == "websocket":
+        out[_WEBUI_TURN_META_KEY] = f"{turn_seed}:{uuid.uuid4().hex}"
+        source: dict[str, str] = {"kind": "cron"}
+        if source_label:
+            source["label"] = source_label
+        out[_WEBUI_MESSAGE_SOURCE_META_KEY] = source
+    return out
+
 app = typer.Typer(
     name="blackcat",
     context_settings={"help_option_names": ["-h", "--help"]},

@@ -42,12 +42,12 @@
 
   .dark {
     color-scheme: dark;
-    --background: 260 6% 8%;
-    --foreground: 260 8% 94%;
-    --card: 260 6% 11%;
-    --card-foreground: 260 8% 94%;
-    --popover: 260 6% 11%;
-    --popover-foreground: 260 8% 94%;
+    --background: 0 0% 10%;
+    --foreground: 240 4% 96%;
+    --card: 0 0% 12%;
+    --card-foreground: 240 4% 96%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 240 4% 96%;
     --primary: 240 5% 98%;
     --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 12%;

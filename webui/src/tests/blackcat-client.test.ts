@@ -211,7 +211,7 @@ it("serializes workspace scope for new chats and messages", async () => {
   });
 
   it("includes an explicit turn id on outbound WebUI messages", () => {
-    const client = new BlackcatClient({
+    const client = new NanobotClient({
       url: "ws://test",
       reconnect: false,
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,

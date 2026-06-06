@@ -1,8 +1,20 @@
-import { BlackcatBrandLogo } from "@/components/settings/SettingsView";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Moon, PanelLeft, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { BlackcatClient } from "@/lib/blackcat-client";
+import { useSessions } from "@/hooks/useSessions";
+import { useDeferredTitleRefresh } from "@/hooks/useDeferredTitleRefresh";
+import { useSidebarState } from "@/hooks/useSidebarState";
+import { useSkills } from "@/hooks/useSkills";
+import { ThemeProvider, useTheme } from "@/hooks/useTheme";
+import { cn } from "@/lib/utils";
 import {
   clearSavedSecret,
   deriveWsUrl,
@@ -10,6 +22,488 @@ import {
   loadSavedSecret,
   saveSecret,
 } from "@/lib/bootstrap";
+import { deriveTitle } from "@/lib/format";
+import { NanobotClient } from "@/lib/nanobot-client";
+import { ClientProvider, useClient } from "@/providers/ClientProvider";
+import type {
+  ChatSummary,
+  RuntimeSurface,
+  SettingsPayload,
+  WorkspaceScopePayload,
+  WorkspacesPayload,
+} from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { fetchSettings, fetchWorkspaces } from "@/lib/api";
+import {
+  createRuntimeHost,
+  getHostApi,
+  toRuntimeSurface,
+} from "@/lib/runtime";
+import { projectNameFromPath } from "@/lib/workspace";
+
+type BootState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "auth"; failed?: boolean }
+  | {
+      status: "ready";
+      client: NanobotClient;
+      token: string;
+      tokenExpiresAt: number;
+      modelName: string | null;
+      runtimeSurface: RuntimeSurface;
+    };
+
+const SIDEBAR_STORAGE_KEY = "nanobot-webui.sidebar";
+const COMPLETED_RUNS_STORAGE_KEY = "nanobot-webui.sidebar.completed-runs.v1";
+const RESTART_STARTED_KEY = "nanobot-webui.restartStartedAt";
+const SIDEBAR_WIDTH = 272;
+const SIDEBAR_RAIL_WIDTH = 56;
+const TOKEN_REFRESH_MARGIN_MS = 30_000;
+const TOKEN_REFRESH_MIN_DELAY_MS = 5_000;
+type ShellView = "chat" | "settings" | "apps" | "skills";
+type ShellRoute = {
+  view: ShellView;
+  activeKey: string | null;
+  settingsSection: SettingsSectionKey;
+};
+
+const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
+  "overview",
+  "appearance",
+  "models",
+  "image",
+  "browser",
+  "apps",
+  "skills",
+  "runtime",
+  "advanced",
+];
+
+function isSettingsSectionKey(value: string | null): value is SettingsSectionKey {
+  return SETTINGS_SECTION_KEYS.includes(value as SettingsSectionKey);
+}
+
+function defaultShellRoute(): ShellRoute {
+  return { view: "chat", activeKey: null, settingsSection: "overview" };
+}
+
+function shellViewForSettingsSection(section: SettingsSectionKey): ShellView {
+  if (section === "apps" || section === "skills") return section;
+  return "settings";
+}
+
+function readShellRoute(): ShellRoute {
+  if (typeof window === "undefined") return defaultShellRoute();
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  if (!hash || hash === "/" || hash === "/new") return defaultShellRoute();
+
+  const [path, query = ""] = hash.split("?", 2);
+  const params = new URLSearchParams(query);
+  const rawSettingsSection = params.get("section");
+  const settingsSection = isSettingsSectionKey(rawSettingsSection)
+    ? rawSettingsSection
+    : "overview";
+  const activeKey = params.get("chat")?.trim() || null;
+
+  if (path === "/settings") {
+    return {
+      view: shellViewForSettingsSection(settingsSection),
+      activeKey,
+      settingsSection,
+    };
+  }
+  if (path === "/apps") {
+    return { view: "apps", activeKey, settingsSection: "apps" };
+  }
+  if (path === "/skills") {
+    return { view: "skills", activeKey, settingsSection: "skills" };
+  }
+  if (path.startsWith("/chat/")) {
+    const encoded = path.slice("/chat/".length);
+    try {
+      const key = decodeURIComponent(encoded).trim();
+      return key
+        ? { view: "chat", activeKey: key, settingsSection: "overview" }
+        : defaultShellRoute();
+    } catch {
+      return defaultShellRoute();
+    }
+  }
+  return defaultShellRoute();
+}
+
+function shellRouteHash(route: ShellRoute): string {
+  if (route.view === "chat") {
+    return route.activeKey
+      ? `#/chat/${encodeURIComponent(route.activeKey)}`
+      : "#/new";
+  }
+  const params = new URLSearchParams();
+  if (route.activeKey) params.set("chat", route.activeKey);
+  if (route.view === "settings" && route.settingsSection !== "overview") {
+    params.set("section", route.settingsSection);
+  }
+  const query = params.toString();
+  return `#/${route.view}${query ? `?${query}` : ""}`;
+}
+
+function writeShellRoute(route: ShellRoute, replace = false): void {
+  if (typeof window === "undefined") return;
+  const nextHash = shellRouteHash(route);
+  if (window.location.hash === nextHash) return;
+  if (replace) {
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}${nextHash}`,
+    );
+    return;
+  }
+  window.location.hash = nextHash;
+}
+
+function bootstrapTokenExpiresAt(expiresInSeconds: number): number {
+  return Date.now() + Math.max(0, expiresInSeconds) * 1000;
+}
+
+function tokenRefreshDelayMs(expiresAt: number): number {
+  const remaining = Math.max(0, expiresAt - Date.now());
+  const margin = Math.min(
+    TOKEN_REFRESH_MARGIN_MS,
+    Math.max(1_000, remaining / 2),
+  );
+  return Math.max(TOKEN_REFRESH_MIN_DELAY_MS, remaining - margin);
+}
+
+function AuthForm({
+  failed,
+  onSecret,
+}: {
+  failed: boolean;
+  onSecret: (secret: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [value, setValue] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const secret = value.trim();
+    if (!secret) return;
+    setSubmitting(true);
+    onSecret(secret);
+  };
+
+  return (
+    <div className="flex h-full w-full items-center justify-center px-6">
+      <form
+        onSubmit={handleSubmit}
+        className="flex w-full max-w-sm flex-col gap-4"
+      >
+        <div className="flex flex-col items-center gap-1 text-center">
+          <p className="text-lg font-semibold">{t("app.auth.title")}</p>
+          <p className="text-sm text-muted-foreground">{t("app.auth.hint")}</p>
+        </div>
+        {failed && (
+          <p className="text-center text-sm text-destructive">
+            {t("app.auth.invalid")}
+          </p>
+        )}
+        <Input
+          type="password"
+          placeholder={t("app.auth.placeholder")}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          disabled={submitting}
+          autoFocus
+        />
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={!value.trim() || submitting}
+        >
+          {t("app.auth.submit")}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+function readSidebarOpen(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    if (raw === null) return true;
+    return raw === "1";
+  } catch {
+    return true;
+  }
+}
+
+function readCompletedRunChatIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(COMPLETED_RUNS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((item): item is string => typeof item === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCompletedRunChatIds(chatIds: Set<string>): void {
+  try {
+    window.localStorage.setItem(
+      COMPLETED_RUNS_STORAGE_KEY,
+      JSON.stringify(Array.from(chatIds)),
+    );
+  } catch {
+    // ignore storage errors (private mode, etc.)
+  }
+}
+
+function normalizeWorkspaceScope(scope: WorkspaceScopePayload): WorkspaceScopePayload {
+  const accessMode = scope.access_mode === "restricted" ? "restricted" : "full";
+  return {
+    ...scope,
+    project_name: scope.project_name ?? projectNameFromPath(scope.project_path),
+    access_mode: accessMode,
+    restrict_to_workspace: accessMode === "restricted",
+  };
+}
+
+function HostChrome({
+  onToggleSidebar,
+  onSidebarPreviewEnter,
+  onSidebarPreviewLeave,
+  sidebarOpen = true,
+  rightAction,
+}: {
+  onToggleSidebar?: () => void;
+  onSidebarPreviewEnter?: () => void;
+  onSidebarPreviewLeave?: () => void;
+  sidebarOpen?: boolean;
+  rightAction?: ReactNode;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <header className="host-drag-region pointer-events-none absolute inset-x-0 top-0 z-40 h-11 bg-transparent text-foreground/90">
+      {onToggleSidebar ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={t("thread.header.toggleSidebar")}
+          data-testid="host-sidebar-toggle"
+          onClick={onToggleSidebar}
+          onFocus={!sidebarOpen ? onSidebarPreviewEnter : undefined}
+          onBlur={!sidebarOpen ? onSidebarPreviewLeave : undefined}
+          onMouseEnter={!sidebarOpen ? onSidebarPreviewEnter : undefined}
+          onMouseLeave={!sidebarOpen ? onSidebarPreviewLeave : undefined}
+          className="host-no-drag pointer-events-auto absolute left-[88px] top-[8px] h-7 w-7 rounded-lg bg-transparent text-muted-foreground/85 shadow-none hover:bg-transparent hover:text-foreground"
+        >
+          <PanelLeft className="h-[15px] w-[15px]" strokeWidth={1.75} />
+        </Button>
+      ) : null}
+      {rightAction ? (
+        <div className="host-no-drag pointer-events-auto absolute right-3 top-2">
+          {rightAction}
+        </div>
+      ) : null}
+    </header>
+  );
+}
+
+export default function App() {
+  const { t } = useTranslation();
+  const [state, setState] = useState<BootState>({ status: "loading" });
+  const bootstrapSecretRef = useRef("");
+
+  const refreshReadyClient = useCallback(
+    async (client: NanobotClient, fallbackSurface: RuntimeSurface) => {
+      const boot = await fetchBootstrap("", bootstrapSecretRef.current);
+      const url = deriveWsUrl(boot.ws_path, boot.token, boot.ws_url);
+      const runtimeSurface = boot.runtime_surface
+        ? toRuntimeSurface(boot.runtime_surface)
+        : fallbackSurface;
+      const runtimeHost = createRuntimeHost(runtimeSurface, boot.runtime_capabilities);
+      const tokenExpiresAt = bootstrapTokenExpiresAt(boot.expires_in);
+      if (runtimeHost.socketFactory) {
+        client.updateUrl(url, runtimeHost.socketFactory);
+      } else {
+        client.updateUrl(url);
+      }
+      setState((current) =>
+        current.status === "ready" && current.client === client
+          ? {
+              ...current,
+              token: boot.token,
+              tokenExpiresAt,
+              modelName: boot.model_name ?? current.modelName,
+              runtimeSurface,
+            }
+          : current,
+      );
+      return { token: boot.token, url };
+    },
+    [],
+  );
+
+  const bootstrapWithSecret = useCallback(
+    (secret: string) => {
+      let cancelled = false;
+      (async () => {
+        setState({ status: "loading" });
+        try {
+          const boot = await fetchBootstrap("", secret);
+          if (cancelled) return;
+          if (secret) saveSecret(secret);
+          const url = deriveWsUrl(boot.ws_path, boot.token, boot.ws_url);
+          const runtimeSurface = toRuntimeSurface(boot.runtime_surface);
+          const runtimeHost = createRuntimeHost(runtimeSurface, boot.runtime_capabilities);
+          const client = new NanobotClient({
+            url,
+            socketFactory: runtimeHost.socketFactory,
+            onReauth: async () => {
+              try {
+                const refreshed = await refreshReadyClient(client, runtimeSurface);
+                return refreshed.url;
+              } catch {
+                return null;
+              }
+            },
+          });
+          bootstrapSecretRef.current = secret;
+          client.connect();
+          setState({
+            status: "ready",
+            client,
+            token: boot.token,
+            tokenExpiresAt: bootstrapTokenExpiresAt(boot.expires_in),
+            modelName: boot.model_name ?? null,
+            runtimeSurface,
+          });
+        } catch (e) {
+          if (cancelled) return;
+          const msg = (e as Error).message;
+          if (msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
+            setState({ status: "auth", failed: true });
+          } else {
+            setState({ status: "error", message: msg });
+          }
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    },
+    [refreshReadyClient],
+  );
+
+  useEffect(() => {
+    if (state.status !== "ready") return;
+    const client = state.client;
+    const timer = window.setTimeout(async () => {
+      try {
+        await refreshReadyClient(client, state.runtimeSurface);
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
+          setState({ status: "auth", failed: true });
+        }
+      }
+    }, tokenRefreshDelayMs(state.tokenExpiresAt));
+    return () => window.clearTimeout(timer);
+  }, [refreshReadyClient, state]);
+
+  useEffect(() => {
+    const saved = loadSavedSecret();
+    return bootstrapWithSecret(saved);
+  }, [bootstrapWithSecret]);
+
+  if (state.status === "loading") {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3 animate-in fade-in-0 duration-300">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-foreground/40" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-foreground/60" />
+            </span>
+            {t("app.loading.connecting")}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (state.status === "auth") {
+    return (
+      <AuthForm
+        failed={!!state.failed}
+        onSecret={(s) => bootstrapWithSecret(s)}
+      />
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <div className="flex h-full w-full items-center justify-center px-4 text-center">
+        <div className="flex max-w-md flex-col items-center gap-3">
+          <p className="text-lg font-semibold">{t("app.error.title")}</p>
+          <p className="text-sm text-muted-foreground">{state.message}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("app.error.gatewayHint")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleModelNameChange = (modelName: string | null) => {
+    setState((current) =>
+      current.status === "ready" ? { ...current, modelName } : current,
+    );
+  };
+
+  const handleLogout = () => {
+    if (state.status === "ready") {
+      state.client.close();
+    }
+    clearSavedSecret();
+    setState({ status: "auth" });
+  };
+
+  const handleNativeEngineRestart = async (): Promise<string> => {
+    const hostApi = getHostApi();
+    if (!hostApi?.restartEngine) {
+      throw new Error("native engine restart is unavailable");
+    }
+    await hostApi.restartEngine();
+    const refreshed = await refreshReadyClient(state.client, state.runtimeSurface);
+    return refreshed.token;
+  };
+
+  return (
+    <ClientProvider
+      client={state.client}
+      token={state.token}
+      modelName={state.modelName}
+    >
+      <Shell
+        runtimeSurface={state.runtimeSurface}
+        onModelNameChange={handleModelNameChange}
+        onLogout={handleLogout}
+        onNativeEngineRestart={handleNativeEngineRestart}
+      />
+    </ClientProvider>
+  );
+}
+
 function Shell({
   runtimeSurface,
   onModelNameChange,

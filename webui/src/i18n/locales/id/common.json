@@ -508,11 +508,6 @@
       "rawInstructions": "SKILL.md mentah",
       "rawInstructionsEmpty": "Tidak ada instruksi mentah.",
       "detailDescription": "Detail untuk {{name}}."
-    },
-    "voice": {
-      "selectProvider": "Pilih penyedia",
-      "configureProvider": "Konfigurasi penyedia",
-      "languageAuto": "Auto"
     }
   },
   "chat": {
@@ -888,7 +883,7 @@
     "close": "Tutup pratinjau file",
     "loading": "Memuat pratinjau...",
     "failed": "Tidak dapat mempratinjau file ini.",
-    "routeMissing": "Pratinjau file memerlukan gateway terbaru. Mulai ulang blackcat gateway lalu coba lagi.",
+    "routeMissing": "Pratinjau file memerlukan gateway terbaru. Mulai ulang nanobot gateway lalu coba lagi.",
     "resize": "Ubah ukuran pratinjau file",
     "truncated": "Pratinjau dipotong karena file ini besar."
   },

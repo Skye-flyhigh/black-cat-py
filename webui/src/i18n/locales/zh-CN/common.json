@@ -508,11 +508,6 @@
       "rawInstructions": "原始 SKILL.md",
       "rawInstructionsEmpty": "没有原始说明。",
       "detailDescription": "{{name}} 的详情。"
-    },
-    "voice": {
-      "selectProvider": "选择提供商",
-      "configureProvider": "配置提供商",
-      "languageAuto": "自动"
     }
   },
   "chat": {
@@ -888,7 +883,7 @@
     "close": "关闭文件预览",
     "loading": "正在加载预览...",
     "failed": "无法预览这个文件。",
-    "routeMissing": "文件预览需要最新的 gateway。请重启 blackcat gateway 后再试。",
+    "routeMissing": "文件预览需要最新的 gateway。请重启 nanobot gateway 后再试。",
     "resize": "调整文件预览宽度",
     "truncated": "文件较大，当前只显示前半部分预览。"
   },

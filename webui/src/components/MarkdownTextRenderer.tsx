@@ -1,11 +1,16 @@
-import { Check, Globe2 } from "lucide-react";
 import {
-  Children, isValidElement, useCallback,
-  useEffect, useMemo, useState, type ReactNode
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
 } from "react";
 import type { Components, Options as ReactMarkdownOptions } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
+import { Check, Globe2 } from "lucide-react";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -19,7 +24,6 @@ import {
 } from "@/components/FileReferenceChip";
 import { inferMediaKind } from "@/lib/media";
 import { faviconUrls } from "@/lib/provider-brand";
-import { remarkTexMath } from "@/lib/remark-tex-math";
 import { cn } from "@/lib/utils";
 
 import "katex/dist/katex.min.css";

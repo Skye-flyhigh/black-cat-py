@@ -159,7 +159,7 @@ describe("useBlackcatStream", () => {
 
   it("preserves proactive automation source metadata on complete assistant messages", () => {
     const fake = fakeClient();
-    const { result } = renderHook(() => useBlackcatStream("chat-cron", EMPTY_MESSAGES), {
+    const { result } = renderHook(() => useNanobotStream("chat-cron", EMPTY_MESSAGES), {
       wrapper: wrap(fake.client),
     });
 
