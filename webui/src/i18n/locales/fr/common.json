@@ -55,7 +55,6 @@
       "ariaLabel": "Changer de langue"
     },
     "apps": "Apps",
-    "automations": "Automatisations",
     "skills": {
       "title": "Compétences"
     }
@@ -81,7 +80,6 @@
       "cliApps": "Apps CLI",
       "mcp": "MCP",
       "apps": "Applications",
-      "automations": "Automatisations",
       "skills": "Compétences"
     },
     "sections": {
@@ -790,7 +788,6 @@
       },
       "next": {
         "label": "Prochaine {{time}}",
-        "pending": "Exécution imminente",
         "disabled": "En pause",
         "none": "Aucune prochaine exécution"
       }
@@ -954,7 +951,6 @@
     },
     "scrollToBottom": "Faire défiler vers le bas",
     "loadEarlier": "Charger les messages précédents",
-    "forkedFromHistory": "Bifurqué depuis l'historique",
     "promptNavigator": {
       "open": "Ouvrir le navigateur de prompts",
       "title": "Prompts",

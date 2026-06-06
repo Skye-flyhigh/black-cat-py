@@ -12,9 +12,7 @@ interface ThreadMessagesProps {
   hiddenUserMessageCount?: number;
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
-  forkBoundaryMessageCount?: number | null;
   onOpenFilePreview?: (path: string) => void;
-  onForkFromMessage?: (beforeUserIndex: number) => void;
 }
 
 export type DisplayUnit = TurnUnit;
@@ -66,16 +64,10 @@ export function ThreadMessages({
   hiddenUserMessageCount = 0,
   cliApps = [],
   mcpPresets = [],
-  forkBoundaryMessageCount = null,
   onOpenFilePreview,
-  onForkFromMessage,
 }: ThreadMessagesProps) {
   const { t } = useTranslation();
   const units = useMemo(() => buildDisplayUnits(messages, isStreaming), [isStreaming, messages]);
-  const forkBoundaryAfterUnitIndex = useMemo(
-    () => unitIndexAfterMessageCount(units, forkBoundaryMessageCount),
-    [forkBoundaryMessageCount, units],
-  );
   const copyFlags = useMemo(() => assistantCopyFlags(units), [units]);
   const liveActivityClusterIndices = useMemo(
     () => isStreaming ? currentActivityClusterIndices(units) : new Set<number>(),
@@ -108,41 +100,35 @@ export function ThreadMessages({
         if (unit.type === "message" && unit.message.role === "user") nextUserIndex += 1;
 
         return (
-          <Fragment key={unitKey(unit, index)}>
-            <div className={marginTop} data-user-prompt-id={userPromptId}>
-              {unit.type === "activity" ? (
-                <AgentActivityCluster
-                  messages={unit.messages}
-                  isTurnStreaming={liveActivityClusterIndices.has(index)}
-                  hasBodyBelow={hasBodyBelow}
-                  turnLatencyMs={unit.turnLatencyMs}
-                  cliApps={cliApps}
-                  mcpPresets={mcpPresets}
-                  onOpenFilePreview={onOpenFilePreview}
-                />
-              ) : (
-                <MessageBubble
-                  message={unit.message}
-                  showAssistantCopyAction={
-                    unit.message.role === "assistant"
-                      ? copyFlags[index]
-                      : true
-                  }
-                  cliApps={cliApps}
-                  mcpPresets={mcpPresets}
-                  onOpenFilePreview={onOpenFilePreview}
-                  onForkFromHere={
-                    onForkFromMessage && forkIndex !== undefined
-                      ? () => onForkFromMessage(forkIndex)
-                      : undefined
-                  }
-                />
-              )}
-            </div>
-            {index === forkBoundaryAfterUnitIndex ? (
-              <ForkBoundaryDivider label={t("thread.forkedFromHistory")} />
-            ) : null}
-          </Fragment>
+          <div
+            key={unitKey(unit, index)}
+            className={marginTop}
+            data-user-prompt-id={userPromptId}
+          >
+            {unit.type === "activity" ? (
+              <AgentActivityCluster
+                messages={unit.messages}
+                isTurnStreaming={liveActivityClusterIndices.has(index)}
+                hasBodyBelow={hasBodyBelow}
+                turnLatencyMs={unit.turnLatencyMs}
+                cliApps={cliApps}
+                mcpPresets={mcpPresets}
+                onOpenFilePreview={onOpenFilePreview}
+              />
+            ) : (
+              <MessageBubble
+                message={unit.message}
+                showAssistantCopyAction={
+                  unit.message.role === "assistant"
+                    ? copyFlags[index]
+                    : true
+                }
+                cliApps={cliApps}
+                mcpPresets={mcpPresets}
+                onOpenFilePreview={onOpenFilePreview}
+              />
+            )}
+          </div>
         );
       })}
     </div>

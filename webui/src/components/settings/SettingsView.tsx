@@ -154,7 +154,6 @@ export type SettingsSectionKey =
   | "image"
   | "browser"
   | "apps"
-  | "automations"
   | "skills"
   | "runtime"
   | "advanced"
@@ -368,13 +367,6 @@ function settingsProviderConfigured(
 ): boolean {
   const row = settingsProviderRow(payload, provider);
   if (row) return row.configured;
-  if (provider === "auto") {
-    const resolvedRow = settingsProviderRow(
-      payload,
-      payload.agent.resolved_provider ?? payload.agent.provider,
-    );
-    if (resolvedRow) return resolvedRow.configured;
-  }
   return payload.agent.has_api_key;
 }
 
@@ -504,7 +496,6 @@ export function SettingsView({
   const [settings, setSettings] = useState<SettingsPayload | null>(() => initialSettings);
   const [cliApps, setCliApps] = useState<CliAppsPayload | null>(null);
   const [mcpPresets, setMcpPresets] = useState<McpPresetsPayload | null>(null);
-  const [automations, setAutomations] = useState<AutomationsPayload | null>(null);
   const [loading, setLoading] = useState(() => initialSettings === null);
   const [cliAppsLoading, setCliAppsLoading] = useState(true);
   const [mcpPresetsLoading, setMcpPresetsLoading] = useState(true);
@@ -1547,24 +1538,6 @@ export function SettingsView({
             isRestarting={isRestarting || hostEngineApplying}
           />
         );
-      case "automations":
-        return (
-          <AutomationsSettings
-            payload={automations}
-            loading={automationsLoading}
-            query={automationsQuery}
-            filter={automationsFilter}
-            sort={automationsSort}
-            actionKey={automationAction}
-            error={automationsError}
-            onQueryChange={setAutomationsQuery}
-            onFilterChange={setAutomationsFilter}
-            onSortChange={setAutomationsSort}
-            onAction={handleAutomationAction}
-            onRequestEdit={setAutomationPendingEdit}
-            onRequestDelete={setAutomationPendingDelete}
-          />
-        );
       case "skills":
         return <SkillsCatalogSettings skills={skills} />;
       case "runtime":
@@ -1666,11 +1639,9 @@ export function SettingsView({
                 {t("settings.backToChat")}
               </button>
             ) : null}
-            {showSidebar ? (
-              <p className="mb-2 text-[12px] font-normal text-muted-foreground">
-                {t("settings.sidebar.title")}
-              </p>
-            ) : null}
+            <p className="mb-2 text-[12px] font-normal text-muted-foreground">
+              {t("settings.sidebar.title")}
+            </p>
             <h1 className="text-[24px] font-normal leading-tight tracking-normal text-foreground sm:text-[28px]">
               {text(`settings.nav.${activeSection}`, titleForSection(activeSection))}
             </h1>
@@ -1851,7 +1822,7 @@ function OverviewSettings({
   return (
     <div className="space-y-7">
       <section>
-        <TokenUsageHeatmap usage={settings.usage} timeZone={settings.agent.timezone} />
+        <TokenUsageHeatmap usage={settings.usage} />
       </section>
 
       <section>

@@ -5,8 +5,10 @@ import os
 import select
 import signal
 import sys
+import uuid
 from collections.abc import Callable
 from contextlib import nullcontext, suppress
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -1029,6 +1031,9 @@ def _run_gateway(
         """Publish a user-visible message and mirror it into that channel's session."""
         metadata = dict(msg.metadata or {})
         record = record or bool(metadata.pop("_record_channel_delivery", False))
+        proactive_webui_metadata = _PROACTIVE_WEBUI_METADATA.get()
+        if record and msg.channel == "websocket" and proactive_webui_metadata:
+            metadata = {**metadata, **proactive_webui_metadata}
         if metadata != (msg.metadata or {}):
             msg = OutboundMessage(
                 channel=msg.channel,

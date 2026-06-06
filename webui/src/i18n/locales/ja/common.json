@@ -55,7 +55,6 @@
       "ariaLabel": "言語を変更"
     },
     "apps": "アプリ",
-    "automations": "自動タスク",
     "skills": {
       "title": "スキル"
     }
@@ -81,7 +80,6 @@
       "cliApps": "CLI アプリ",
       "mcp": "MCP",
       "apps": "アプリ",
-      "automations": "自動タスク",
       "skills": "スキル"
     },
     "sections": {
@@ -790,7 +788,6 @@
       },
       "next": {
         "label": "次回 {{time}}",
-        "pending": "まもなく実行",
         "disabled": "一時停止",
         "none": "次回実行なし"
       }
@@ -954,7 +951,6 @@
     },
     "scrollToBottom": "一番下へスクロール",
     "loadEarlier": "以前のメッセージを読み込む",
-    "forkedFromHistory": "履歴から分岐",
     "promptNavigator": {
       "open": "プロンプトナビゲーターを開く",
       "title": "プロンプト",

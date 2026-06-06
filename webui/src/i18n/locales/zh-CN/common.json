@@ -55,7 +55,6 @@
       "ariaLabel": "切换语言"
     },
     "apps": "应用",
-    "automations": "自动任务",
     "skills": {
       "title": "技能"
     }
@@ -81,7 +80,6 @@
       "runtime": "系统",
       "advanced": "安全",
       "apps": "应用",
-      "automations": "自动任务",
       "skills": "技能"
     },
     "sections": {
@@ -790,7 +788,6 @@
       },
       "next": {
         "label": "下次 {{time}}",
-        "pending": "即将执行",
         "disabled": "已暂停",
         "none": "没有下次运行"
       }
@@ -954,7 +951,6 @@
     },
     "scrollToBottom": "滚动到底部",
     "loadEarlier": "加载更早消息",
-    "forkedFromHistory": "从历史消息分叉",
     "promptNavigator": {
       "open": "打开输入导航",
       "title": "输入列表",
@@ -994,9 +990,8 @@
     "imageAttachment": "图片附件",
     "automationSourceFallback": "自动化",
     "automationTriggered": "自动触发",
-    "forkFromHere": "分叉",
-    "copyReply": "复制",
-    "copiedReply": "已复制",
+    "copyReply": "复制回复",
+    "copiedReply": "已复制回复",
     "turnLatencyTitle": "本轮耗时（端到端）"
   },
   "lightbox": {

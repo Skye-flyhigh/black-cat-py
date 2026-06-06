@@ -55,7 +55,6 @@
       "ariaLabel": "언어 변경"
     },
     "apps": "앱",
-    "automations": "자동화",
     "skills": {
       "title": "스킬"
     }
@@ -81,7 +80,6 @@
       "cliApps": "CLI 앱",
       "mcp": "MCP",
       "apps": "앱",
-      "automations": "자동화",
       "skills": "스킬"
     },
     "sections": {
@@ -790,7 +788,6 @@
       },
       "next": {
         "label": "다음 {{time}}",
-        "pending": "곧 실행됨",
         "disabled": "일시 중지됨",
         "none": "다음 실행 없음"
       }
@@ -954,7 +951,6 @@
     },
     "scrollToBottom": "맨 아래로 스크롤",
     "loadEarlier": "이전 메시지 불러오기",
-    "forkedFromHistory": "기록에서 분기됨",
     "promptNavigator": {
       "open": "프롬프트 탐색기 열기",
       "title": "프롬프트",

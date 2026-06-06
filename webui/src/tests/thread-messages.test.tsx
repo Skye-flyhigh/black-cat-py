@@ -693,6 +693,30 @@ describe("ThreadMessages", () => {
     ]);
   });
 
+  it("uses turn ids as activity grouping boundaries when available", () => {
+    const units = buildDisplayUnits([
+      { id: "u1", role: "user", content: "one", turnId: "turn-1", createdAt: 1 },
+      { id: "a1", role: "assistant", content: "answer one", turnId: "turn-1", createdAt: 2 },
+      {
+        id: "t2",
+        role: "tool",
+        kind: "trace",
+        content: "search()",
+        traces: ["search()"],
+        turnId: "turn-2",
+        createdAt: 3,
+      },
+      { id: "a2", role: "assistant", content: "answer two", turnId: "turn-2", createdAt: 4 },
+    ]);
+
+    expect(units.map((unit) => unit.type === "message" ? unit.message.id : "activity")).toEqual([
+      "u1",
+      "a1",
+      "activity",
+      "a2",
+    ]);
+  });
+
   it("computes final assistant copy flags with user-boundary semantics", () => {
     const units = buildDisplayUnits([
       { id: "u1", role: "user", content: "one", createdAt: 1 },
