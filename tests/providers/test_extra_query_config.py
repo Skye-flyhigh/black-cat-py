@@ -7,6 +7,9 @@ from unittest.mock import MagicMock, patch
 from blackcat.config.schema import Config, ProviderConfig
 from blackcat.providers.factory import provider_signature
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+from blackcat.config.schema import Config, ProviderConfig
+from blackcat.providers.factory import provider_signature
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 
 
 class TestExtraQuerySchema:
@@ -45,6 +48,7 @@ class TestExtraQueryBuildClient:
         mock_client = MagicMock()
         with patch(
             "blackcat.providers.openai_compat_provider.AsyncOpenAI",
+            "blackcat.providers.openai_compat_provider.AsyncOpenAI",
             return_value=mock_client,
         ) as mock_async_openai:
             provider = OpenAICompatProvider(
@@ -59,6 +63,7 @@ class TestExtraQueryBuildClient:
     def test_build_client_passes_no_default_query_when_empty(self) -> None:
         mock_client = MagicMock()
         with patch(
+            "blackcat.providers.openai_compat_provider.AsyncOpenAI",
             "blackcat.providers.openai_compat_provider.AsyncOpenAI",
             return_value=mock_client,
         ) as mock_async_openai:
