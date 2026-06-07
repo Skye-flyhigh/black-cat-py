@@ -239,8 +239,7 @@ export class WhatsAppClient {
           content: finalContent,
           timestamp: msg.messageTimestamp as number,
           isGroup,
-          ...(isForwarded ? { isForwarded } : {}),
-          ...(isGroup ? { wasMentioned } : {}),
+          ...(isGroup ? { wasMentioned: wasMentioned || isReplyToBot, isReplyToBot } : {}),
           ...(mediaPaths.length > 0 ? { media: mediaPaths } : {}),
         });
       }
