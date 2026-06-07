@@ -540,16 +540,6 @@ async def test_connect_mcp_servers_http_clients_reject_unsafe_redirect_targets(
     checked_urls: list[str] = []
     sent_urls: list[str] = []
     used_transports: list[str] = []
-
-    def _validate(url: str) -> tuple[bool, str]:
-        checked_urls.append(url)
-        if url == "http://127.0.0.1/private":
-            return False, "loopback blocked"
-        return True, ""
-
-    async def _reachable(_url: str) -> bool:
-        return True
-
     def _handler(request: httpx.Request) -> httpx.Response:
         sent_urls.append(str(request.url))
         if str(request.url) == "https://example.com/start":
