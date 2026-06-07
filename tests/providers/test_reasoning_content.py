@@ -10,6 +10,8 @@ from unittest.mock import patch
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 from blackcat.utils.formatting import build_assistant_message
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+from blackcat.providers.openai_compat_provider import OpenAICompatProvider
+from blackcat.utils.helpers import build_assistant_message
 
 # ── _parse: non-streaming ─────────────────────────────────────────────────
 
@@ -83,6 +85,7 @@ def test_parse_dict_reasoning_content_empty_string_preserved() -> None:
 def test_parse_sdk_reasoning_content_empty_string_preserved() -> None:
     """SDK response objects preserve reasoning_content=\"\"."""
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     message = SimpleNamespace(content="answer", reasoning_content="", tool_calls=None)
@@ -97,6 +100,7 @@ def test_parse_sdk_reasoning_content_empty_string_preserved() -> None:
 
 def test_tool_call_history_preserves_empty_reasoning_content_after_sanitize() -> None:
     """Empty reasoning_content survives the tool-call history round trip."""
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
