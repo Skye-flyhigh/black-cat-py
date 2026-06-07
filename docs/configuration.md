@@ -1571,6 +1571,7 @@ If you want to disable them, which removes both `web_search` and `web_fetch` fro
 ```
 
 blackcat uses a shared SSRF guard for built-in web fetches and HTTP/SSE MCP connections. By default it blocks loopback, RFC1918/private ranges, CGNAT/Tailscale ranges, link-local addresses, and cloud metadata endpoints. If you need to allow trusted private ranges, explicitly exempt them from SSRF blocking with `tools.ssrfWhitelist`:
+nanobot uses a shared SSRF guard for built-in web fetches and HTTP/SSE MCP connections. By default it blocks loopback, RFC1918/private ranges, CGNAT/Tailscale ranges, link-local addresses, and cloud metadata endpoints. If you need to allow trusted private ranges, explicitly exempt them from SSRF blocking with `tools.ssrfWhitelist`:
 
 ```json
 {
