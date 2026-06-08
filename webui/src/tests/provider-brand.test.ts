@@ -52,4 +52,9 @@ describe("provider brand logos", () => {
     expect(providerBrand("assemblyai")?.logoUrls).toContain("https://assemblyai.com/favicon.ico");
     expect(providerBrand("assemblyai")?.initials).toBe("AA");
   });
+
+  it("keeps OpenRouter voice settings on the first-party brand domain", () => {
+    expect(providerBrand("openrouter")?.logoUrls).toContain("https://openrouter.ai/favicon.ico");
+    expect(providerBrand("openrouter")?.initials).toBe("OR");
+  });
 });
