@@ -314,6 +314,7 @@ export function ThreadShell({
     runStartedAt,
     goalState,
     send,
+    transcribeAudio,
     stop,
     setMessages,
     streamError,
@@ -662,6 +663,7 @@ export function ThreadShell({
           cliApps={cliApps}
           mcpPresets={mcpPresets}
           onStop={stop}
+          onTranscribeAudio={transcribeAudio}
           runStartedAt={runStartedAt}
           goalState={goalState}
           workspaceScope={workspaceScope}
@@ -692,6 +694,7 @@ export function ThreadShell({
           cliApps={cliApps}
           mcpPresets={mcpPresets}
           runStartedAt={runStartedAt}
+          onTranscribeAudio={transcribeAudio}
           goalState={goalState}
           workspaceScope={workspaceScope}
           workspaceDefaultScope={workspaceDefaultScope}

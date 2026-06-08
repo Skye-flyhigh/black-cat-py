@@ -1347,6 +1347,61 @@ Selecting a transcription provider does not configure credentials by itself. For
 
 If you are adding a new transcription provider, see [`development.md`](./development.md#adding-a-transcription-provider).
 
+## Transcription Settings
+
+Audio transcription is a shared capability used by chat-channel voice messages and by WebUI/desktop microphone input. Chat-channel voice messages are transcribed automatically before they enter the agent. WebUI and desktop microphone input is transcribed into the composer first, so you can edit the text before sending.
+
+Configure transcription under the top-level `transcription` section:
+
+```json
+{
+  "transcription": {
+    "enabled": true,
+    "provider": "groq",
+    "model": null,
+    "language": null,
+    "maxDurationSec": 120,
+    "maxUploadMb": 25
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `true` | Enables audio transcription for both chat-channel voice messages and WebUI/desktop microphone input. |
+| `provider` | `"groq"` | Transcription backend: `"groq"` or `"openai"`. |
+| `model` | provider default | Optional transcription model override. Defaults to `whisper-large-v3` for Groq and `whisper-1` for OpenAI. |
+| `language` | `null` | Optional ISO-639 language hint, e.g. `"en"`, `"zh"`, `"ko"`, or `"ja"`. |
+| `maxDurationSec` | `120` | Maximum WebUI/desktop recording duration. |
+| `maxUploadMb` | `25` | Maximum WebUI/desktop audio upload size. |
+
+Provider and language resolution is intentionally ordered for backwards compatibility:
+
+1. `transcription.provider` / `transcription.language`
+2. Legacy `channels.transcriptionProvider` / `channels.transcriptionLanguage`
+3. Built-in defaults (`provider: "groq"`, no language hint)
+
+The legacy `channels.*` transcription fields existed before transcription became a shared capability across chat channels and WebUI/desktop microphone input. They are still read so older `config.json` files keep working, but they are no longer the preferred configuration surface. If both old and new fields are present, the top-level `transcription` values are the source of truth.
+
+Transcription credentials are intentionally not stored in `transcription`. Put the API key and optional endpoint in the matching provider config:
+
+```json
+{
+  "providers": {
+    "groq": {
+      "apiKey": "gsk-...",
+      "apiBase": "https://api.groq.com/openai/v1"
+    }
+  },
+  "transcription": {
+    "provider": "groq",
+    "language": "zh"
+  }
+}
+```
+
+Selecting a transcription provider does not configure credentials by itself. For example, the effective provider may default to Groq for compatibility, but transcription is only usable when `providers.groq.apiKey` or the matching environment-backed config is available. The Settings UI writes only the top-level `transcription` fields.
+
 ## Channel Settings
 
 Global settings that apply to all channels. Configure under the `channels` section in `~/.blackcat/config.json`:

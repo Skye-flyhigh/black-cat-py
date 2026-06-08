@@ -629,6 +629,11 @@
       "rawInstructions": "元の SKILL.md",
       "rawInstructionsEmpty": "元の説明はありません。",
       "detailDescription": "{{name}} の詳細。"
+    },
+    "voice": {
+      "selectProvider": "プロバイダーを選択",
+      "configureProvider": "プロバイダーを設定",
+      "languageAuto": "自動"
     }
   },
   "chat": {

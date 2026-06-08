@@ -158,8 +158,8 @@ function stubVisualViewport({
 
 afterEach(() => {
   vi.restoreAllMocks();
-  Reflect.deleteProperty(window, "blackcatHost");
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(window, "nanobotHost");
   if (ORIGINAL_MEDIA_DEVICES) {
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,

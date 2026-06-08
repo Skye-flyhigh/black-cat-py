@@ -95,7 +95,13 @@ interface PendingNewChat {
   timer: ReturnType<typeof setTimeout>;
 }
 
-export interface BlackcatClientOptions {
+interface PendingTranscription {
+  resolve: (text: string) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+export interface NanobotClientOptions {
   url: string;
   reconnect?: boolean;
   /** Called when a connection drops so the app can refresh its token. */
@@ -132,6 +138,7 @@ export class BlackcatClient {
   /** Latest ``goal_state`` snapshot per ``chat_id`` (multi-session isolation). */
   private goalStateByChatId = new Map<string, GoalStateWsPayload>();
   private pendingNewChat: PendingNewChat | null = null;
+  private pendingTranscriptions = new Map<string, PendingTranscription>();
   // Frames queued while the socket is not yet OPEN
   private sendQueue: Outbound[] = [];
   private reconnectAttempts = 0;
@@ -341,31 +348,6 @@ export class BlackcatClient {
     });
   }
 
-  /** Ask the server to create a non-destructive fork before a user-message index. */
-  forkChat(
-    sourceChatId: string,
-    beforeUserIndex: number,
-    title?: string,
-    timeoutMs: number = 5_000,
-  ): Promise<string> {
-    if (this.pendingNewChat) {
-      return Promise.reject(new Error("newChat already in flight"));
-    }
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingNewChat = null;
-        reject(new Error("forkChat timed out"));
-      }, timeoutMs);
-      this.pendingNewChat = { resolve, reject, timer };
-      this.queueSend({
-        type: "fork_chat",
-        source_chat_id: sourceChatId,
-        before_user_index: beforeUserIndex,
-        ...(title?.trim() ? { title: title.trim() } : {}),
-      });
-    });
-  }
-
   attach(chatId: string): void {
     this.knownChats.add(chatId);
     if (this.socket?.readyState === WS_OPEN) {
@@ -473,6 +455,16 @@ export class BlackcatClient {
       return;
     }
 
+    if (parsed.event === "transcription_result") {
+      this.resolveTranscription(parsed.request_id, parsed.text);
+      return;
+    }
+
+    if (parsed.event === "transcription_error") {
+      this.rejectTranscription(parsed.request_id, parsed.detail || "error");
+      return;
+    }
+
     if (parsed.event === "session_updated") {
       this.emitSessionUpdate(parsed.chat_id, parsed.scope, parsed.workspace_scope);
       return;
@@ -556,6 +548,7 @@ export class BlackcatClient {
       this.pendingNewChat.reject(new Error("socket closed"));
       this.pendingNewChat = null;
     }
+    this.rejectAllTranscriptions("socket closed");
     // Surface structured reasons *before* reconnect logic so the UI can
     // display the error even while the client transparently reconnects.
     // Browsers populate ``CloseEvent.code`` with the wire-level close code;
@@ -581,6 +574,34 @@ export class BlackcatClient {
       } catch {
         // best-effort: subscriber fault must not stall transport bookkeeping
       }
+    }
+  }
+
+  private resolveTranscription(requestId: string, text: string): void {
+    const pending = this.pendingTranscriptions.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pendingTranscriptions.delete(requestId);
+    pending.resolve(text);
+  }
+
+  private rejectTranscription(requestId: string | undefined, detail: string): void {
+    if (!requestId) {
+      this.rejectAllTranscriptions(detail);
+      return;
+    }
+    const pending = this.pendingTranscriptions.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pendingTranscriptions.delete(requestId);
+    pending.reject(new Error(detail));
+  }
+
+  private rejectAllTranscriptions(detail: string): void {
+    for (const [requestId, pending] of this.pendingTranscriptions) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error(detail));
+      this.pendingTranscriptions.delete(requestId);
     }
   }
 

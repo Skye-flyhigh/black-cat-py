@@ -139,7 +139,7 @@ it("serializes workspace scope for new chats and messages", async () => {
   });
 
   it("sends transcription requests and resolves transcription results outside chat dispatch", async () => {
-    const client = new BlackcatClient({
+    const client = new NanobotClient({
       url: "ws://test",
       reconnect: false,
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,
@@ -171,7 +171,7 @@ it("serializes workspace scope for new chats and messages", async () => {
   });
 
   it("rejects pending transcription requests on server errors and socket close", async () => {
-    const client = new BlackcatClient({
+    const client = new NanobotClient({
       url: "ws://test",
       reconnect: false,
       socketFactory: (url) => new FakeSocket(url) as unknown as WebSocket,

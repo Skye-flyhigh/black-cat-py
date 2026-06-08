@@ -629,6 +629,11 @@
       "rawInstructions": "SKILL.md mentah",
       "rawInstructionsEmpty": "Tidak ada instruksi mentah.",
       "detailDescription": "Detail untuk {{name}}."
+    },
+    "voice": {
+      "selectProvider": "Pilih penyedia",
+      "configureProvider": "Konfigurasi penyedia",
+      "languageAuto": "Auto"
     }
   },
   "chat": {

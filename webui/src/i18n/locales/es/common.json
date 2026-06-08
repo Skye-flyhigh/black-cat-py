@@ -629,6 +629,11 @@
       "rawInstructions": "SKILL.md original",
       "rawInstructionsEmpty": "No hay instrucciones originales.",
       "detailDescription": "Detalles de {{name}}."
+    },
+    "voice": {
+      "selectProvider": "Seleccionar proveedor",
+      "configureProvider": "Configurar proveedor",
+      "languageAuto": "Auto"
     }
   },
   "chat": {

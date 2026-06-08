@@ -47,6 +47,12 @@ import {
 import { useTranslation } from "react-i18next";
 
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   WorkspaceAccessMenu,
   WorkspaceProjectPicker,
 } from "@/components/thread/WorkspaceControls";
@@ -66,12 +72,8 @@ import {
 } from "@/hooks/useAttachedImages.ts";
 import type { SendImage, SendOptions } from "@/hooks/useBlackcatStream";
 import { useClipboardAndDrop } from "@/hooks/useClipboardAndDrop";
+import type { SendImage, SendOptions } from "@/hooks/useNanobotStream";
 import { useVoiceRecorder, type VoiceRecorderErrorKey } from "@/hooks/useVoiceRecorder";
-import {
-  inferProviderFromModelName,
-  logoFallbackUrls,
-  providerBrand,
-} from "@/lib/provider-brand";
 import type {
   CliAppInfo,
   GoalStateWsPayload,
@@ -1151,24 +1153,6 @@ export function ThreadComposer({
     });
   }, []);
 
-  // Runs before paint so switching sessions never flashes stale draft text.
-  useLayoutEffect(() => {
-    if (previousPendingQueueKeyRef.current === pendingQueueKey) return;
-    previousPendingQueueKeyRef.current = pendingQueueKey;
-    setValue("");
-    setInlineError(null);
-    setSlashMenuDismissed(false);
-    setCliAppMenuDismissed(false);
-    setCursorPosition(0);
-    clear();
-    requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, 260)}px`;
-    });
-  }, [clear, pendingQueueKey]);
-
   const appendTranscription = useCallback((text: string) => {
     const transcript = text.trim();
     if (!transcript) return;
@@ -1770,7 +1754,7 @@ export function ThreadComposer({
               />
             ) : null}
           </div>
-          <div className={cn("ml-auto flex min-w-0 shrink-0 items-center", isHero ? "gap-1.5" : "gap-2")}>
+          <div className={cn("flex shrink-0 items-center", isHero ? "gap-1.5" : "gap-2")}>
             {modelLabel && !voiceRecorder.isRecording ? (
               <ComposerModelBadge
                 label={modelLabel}

@@ -629,6 +629,11 @@
       "rawInstructions": "원본 SKILL.md",
       "rawInstructionsEmpty": "원본 지침이 없습니다.",
       "detailDescription": "{{name}} 세부 정보."
+    },
+    "voice": {
+      "selectProvider": "제공자 선택",
+      "configureProvider": "제공자 설정",
+      "languageAuto": "자동"
     }
   },
   "chat": {

@@ -629,6 +629,11 @@
       "rawInstructions": "Raw SKILL.md",
       "rawInstructionsEmpty": "No raw instructions.",
       "detailDescription": "Details for {{name}}."
+    },
+    "voice": {
+      "selectProvider": "Select provider",
+      "configureProvider": "Configure provider",
+      "languageAuto": "Auto"
     }
   },
   "chat": {
