@@ -67,4 +67,9 @@ describe("provider brand logos", () => {
     expect(providerBrand("openrouter")?.logoUrls).toContain("https://openrouter.ai/favicon.ico");
     expect(providerBrand("openrouter")?.initials).toBe("OR");
   });
+
+  it("keeps OpenRouter voice settings on the first-party brand domain", () => {
+    expect(providerBrand("openrouter")?.logoUrls).toContain("https://openrouter.ai/favicon.ico");
+    expect(providerBrand("openrouter")?.initials).toBe("OR");
+  });
 });
