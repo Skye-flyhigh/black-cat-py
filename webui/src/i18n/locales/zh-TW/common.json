@@ -629,6 +629,11 @@
       "rawInstructions": "原始 SKILL.md",
       "rawInstructionsEmpty": "沒有原始說明。",
       "detailDescription": "{{name}} 的詳細資訊。"
+    },
+    "voice": {
+      "selectProvider": "選擇提供商",
+      "configureProvider": "設定提供商",
+      "languageAuto": "自動"
     }
   },
   "chat": {

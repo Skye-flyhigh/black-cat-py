@@ -629,6 +629,11 @@
       "rawInstructions": "SKILL.md gốc",
       "rawInstructionsEmpty": "Không có hướng dẫn gốc.",
       "detailDescription": "Chi tiết cho {{name}}."
+    },
+    "voice": {
+      "selectProvider": "Chon nha cung cap",
+      "configureProvider": "Cau hinh nha cung cap",
+      "languageAuto": "Tu dong"
     }
   },
   "chat": {

@@ -629,6 +629,11 @@
       "rawInstructions": "SKILL.md brut",
       "rawInstructionsEmpty": "Aucune instruction brute.",
       "detailDescription": "Détails de {{name}}."
+    },
+    "voice": {
+      "selectProvider": "Choisir un fournisseur",
+      "configureProvider": "Configurer le fournisseur",
+      "languageAuto": "Auto"
     }
   },
   "chat": {

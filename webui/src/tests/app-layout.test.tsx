@@ -1297,7 +1297,7 @@ describe("App layout", () => {
 
   it("restores the settings section from the URL hash after a page reload", async () => {
     mockFetchRoutes({ "/api/settings": baseSettingsPayload() });
-    window.history.replaceState(null, "", "/#/settings?section=models");
+    window.history.replaceState(null, "", "/#/settings?section=voice");
 
     render(<App />);
 
