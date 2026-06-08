@@ -1524,45 +1524,7 @@ function OverviewSettings({
   return (
     <div className="space-y-7">
       <section>
-        <div className="overflow-hidden rounded-[22px] border border-border/45 bg-card/86 shadow-[0_18px_65px_rgba(15,23,42,0.075)] backdrop-blur-xl dark:border-white/10 dark:shadow-[0_18px_65px_rgba(0,0,0,0.24)]">
-          <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-center gap-3">
-              <BlackcatBrandLogo size="lg" testId="overview-blackcat-logo" />
-              <div className="min-w-0">
-                <div className="text-[12px] font-medium text-muted-foreground">blackcat</div>
-                <div className="mt-0.5 truncate text-[18px] font-semibold leading-6 text-foreground">
-                  {settings.agent.model}
-                </div>
-                <div className="mt-0.5 truncate text-[13px] leading-5 text-muted-foreground">
-                  {activeProvider} · {activePreset}
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <StatusPill tone={requiresRestart ? "neutral" : "success"}>
-                {requiresRestart
-                  ? tx("settings.values.restartPending", "Restart pending")
-                  : tx("settings.values.ready", "Ready")}
-              </StatusPill>
-              {requiresRestart && onRestart ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onRestart}
-                  disabled={isRestarting}
-                  className="rounded-full"
-                >
-                  {isRestarting ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
-                  ) : (
-                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                  )}
-                  {isRestarting ? t("app.system.restarting") : t("app.system.restart")}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <TokenUsageHeatmap usage={settings.usage} timeZone={settings.agent.timezone} />
       </section>
 
       <section>

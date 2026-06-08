@@ -277,11 +277,10 @@ describe("SettingsView Apps catalog", () => {
   it("aligns token activity days with the configured timezone", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-02T18:00:00Z"));
-    const basePayload = settingsPayload();
     const payload: SettingsPayload = {
-      ...basePayload,
+      ...settingsPayload(),
       agent: {
-        ...basePayload.agent,
+        ...settingsPayload().agent,
         timezone: "Asia/Shanghai",
       },
       usage: {
