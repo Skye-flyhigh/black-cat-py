@@ -957,7 +957,8 @@
     "scrollToBottom": "Gulir ke bawah",
     "loadEarlier": "Muat pesan sebelumnya",
     "fork": {
-      "failed": "Tidak dapat mem-fork chat ini. Coba lagi."
+      "failed": "Tidak dapat mem-fork chat ini. Coba lagi.",
+      "fromHistory": "Fork dari riwayat"
     },
     "promptNavigator": {
       "open": "Buka navigator prompt",
@@ -984,11 +985,11 @@
     "agentActivityLiveSummary": "Berjalan… · {{reasoning}} langkah · {{tools}} panggilan alat",
     "agentActivityLiveToolsOnly": "Berjalan… · {{tools}} panggilan alat",
     "imageAttachment": "Lampiran gambar",
-    "copyMessage": "Salin pesan",
-    "copiedMessage": "Pesan disalin",
-    "forkFromHere": "Fork dari sini",
-    "copyReply": "Salin balasan",
-    "copiedReply": "Balasan disalin",
+    "copyMessage": "Salin",
+    "copiedMessage": "Disalin",
+    "forkFromHere": "Fork",
+    "copyReply": "Salin",
+    "copiedReply": "Disalin",
     "turnLatencyTitle": "Waktu respons (ujung ke ujung)",
     "activityThinkingFor": "Berpikir selama {{duration}}",
     "activityThought": "Selesai berpikir",

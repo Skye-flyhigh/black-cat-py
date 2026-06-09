@@ -49,7 +49,7 @@ export function useSessions(): {
   error: string | null;
   refresh: () => Promise<void>;
   createChat: (workspaceScope?: WorkspaceScopePayload | null) => Promise<string>;
-  forkChat: (sourceChatId: string, beforeUserIndex: number) => Promise<string>;
+  forkChat: (sourceChatId: string, beforeUserIndex: number, title?: string) => Promise<string>;
   deleteChat: (key: string) => Promise<void>;
 } {
   const { client, token } = useClient();
@@ -177,8 +177,9 @@ export function useSessions(): {
   const forkChat = useCallback(async (
     sourceChatId: string,
     beforeUserIndex: number,
+    title?: string,
   ): Promise<string> => {
-    const chatId = await client.forkChat(sourceChatId, beforeUserIndex);
+    const chatId = await client.forkChat(sourceChatId, beforeUserIndex, title);
     const key = `websocket:${chatId}`;
     optimisticKeysRef.current.add(key);
     setSessions((prev) => [
@@ -188,7 +189,7 @@ export function useSessions(): {
         chatId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        title: "",
+        title: title ?? "",
         preview: "",
         workspaceScope: null,
       },
@@ -240,9 +241,6 @@ export function useSessionHistory(key: string | null): {
     error: string | null;
     hasPendingToolCalls: boolean;
     forkBoundaryMessageCount: number | null;
-    beforeCursor: string | null;
-    hasMoreBefore: boolean;
-    userMessageOffset: number;
     version: number;
   }>({
     key: null,
@@ -252,9 +250,6 @@ export function useSessionHistory(key: string | null): {
     error: null,
     hasPendingToolCalls: false,
     forkBoundaryMessageCount: null,
-    beforeCursor: null,
-    hasMoreBefore: false,
-    userMessageOffset: 0,
     version: 0,
   });
 
@@ -268,9 +263,6 @@ export function useSessionHistory(key: string | null): {
         error: null,
         hasPendingToolCalls: false,
         forkBoundaryMessageCount: null,
-        beforeCursor: null,
-        hasMoreBefore: false,
-        userMessageOffset: 0,
         version: 0,
       });
       return;
@@ -288,9 +280,6 @@ export function useSessionHistory(key: string | null): {
           error: null,
           hasPendingToolCalls: false,
           forkBoundaryMessageCount: null,
-          beforeCursor: null,
-          hasMoreBefore: false,
-          userMessageOffset: 0,
           version: 0,
         });
     (async () => {
@@ -309,15 +298,17 @@ export function useSessionHistory(key: string | null): {
             error: null,
             hasPendingToolCalls: false,
             forkBoundaryMessageCount: null,
-            beforeCursor: null,
-            hasMoreBefore: false,
-            userMessageOffset: 0,
             version: prev.key === key ? prev.version + 1 : 1,
           }));
           return;
         }
-        const ui = persistedMessagesToUi(body.messages);
-        const hasPending = hasPendingToolCallsFromThread(body, ui);
+        const ui: UIMessage[] = body.messages.map((m, idx) => ({
+          ...m,
+          id: m.id ?? `hist-${idx}`,
+          createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
+        }));
+        const last = ui[ui.length - 1];
+        const hasPending = last?.kind === "trace";
         const forkBoundary = typeof body.fork_boundary_message_count === "number"
           ? Math.max(0, Math.min(body.fork_boundary_message_count, ui.length))
           : null;
@@ -329,9 +320,6 @@ export function useSessionHistory(key: string | null): {
           error: null,
           hasPendingToolCalls: hasPending,
           forkBoundaryMessageCount: forkBoundary,
-          beforeCursor: body.page?.before_cursor ?? null,
-          hasMoreBefore: body.page?.has_more_before === true,
-          userMessageOffset: Math.max(0, body.page?.user_message_offset ?? 0),
           version: prev.key === key ? prev.version + 1 : 1,
         }));
       } catch (e) {
@@ -345,9 +333,6 @@ export function useSessionHistory(key: string | null): {
             error: null,
             hasPendingToolCalls: false,
             forkBoundaryMessageCount: null,
-            beforeCursor: null,
-            hasMoreBefore: false,
-            userMessageOffset: 0,
             version: prev.key === key ? prev.version + 1 : 1,
           }));
         } else {
@@ -359,9 +344,6 @@ export function useSessionHistory(key: string | null): {
             error: (e as Error).message,
             hasPendingToolCalls: false,
             forkBoundaryMessageCount: null,
-            beforeCursor: null,
-            hasMoreBefore: false,
-            userMessageOffset: 0,
             version: prev.key === key ? prev.version : 0,
           }));
         }

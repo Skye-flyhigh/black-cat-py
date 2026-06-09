@@ -794,6 +794,7 @@ export function ThreadShell({
           cliApps={cliApps}
           mcpPresets={mcpPresets}
           allMessages={displayMessages}
+          forkBoundaryMessageCount={forkBoundaryMessageCount}
           onOpenFilePreview={historyKey ? handleOpenFilePreview : undefined}
           onForkFromMessage={onForkChat ? handleForkFromMessage : undefined}
         />
