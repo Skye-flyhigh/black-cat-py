@@ -903,7 +903,15 @@ function Shell({
     beforeUserIndex: number,
   ) => {
     try {
-      const chatId = await forkChat(sourceChatId, beforeUserIndex);
+      const sourceSession = sessions.find((session) => session.chatId === sourceChatId);
+      const sourceTitle = sourceSession
+        ? displayTitle(sourceSession, sidebarState.title_overrides, t("chat.newChat"))
+        : t("chat.newChat");
+      const chatId = await forkChat(
+        sourceChatId,
+        beforeUserIndex,
+        t("chat.forkTitle", { title: sourceTitle }),
+      );
       navigate({
         view: "chat",
         activeKey: `websocket:${chatId}`,
@@ -915,7 +923,7 @@ function Shell({
       console.error("Failed to fork chat", e);
       return null;
     }
-  }, [forkChat, navigate]);
+  }, [forkChat, navigate, sessions, sidebarState.title_overrides, t]);
 
   const onNewChat = useCallback(() => {
     navigate(defaultShellRoute());

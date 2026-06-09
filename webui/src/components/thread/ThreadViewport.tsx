@@ -43,6 +43,7 @@ interface ThreadViewportProps {
   showScrollToBottomButton?: boolean;
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
+  forkBoundaryMessageCount?: number | null;
   onOpenFilePreview?: (path: string) => void;
   onForkFromMessage?: (beforeUserIndex: number) => void;
 }
@@ -80,6 +81,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   showScrollToBottomButton = true,
   cliApps = [],
   mcpPresets = [],
+  forkBoundaryMessageCount = null,
   onOpenFilePreview,
   onForkFromMessage,
 }, ref) {
@@ -107,22 +109,13 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
     [messages, visibleMessageCount],
   );
   const hiddenMessageCount = messages.length - visibleMessages.length;
-  const hiddenUserMessageCount =
-    userMessageOffset
-    + (hiddenMessageCount > 0
-      ? messages.slice(0, hiddenMessageCount).filter((message) => message.role === "user").length
-      : 0);
   const visibleForkBoundaryMessageCount =
     forkBoundaryMessageCount !== null && forkBoundaryMessageCount > hiddenMessageCount
       ? forkBoundaryMessageCount - hiddenMessageCount
       : null;
-  const scrollButtonBottom =
-    keyboardInsetBottom
-    + (composerDockHeight > 0
-      ? composerDockHeight + SCROLL_BUTTON_COMPOSER_GAP_PX
-      : DEFAULT_SCROLL_BUTTON_BOTTOM_PX);
-  const scrollViewportStyle =
-    keyboardInsetBottom > 0 ? { bottom: keyboardInsetBottom } : undefined;
+  const scrollButtonBottom = composerDockHeight > 0
+    ? composerDockHeight + SCROLL_BUTTON_COMPOSER_GAP_PX
+    : DEFAULT_SCROLL_BUTTON_BOTTOM_PX;
 
   const cancelScheduledBottomScroll = useCallback(() => {
     for (const id of scrollFrameIdsRef.current) {
@@ -447,6 +440,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
                   hiddenUserMessageCount={hiddenUserMessageCount}
                   cliApps={cliApps}
                   mcpPresets={mcpPresets}
+                  forkBoundaryMessageCount={visibleForkBoundaryMessageCount}
                   onOpenFilePreview={onOpenFilePreview}
                   onForkFromMessage={onForkFromMessage}
                 />
