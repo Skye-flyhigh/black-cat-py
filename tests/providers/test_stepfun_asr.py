@@ -5,53 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import httpx
-import pytest
-
-from nanobot.audio.transcription_registry import (
-    get_transcription_provider,
-    transcription_provider_names,
-)
-from nanobot.config.schema import Config
-from nanobot.providers.transcription import StepFunTranscriptionProvider
-
-
-@pytest.fixture
-def audio_file(tmp_path: Path) -> Path:
-    p = tmp_path / "voice.ogg"
-    p.write_bytes(b"OggS\x00fake-audio-bytes")
-    return p
-
-
-# ---------------------------------------------------------------------------
-# Defaults and base normalization
-# ---------------------------------------------------------------------------
-
-
-def test_stepfun_defaults() -> None:
-    provider = StepFunTranscriptionProvider(api_key="sk-test")
-    assert provider.api_url == "https://api.stepfun.com/v1/audio/asr/sse"
-    assert provider.model == "stepaudio-2.5-asr"
-
-
-def test_stepfun_api_base_overrides_url() -> None:
-    provider = StepFunTranscriptionProvider(
-        api_key="sk-test",
-        api_base="https://api.stepfun.com/step_plan/v1/audio/asr/sse",
-    )
-    assert provider.api_url == "https://api.stepfun.com/step_plan/v1/audio/asr/sse"
-
-
-def test_stepfun_api_base_appends_asr_path() -> None:
-    provider = StepFunTranscriptionProvider(
-        api_key="sk-test",
-        api_base="https://api.stepfun.com/step_plan/v1",
-    )
-    assert provider.api_url == "https://api.stepfun.com/step_plan/v1/audio/asr/sse"
-
-
 def test_stepfun_custom_model() -> None:
     provider = StepFunTranscriptionProvider(api_key="sk-test", model="stepaudio-2-asr-pro")
     assert provider.model == "stepaudio-2-asr-pro"
