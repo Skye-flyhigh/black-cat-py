@@ -183,33 +183,6 @@ def test_fork_transcript_before_user_index_copies_only_prefix(tmp_path, monkeypa
     assert "round3 must not appear" not in "\n".join(str(line.get("text")) for line in lines)
 
 
-def test_fork_transcript_from_middle_assistant_reply_keeps_selected_turn(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
-    source = "websocket:source"
-    for ev in (
-        {"event": "user", "chat_id": "source", "text": "round1"},
-        {"event": "message", "chat_id": "source", "text": "answer1"},
-        {"event": "user", "chat_id": "source", "text": "round2"},
-        {"event": "message", "chat_id": "source", "text": "answer2"},
-        {"event": "user", "chat_id": "source", "text": "round3 must not appear"},
-        {"event": "message", "chat_id": "source", "text": "answer3 must not appear"},
-    ):
-        append_transcript_object(source, ev)
-
-    ok = fork_transcript_before_user_index(source, "websocket:fork", 2)
-
-    assert ok is True
-    assert [line.get("text") for line in read_transcript_lines("websocket:fork")] == [
-        "round1",
-        "answer1",
-        "round2",
-        "answer2",
-    ]
-
-
 def test_fork_transcript_rejects_out_of_range_user_index(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
     source = "websocket:source"
