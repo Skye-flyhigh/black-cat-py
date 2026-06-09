@@ -34,7 +34,6 @@ export interface ThreadViewportHandle {
 
 interface ThreadViewportProps {
   messages: UIMessage[];
-  allMessages?: UIMessage[];
   isStreaming: boolean;
   composer: ReactNode;
   emptyState?: ReactNode;
@@ -72,7 +71,6 @@ export function windowMessages(messages: UIMessage[], visibleCount: number): UIM
 
 export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportProps>(function ThreadViewport({
   messages,
-  allMessages,
   isStreaming,
   composer,
   emptyState,
@@ -109,6 +107,10 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
     [messages, visibleMessageCount],
   );
   const hiddenMessageCount = messages.length - visibleMessages.length;
+  const hiddenUserMessageCount =
+    hiddenMessageCount > 0
+      ? messages.slice(0, hiddenMessageCount).filter((message) => message.role === "user").length
+      : 0;
   const visibleForkBoundaryMessageCount =
     forkBoundaryMessageCount !== null && forkBoundaryMessageCount > hiddenMessageCount
       ? forkBoundaryMessageCount - hiddenMessageCount
@@ -435,9 +437,10 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
               <div className="mx-auto w-full max-w-[49.5rem]">
                 <ThreadMessages
                   messages={visibleMessages}
-                  allMessages={allMessages ?? messages}
                   isStreaming={isStreaming}
+                  hiddenMessageCount={hiddenMessageCount}
                   hiddenUserMessageCount={hiddenUserMessageCount}
+                  onLoadEarlier={loadEarlierMessages}
                   cliApps={cliApps}
                   mcpPresets={mcpPresets}
                   forkBoundaryMessageCount={visibleForkBoundaryMessageCount}
