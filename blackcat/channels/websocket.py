@@ -1065,6 +1065,7 @@ class WebSocketChannel(BaseChannel):
             full_text = "".join(buffered)
             rewritten = self._media.rewrite_local_markdown_images(full_text)
             if delta or rewritten != full_text:
+            if full_text:
                 body["text"] = rewritten
         else:
             body = {
