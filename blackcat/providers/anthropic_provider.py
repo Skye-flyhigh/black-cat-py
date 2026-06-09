@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from blackcat.providers.base import (
+from blackcat.providers.base import (
     LLMProvider,
     LLMResponse,
     ToolCallRequest,

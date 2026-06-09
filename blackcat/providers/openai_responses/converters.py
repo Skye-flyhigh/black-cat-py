@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from blackcat.providers.base import tool_arguments_json_for_replay
+from blackcat.providers.base import tool_arguments_json_for_replay
 
 
 def convert_messages(messages: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:

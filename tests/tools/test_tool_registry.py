@@ -140,6 +140,7 @@ def test_prepare_call_rejects_malformed_json_string_arguments() -> None:
 
     assert tool is not None
     assert params == '{path:"foo.txt"}'
+    assert error is not None
     assert "parameters must be a JSON object" in error
 
 
@@ -158,6 +159,7 @@ def test_prepare_call_rejects_scalar_for_single_required_parameter() -> None:
 
     assert tool is not None
     assert params == "https://example.com"
+    assert error is not None
     assert "parameters must be a JSON object" in error
 
 
@@ -176,6 +178,7 @@ def test_prepare_call_rejects_unquoted_scalar_strings_before_schema_cast() -> No
 
     assert tool is not None
     assert params == "true"
+    assert error is not None
     assert "parameters must be a JSON object" in error
 
 
@@ -214,6 +217,7 @@ def test_prepare_call_treats_none_arguments_as_empty_object() -> None:
 
     assert tool is not None
     assert params == "null"
+    assert error is not None
     assert "parameters must be a JSON object" in error
 
 

@@ -622,6 +622,7 @@ async def test_openai_compat_preserves_extra_content_on_tool_calls() -> None:
 
 def test_openai_compat_parse_preserves_malformed_tool_arguments() -> None:
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     result = provider._parse(_fake_tool_call_response_with_arguments('{path:"foo.txt"}'))
@@ -630,6 +631,7 @@ def test_openai_compat_parse_preserves_malformed_tool_arguments() -> None:
 
 
 def test_openai_compat_parse_preserves_array_tool_arguments() -> None:
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
@@ -1179,6 +1181,8 @@ def test_openai_compat_stringifies_dict_tool_arguments() -> None:
 
 
 def test_openai_compat_repairs_non_json_tool_arguments_string() -> None:
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
+def test_openai_compat_repairs_object_like_history_tool_arguments_string() -> None:
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
