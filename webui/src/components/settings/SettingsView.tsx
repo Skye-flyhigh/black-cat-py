@@ -12,7 +12,6 @@ import {
 import {
   Activity,
   ArrowUpCircle,
-  ArrowUpDown,
   Bot,
   Brain,
   Check,
@@ -2088,10 +2087,7 @@ function VersionCheckRow({ currentVersion }: { currentVersion?: string }) {
         {result?.type === "update" ? (
           <span className="inline-flex items-center gap-1.5 text-[12px] text-blue-600 dark:text-blue-300">
             <ArrowUpCircle className="h-3 w-3" aria-hidden />
-            {t("settings.about.updateAvailable", {
-              defaultValue: "Update available v{{version}}",
-              version: result.latestVersion,
-            })}
+            {tx("settings.about.updateAvailable", "Update available")}{result.latestVersion && ` v${result.latestVersion}`}
             {result.pypiUrl ? (
               <a
                 href={result.pypiUrl}
