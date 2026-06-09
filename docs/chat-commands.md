@@ -43,7 +43,7 @@ Use `/model` to inspect the current runtime model:
 /model
 ```
 
-The response shows the current model, the current preset, and the available preset names. `default` is always available and represents the model settings from `agents.defaults.*`.
+The response shows the current model, the current preset, and the available preset names. Named presets come from the top-level `modelPresets` config and are the recommended way to configure model choices. `default` is always available and represents the model settings from direct `agents.defaults.*` fields.
 
 To switch presets for future turns:
 
@@ -64,8 +64,8 @@ The gateway wakes up every 30 minutes and checks `HEARTBEAT.md` in your workspac
 ```markdown
 ## Active Tasks
 
-- [ ] Check weather forecast and send a summary
-- [ ] Scan inbox for urgent emails
+- Check weather forecast and send a summary
+- Scan inbox for urgent emails
 ```
 
 The agent can also manage this file itself — ask it to "add a periodic task" and it will update `HEARTBEAT.md` for you. Completed tasks should be deleted from the file, not moved to another section.

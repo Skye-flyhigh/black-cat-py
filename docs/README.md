@@ -2,13 +2,17 @@
 
 For the latest documentation, visit [blackcat.wiki](https://blackcat.wiki/docs/latest/getting-started/blackcat-overview).
 
-The pages in this directory track the current repository and may move faster than the published website.
+If you have never used a terminal or edited a config file before, start with [`start-without-technical-background.md`](./start-without-technical-background.md). Otherwise, start with [`quick-start.md`](./quick-start.md) and get one local `nanobot agent -m "Hello!"` reply working before connecting chat apps, WebUI, Docker, or custom tools.
 
-## Core Docs
+Most JSON examples in these docs are snippets to merge into `~/.nanobot/config.json`, not full replacement files.
 
-Start here for setup, everyday usage, and deployment.
+Provider examples are concrete walkthroughs, not rankings or endorsements. Use the provider whose key, endpoint, and model ID you actually control.
 
-| Topic | Repo docs | What it covers |
+If you find a docs mistake, outdated command, or confusing step, please open an issue: <https://github.com/HKUDS/nanobot/issues>.
+
+## Pick a Track
+
+| You are | Start with | Then use |
 |---|---|---|
 | Install and quick start | [`quick-start.md`](./quick-start.md) | Installation, onboarding, and first-run setup |
 | Chat apps | [`chat-apps.md`](./chat-apps.md) | Connect blackcat to Telegram, Discord, WeChat, and more |
@@ -22,11 +26,9 @@ Start here for setup, everyday usage, and deployment.
 | OpenAI-compatible API | [`openai-api.md`](./openai-api.md) | Local API endpoints, request format, and file uploads |
 | Deployment | [`deployment.md`](./deployment.md) | Docker, Linux service, and macOS LaunchAgent setup |
 
-## Advanced Docs
+## Start Here
 
-Use these when you want deeper customization, integration, or extension details.
-
-| Topic | Repo docs | What it covers |
+| Goal | Read | Outcome |
 |---|---|---|
 | Memory | [`memory.md`](./memory.md) | How blackcat stores, consolidates, and restores memory |
 | Python SDK | [`python-sdk.md`](./python-sdk.md) | Use blackcat programmatically from Python |

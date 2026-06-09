@@ -67,7 +67,7 @@ blackcat agent -c ~/.blackcat-telegram/config.json -w /tmp/blackcat-telegram-tes
 2. Set a different `agents.defaults.workspace` for that instance.
 3. Start the instance with `--config`.
 
-Example config:
+Example config fragment:
 
 ```json
 {
@@ -90,6 +90,8 @@ Example config:
 }
 ```
 
+The copied base config can keep using the same `modelPresets` and `agents.defaults.modelPreset`. If this instance needs a different model, add another preset and set `agents.defaults.modelPreset` to that preset name.
+
 Start separate instances:
 
 ```bash
@@ -97,10 +99,7 @@ blackcat gateway --config ~/.blackcat-telegram/config.json
 blackcat gateway --config ~/.blackcat-discord/config.json
 ```
 
-Each gateway instance also exposes a lightweight HTTP health endpoint on
-`gateway.host:gateway.port`. By default, the gateway binds to `127.0.0.1`,
-so the endpoint stays local unless you explicitly set `gateway.host` to a
-public or LAN-facing address.
+Each gateway instance also exposes a lightweight HTTP health endpoint on `gateway.host:gateway.port`. By default, the gateway binds to `127.0.0.1`, so the endpoint stays local unless you explicitly set `gateway.host` to a public or LAN-facing address.
 
 - `GET /health` returns `{"status":"ok"}`
 - Other paths return `404`
@@ -123,4 +122,4 @@ blackcat gateway --config ~/.blackcat-telegram/config.json --workspace /tmp/blac
 - Each instance must use a different port if they run at the same time
 - Use a different workspace per instance if you want isolated memory, sessions, and skills
 - `--workspace` overrides the workspace defined in the config file
-- Cron jobs and runtime media/state are derived from the config directory
+- Cron jobs are stored in the active workspace; runtime media/state is derived from the config directory
