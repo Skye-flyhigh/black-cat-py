@@ -249,7 +249,7 @@ class ProvidersConfig(Base):
     def convert_extra_providers(self):
         """Convert extra fields (custom providers) to ProviderConfig objects."""
         if self.model_extra:
-            from nanobot.providers.registry import find_by_name
+            from blackcat.providers.registry import find_by_name
 
             for key, value in self.model_extra.items():
                 if spec := find_by_name(key):

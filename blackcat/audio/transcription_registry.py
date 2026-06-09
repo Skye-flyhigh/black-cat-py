@@ -67,7 +67,7 @@ TRANSCRIPTION_PROVIDERS: tuple[TranscriptionProviderSpec, ...] = (
     TranscriptionProviderSpec(
         name="stepfun",
         default_model="stepaudio-2.5-asr",
-        adapter="nanobot.providers.transcription:StepFunTranscriptionProvider",
+        adapter="blackcat.providers.transcription:StepFunTranscriptionProvider",
     ),
     TranscriptionProviderSpec(
         name="assemblyai",
@@ -77,13 +77,13 @@ TRANSCRIPTION_PROVIDERS: tuple[TranscriptionProviderSpec, ...] = (
     TranscriptionProviderSpec(
         name="siliconflow",
         default_model="FunAudioLLM/SenseVoiceSmall",
-        adapter="nanobot.providers.transcription:OpenAITranscriptionProvider",
+        adapter="blackcat.providers.transcription:OpenAITranscriptionProvider",
         aliases=("silicon",),
     ),
     TranscriptionProviderSpec(
         name="siliconflow",
         default_model="FunAudioLLM/SenseVoiceSmall",
-        adapter="nanobot.providers.transcription:OpenAITranscriptionProvider",
+        adapter="blackcat.providers.transcription:OpenAITranscriptionProvider",
         aliases=("silicon",),
     ),
 )
