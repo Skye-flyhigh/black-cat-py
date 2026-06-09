@@ -394,6 +394,7 @@ def test_apply_post_actions_batch_delete_with_post_action_expunge_true_no_uidplu
 
     fake = FakeIMAP()
     monkeypatch.setattr("blackcat.channels.email.imaplib.IMAP4_SSL", lambda _h, _p: fake)
+    monkeypatch.setattr("blackcat.channels.email.imaplib.IMAP4_SSL", lambda _h, _p: fake)
 
     channel = EmailChannel(_make_config(post_action="delete", post_action_expunge=True), MessageBus())
     channel._apply_post_actions_batch(["123", "124"])
