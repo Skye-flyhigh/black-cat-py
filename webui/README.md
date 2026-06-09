@@ -1,10 +1,6 @@
-# nanobot WebUI Source
+# nanobot WebUI
 
-This directory contains the React/TypeScript source for the nanobot WebUI. If
-you installed `nanobot-ai` from PyPI and only want to use the bundled browser UI,
-read the user guide in [`docs/webui.md`](../docs/webui.md). You do not need
-Node.js, Bun, Vite, or anything in this directory unless you are changing the
-frontend.
+The WebUI is the browser workbench served by `nanobot gateway`. If you installed `nanobot-ai` from PyPI, the WebUI bundle is already included; this `webui/` source tree is only needed when you are changing the frontend.
 
 For the project overview, install guide, and general docs map, see the root [`README.md`](../README.md) and [`docs/README.md`](../docs/README.md).
 
@@ -12,14 +8,46 @@ For the project overview, install guide, and general docs map, see the root [`RE
 
 | Goal | Start with | Opens at |
 |---|---|---|
-| Use the bundled browser UI | [`docs/webui.md`](../docs/webui.md) | `http://127.0.0.1:8765` |
-| Use the WebUI from another device | [`docs/webui.md#lan-access`](../docs/webui.md#lan-access) | `http://<your-ip>:8765` |
+| Use the bundled browser UI | [Just want to use the WebUI?](#just-want-to-use-the-webui) | `http://127.0.0.1:8765` |
+| Use the WebUI from another device | [Access from another device (LAN)](#access-from-another-device-lan) | `http://<your-ip>:8765` |
 | Change WebUI source code | [Develop the WebUI (Vite HMR)](#develop-the-webui-vite-hmr) | `http://127.0.0.1:5173` |
 | Debug setup failures | [`docs/troubleshooting.md#webui-problems`](../docs/troubleshooting.md#webui-problems) | Diagnosis order and common fixes |
 
-The source app is built with Vite + React 18 + TypeScript + Tailwind 3 +
-shadcn/ui. It talks to the gateway over the WebSocket multiplex protocol and
-reads session metadata from the embedded REST surface on the same port.
+## Pick a Path
+
+If you installed nanobot via `python -m pip install nanobot-ai`, the WebUI is **already bundled** in the wheel. You do **not** need Node.js, Bun, Vite, or anything in this directory unless you are changing the WebUI source code.
+
+First prove the provider path:
+
+```bash
+nanobot agent -m "Hello!"
+```
+
+If the shell cannot find `nanobot`, use the module form from the same Python environment:
+
+```bash
+python -m nanobot agent -m "Hello!"
+```
+
+Then merge this WebSocket snippet into your existing `~/.nanobot/config.json` instead of replacing the whole file:
+
+```json
+{ "channels": { "websocket": { "enabled": true } } }
+```
+
+If you are new to JSON snippets, see [`docs/start-without-technical-background.md#how-to-merge-json-snippets`](../docs/start-without-technical-background.md#how-to-merge-json-snippets).
+
+Start the gateway:
+
+```bash
+nanobot gateway
+```
+
+Leave this terminal running while you use the WebUI. Closing it stops the browser UI and WebSocket connection.
+
+Open [`http://127.0.0.1:8765`](http://127.0.0.1:8765). The gateway's `18790` port is only the health endpoint, not the browser UI. For setup failures, use [`docs/troubleshooting.md`](../docs/troubleshooting.md#webui-problems).
+
+This `webui/` tree is for people **changing the WebUI source code**. It is built with Vite + React 18 + TypeScript + Tailwind 3 + shadcn/ui, talks to the gateway over the WebSocket multiplex protocol, and reads session metadata from the embedded REST surface on the same port.
 
 ## Layout
 
