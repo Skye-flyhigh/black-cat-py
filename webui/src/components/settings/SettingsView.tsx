@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  ExternalLink,
   Gem,
   Globe2,
   Grid3X3,
@@ -1640,7 +1641,7 @@ function VersionCheckRow({ currentVersion }: { currentVersion?: string }) {
           {tx("settings.about.version", "Version")}
         </div>
         <div className="mt-0.5 text-[12px] leading-5 text-muted-foreground">
-          {currentVersion ? `v${currentVersion}` : "blackcat"}
+          {currentVersion ? `v${currentVersion}` : "nanobot"}
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
@@ -1669,10 +1670,7 @@ function VersionCheckRow({ currentVersion }: { currentVersion?: string }) {
         {result?.type === "update" ? (
           <span className="inline-flex items-center gap-1.5 text-[12px] text-blue-600 dark:text-blue-300">
             <ArrowUpCircle className="h-3 w-3" aria-hidden />
-            {t("settings.about.updateAvailable", {
-              defaultValue: "Update available v{{version}}",
-              version: result.latestVersion,
-            })}
+            {tx("settings.about.updateAvailable", "Update available")}{result.latestVersion && ` v${result.latestVersion}`}
             {result.pypiUrl ? (
               <a
                 href={result.pypiUrl}
