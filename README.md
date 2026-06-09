@@ -49,6 +49,17 @@ Built on lightweight [nanobot](https://github.com/HKUDS/nanobot), extended with 
   <a href="https://platform.minimaxi.com/subscribe/token-plan?code=GILTJpMTqZ&source=link"><img alt="MiniMax" height="40" src="https://mintcdn.com/minimax-zh/1UjvBcdoC6r0UeyA/logo/light.svg?fit=max&auto=format&n=1UjvBcdoC6r0UeyA&q=85&s=672d724b639b2d88d0702fae329ea4f8"></a>
 </p>
 
+## Start Here
+
+| You want to... | Go to |
+|---|---|
+| Install nanobot with no terminal/config background | [Start Without Technical Background](./docs/start-without-technical-background.md) |
+| Install quickly and get one CLI reply | [Install](#-install) and [Quick Start](#-quick-start) |
+| Open the bundled browser UI after the CLI works | [WebUI](#-webui) |
+| Connect Telegram, Discord, WeChat, Slack, Email, or another chat app | [Chat Apps](./docs/chat-apps.md) |
+| Configure providers, fallback models, Langfuse, MCP, web tools, or security | [Docs](./docs/README.md) and [Configuration](./docs/configuration.md) |
+| Understand or extend the internals | [Architecture](./docs/architecture.md) and [Development](./docs/development.md) |
+
 ## 📢 News
 
 > [!CAUTION]
@@ -449,6 +460,8 @@ Black Cat integrates with VS Code via the **lens** extension for Language Server
 1. Install the lens VS Code extension (from `/path/to/cloned/repo/lens-mcp` or marketplace)
 2. The extension auto-starts an HTTP bridge on port 8765
 3. Enable lens in your blackcat config:
+
+Merge this block into your existing config:
 
 Merge this block into your existing config:
 

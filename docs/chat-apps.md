@@ -38,6 +38,42 @@ If `nanobot channels status` does not show the channel as enabled, the config sn
 
 > `["*"]` allows anyone who can reach that channel to talk to the bot. Use it only when that is intentional, or temporarily while testing in a private sandbox.
 
+Before configuring a chat app, make sure the local CLI path works:
+
+```bash
+nanobot agent -m "Hello!"
+```
+
+If that fails, fix installation, config, provider, or model setup first with [`quick-start.md`](./quick-start.md), [`providers.md`](./providers.md), and [`troubleshooting.md`](./troubleshooting.md). Chat apps require `nanobot gateway` to stay running after the channel is configured.
+
+Most examples below are snippets to merge into `~/.nanobot/config.json`.
+
+## Common Setup Pattern
+
+Every chat app uses the same shape:
+
+1. Create or prepare the bot/account in the chat platform.
+2. Copy the token, secret, QR login state, webhook URL, or account ID that platform gives you.
+3. Merge that platform's JSON snippet into `~/.nanobot/config.json`.
+4. Keep access control narrow at first with `allowFrom` or the platform-specific allow list.
+5. Check that nanobot can see the configured channel:
+
+```bash
+nanobot channels status
+```
+
+6. Start the gateway and leave that terminal running:
+
+```bash
+nanobot gateway
+```
+
+7. Send a message from the allowed account. In group chats, follow that channel's `groupPolicy` behavior: many channels default to mention-only, while Matrix and WhatsApp default to open group replies.
+
+If `nanobot channels status` does not show the channel as enabled, the config snippet is in the wrong place, the channel name is misspelled, or the config file you edited is not the one nanobot is reading. If the channel is enabled but messages do not arrive, run `nanobot gateway --verbose` and compare the platform-side credentials, event permissions, and allow lists.
+
+> `["*"]` allows anyone who can reach that channel to talk to the bot. Use it only when that is intentional, or temporarily while testing in a private sandbox.
+
 | Channel | What you need |
 |---------|---------------|
 | **Telegram** | Bot token from @BotFather |
