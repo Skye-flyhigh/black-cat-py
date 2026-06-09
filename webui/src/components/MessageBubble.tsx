@@ -6,7 +6,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Check, ChevronRight, Clock3, Copy, ImageIcon, Sparkles, Wrench } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Clock3,
+  Copy,
+  ImageIcon,
+  Sparkles,
+  Wrench,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AttachmentTile } from "@/components/AttachmentTile";
@@ -40,6 +48,26 @@ interface MessageBubbleProps {
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
   onOpenFilePreview?: (path: string) => void;
+}
+
+function ForkArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M5 19c8 0 8-14 16-14" />
+      <path d="M14 5h7v7" />
+      <path d="M5 5c5 0 7 3 9 7" />
+      <path d="M14 12h5v-5" />
+    </svg>
+  );
 }
 
 /**
@@ -217,7 +245,7 @@ export function MessageBubble({
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         )}
                       >
-                        <GitFork className="h-4 w-4" aria-hidden />
+                        <ForkArrowIcon className="h-4 w-4" />
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="top" align="center">{forkLabel}</TooltipContent>
