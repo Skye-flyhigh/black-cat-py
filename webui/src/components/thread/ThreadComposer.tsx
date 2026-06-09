@@ -1749,7 +1749,6 @@ export function ThreadComposer({
                       disabled={voiceRecorder.buttonDisabled}
                       aria-label={voiceButtonLabel}
                       aria-keyshortcuts={VOICE_SHORTCUT_ARIA}
-                      title={voiceButtonTooltip}
                       onPointerDown={voiceRecorder.beginPress}
                       onPointerUp={voiceRecorder.endPress}
                       onPointerCancel={voiceRecorder.endPress}
