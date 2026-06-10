@@ -80,6 +80,12 @@ TRANSCRIPTION_PROVIDERS: tuple[TranscriptionProviderSpec, ...] = (
         adapter="nanobot.providers.transcription:OpenAITranscriptionProvider",
         aliases=("silicon",),
     ),
+    TranscriptionProviderSpec(
+        name="siliconflow",
+        default_model="FunAudioLLM/SenseVoiceSmall",
+        adapter="nanobot.providers.transcription:OpenAITranscriptionProvider",
+        aliases=("silicon",),
+    ),
 )
 
 _BY_NAME = {spec.name: spec for spec in TRANSCRIPTION_PROVIDERS}
