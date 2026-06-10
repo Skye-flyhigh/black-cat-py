@@ -942,7 +942,10 @@ def test_openai_compat_build_kwargs_uses_gpt5_safe_parameters() -> None:
         ("foo3-mini", "max_tokens"),
         ("foo4-mini", "max_tokens"),
         ("o3-mini", "max_completion_tokens"),
+        ("o4-mini", "max_completion_tokens"),
         ("gpt-4", "max_tokens"),
+        ("foo3-mini", "max_tokens"),
+        ("foo4-mini", "max_tokens"),
     ],
 )
 def test_openai_compat_build_kwargs_max_completion_tokens_by_model_name(
