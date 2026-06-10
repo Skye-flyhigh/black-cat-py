@@ -3,6 +3,7 @@ import json
 import pytest
 
 from blackcat.config.loader import load_config
+from blackcat.config.loader import load_config
 
 
 def test_load_config_missing_file_uses_defaults(tmp_path) -> None:
