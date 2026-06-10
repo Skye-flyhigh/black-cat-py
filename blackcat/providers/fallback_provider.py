@@ -171,6 +171,7 @@ class FallbackProvider(LLMProvider):
                         await on_stream_recover()
                     else:
                         kwargs["on_content_delta"] = None
+                    kwargs["on_content_delta"] = None
                 else:
                     logger.warning(
                         "Primary model error but content already streamed; skipping failover"

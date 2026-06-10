@@ -885,6 +885,15 @@ class LLMProvider(ABC):
                         kw["on_thinking_delta"] = None
                         kw["on_tool_call_delta"] = None
                         should_retry_guard = None
+                    logger.warning(
+                        "LLM stream stalled after content was emitted; "
+                        "suppressing delta callbacks and retrying"
+                    )
+                    kw.setdefault("on_content_delta", None)
+                    kw["on_content_delta"] = None
+                    kw["on_thinking_delta"] = None
+                    kw["on_tool_call_delta"] = None
+                    should_retry_guard = None
                 else:
                     logger.warning(
                         "LLM stream failed after content was emitted; skipping retry"
