@@ -28,6 +28,9 @@ from blackcat.utils.logging_bridge import redirect_lib_logging
 if TYPE_CHECKING:
     from lark_oapi.api.im.v1.model import MentionEvent, P2ImMessageReceiveV1
 
+if TYPE_CHECKING:
+    from lark_oapi.api.im.v1.model import MentionEvent, P2ImMessageReceiveV1
+
 FEISHU_AVAILABLE = importlib.util.find_spec("lark_oapi") is not None
 
 
