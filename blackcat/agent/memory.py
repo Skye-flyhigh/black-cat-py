@@ -35,6 +35,8 @@ class MemoryStore:
     """Pure file I/O for memory files: MEMORY.md, history.jsonl, SOUL.md, USER.md."""
 
     _DEFAULT_MAX_HISTORY = 1000
+    _INTERNAL_HISTORY_SESSION_PREFIXES = ("cron:", "dream:")
+    _INTERNAL_HISTORY_SESSION_KEYS = {"heartbeat"}
     _LEGACY_ENTRY_START_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2}[^\]]*)\]\s*")
     _LEGACY_TIMESTAMP_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\]\s*")
     _LEGACY_RAW_MESSAGE_RE = re.compile(
@@ -227,7 +229,13 @@ class MemoryStore:
 
     # -- history.jsonl — append-only, JSONL format ---------------------------
 
-    def append_history(self, entry: str, *, max_chars: int | None = None) -> int:
+    def append_history(
+        self,
+        entry: str,
+        *,
+        max_chars: int | None = None,
+        session_key: str | None = None,
+    ) -> int:
         """Append *entry* to history.jsonl and return its auto-incrementing cursor.
 
         Entries are passed through `strip_think` to drop template-level leaks
@@ -267,6 +275,8 @@ class MemoryStore:
                     cursor,
                 )
             record = {"cursor": cursor, "timestamp": ts, "content": content}
+            if session_key:
+                record["session_key"] = session_key
             with open(self.history_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
             self._cursor_file.write_text(str(cursor), encoding="utf-8")
@@ -336,6 +346,36 @@ class MemoryStore:
     def read_unprocessed_history(self, since_cursor: int) -> list[dict[str, Any]]:
         """Return history entries with a valid cursor > *since_cursor*."""
         return [e for e, c in self._iter_valid_entries() if c > since_cursor]
+
+    @classmethod
+    def _is_internal_history_session(cls, session_key: str | None) -> bool:
+        if not session_key:
+            return False
+        return (
+            session_key in cls._INTERNAL_HISTORY_SESSION_KEYS
+            or session_key.startswith(cls._INTERNAL_HISTORY_SESSION_PREFIXES)
+        )
+
+    def read_recent_history_for_prompt(
+        self,
+        since_cursor: int,
+        *,
+        session_key: str | None,
+        unified_session: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return unprocessed history entries safe to inject into a turn prompt."""
+        entries = self.read_unprocessed_history(since_cursor=since_cursor)
+        if session_key is None:
+            return entries
+        if not unified_session:
+            return [e for e in entries if e.get("session_key") == session_key]
+
+        return [
+            entry
+            for entry in entries
+            if (entry_session := entry.get("session_key")) == session_key
+            or not self._is_internal_history_session(entry_session)
+        ]
 
     def compact_history(self) -> None:
         """Drop oldest entries if the file exceeds *max_history_entries*."""
@@ -504,13 +544,20 @@ class MemoryStore:
             )
         return "\n".join(lines)
 
-    def raw_archive(self, messages: list[dict], *, max_chars: int | None = None) -> None:
+    def raw_archive(
+        self,
+        messages: list[dict],
+        *,
+        max_chars: int | None = None,
+        session_key: str | None = None,
+    ) -> None:
         """Fallback: dump raw messages to history.jsonl without LLM summarization."""
         limit = max_chars if max_chars is not None else _RAW_ARCHIVE_MAX_CHARS
         formatted = truncate_text(self._format_messages(messages), limit)
         self.append_history(
             f"[RAW] {len(messages)} messages\n"
-            f"{formatted}"
+            f"{formatted}",
+            session_key=session_key,
         )
         logger.warning(
             "Memory consolidation degraded: raw-archived {} messages", len(messages)
