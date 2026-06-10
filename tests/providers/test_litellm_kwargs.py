@@ -941,6 +941,8 @@ def test_openai_compat_build_kwargs_uses_gpt5_safe_parameters() -> None:
         ("gpt-4", "max_tokens"),
         ("foo3-mini", "max_tokens"),
         ("foo4-mini", "max_tokens"),
+        ("o3-mini", "max_completion_tokens"),
+        ("gpt-4", "max_tokens"),
     ],
 )
 def test_openai_compat_build_kwargs_max_completion_tokens_by_model_name(
@@ -948,6 +950,7 @@ def test_openai_compat_build_kwargs_max_completion_tokens_by_model_name(
     expected_key: str,
 ) -> None:
     spec = find_by_name("custom")
+    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider(
             api_key="sk-test-key",
