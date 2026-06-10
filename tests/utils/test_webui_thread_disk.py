@@ -12,9 +12,20 @@ def test_delete_webui_thread_removes_legacy_json_and_transcript(tmp_path, monkey
     json_path = webui_thread_file_path(key)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.write_text('{"x":1}', encoding="utf-8")
-    append_transcript_object(key, {"event": "user", "chat_id": "k1", "text": "hi"})
+    for idx in range(1, 5):
+        append_transcript_object(
+            key,
+            {"event": "user", "chat_id": "k1", "text": f"question {idx} " + ("x" * 24)},
+        )
+        append_transcript_object(
+            key,
+            {"event": "message", "chat_id": "k1", "text": f"answer {idx} " + ("y" * 24)},
+        )
+        append_transcript_object(key, {"event": "turn_end", "chat_id": "k1"})
     assert webui_transcript_path(key).is_file()
+    assert webui_transcript_segments_dir(key).is_dir()
     assert delete_webui_thread(key) is True
     assert not json_path.is_file()
     assert not webui_transcript_path(key).is_file()
+    assert not webui_transcript_segments_dir(key).exists()
     assert delete_webui_thread(key) is False
