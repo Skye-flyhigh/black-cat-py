@@ -227,6 +227,7 @@ async def test_chat_stream_with_retry_retries_timeout_in_new_stream_segment(
         recoveries.append("recover")
 
     monkeypatch.setattr("blackcat.providers.base.asyncio.sleep", _fake_sleep)
+    monkeypatch.setattr("blackcat.providers.base.asyncio.sleep", _fake_sleep)
 
     response = await provider.chat_stream_with_retry(
         messages=[{"role": "user", "content": "hello"}],

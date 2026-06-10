@@ -338,6 +338,7 @@ class TestFallbackOnStreamStalledAfterContent:
         result = await fb.chat_stream(
             messages=[{"role": "user", "content": "hi"}],
             on_content_delta=_delta,
+            on_stream_recover=_recover,
         )
         assert result.finish_reason == "stop"
         assert result.content == "fallback ok"
