@@ -875,6 +875,7 @@ export interface WebuiThreadPersistedPayload {
   savedAt?: string;
   messages: UIMessage[];
   fork_boundary_message_count?: number;
+  page?: WebuiThreadPagePayload;
   workspace_scope?: WorkspaceScopePayload;
 }
 

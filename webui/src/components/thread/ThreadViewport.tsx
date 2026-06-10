@@ -47,6 +47,10 @@ interface ThreadViewportProps {
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
   forkBoundaryMessageCount?: number | null;
+  hasMoreBefore?: boolean;
+  loadingOlder?: boolean;
+  userMessageOffset?: number;
+  onLoadOlder?: () => Promise<void> | void;
   onOpenFilePreview?: (path: string) => void;
   onForkFromMessage?: (beforeUserIndex: number) => void;
 }
@@ -84,6 +88,10 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   cliApps = [],
   mcpPresets = [],
   forkBoundaryMessageCount = null,
+  hasMoreBefore = false,
+  loadingOlder = false,
+  userMessageOffset = 0,
+  onLoadOlder,
   onOpenFilePreview,
   onForkFromMessage,
 }, ref) {
@@ -112,9 +120,10 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   );
   const hiddenMessageCount = messages.length - visibleMessages.length;
   const hiddenUserMessageCount =
-    hiddenMessageCount > 0
+    userMessageOffset
+    + (hiddenMessageCount > 0
       ? messages.slice(0, hiddenMessageCount).filter((message) => message.role === "user").length
-      : 0;
+      : 0);
   const visibleForkBoundaryMessageCount =
     forkBoundaryMessageCount !== null && forkBoundaryMessageCount > hiddenMessageCount
       ? forkBoundaryMessageCount - hiddenMessageCount
@@ -207,22 +216,6 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
     if (hiddenMessageCount <= 0 && !hasMoreBefore) return;
     loadEarlierMessages();
   }, [hasMessages, hasMoreBefore, hiddenMessageCount, loadEarlierMessages]);
-
-  const jumpToUserPrompt = useCallback((promptId: string) => {
-    const scrollEl = scrollRef.current;
-    if (scrollEl && findPromptElement(scrollEl, promptId)) {
-      jumpToPrompt(scrollEl, promptId);
-      return;
-    }
-    const index = messages.findIndex((message) => message.id === promptId);
-    if (index < 0) return;
-    pendingPromptJumpRef.current = promptId;
-    userReadingHistoryRef.current = true;
-    setAtBottom(false);
-    setVisibleMessageCount((count) => Math.max(count, messages.length - index));
-  }, [messages]);
-
-  useImperativeHandle(ref, () => ({ jumpToUserPrompt }), [jumpToUserPrompt]);
 
   const jumpToUserPrompt = useCallback((promptId: string) => {
     const scrollEl = scrollRef.current;
@@ -356,15 +349,6 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   }, [visibleMessages.length]);
 
   useLayoutEffect(() => {
-    const promptId = pendingPromptJumpRef.current;
-    const scrollEl = scrollRef.current;
-    if (!promptId || !scrollEl || !findPromptElement(scrollEl, promptId)) return;
-    pendingPromptJumpRef.current = null;
-    const frame = window.requestAnimationFrame(() => jumpToPrompt(scrollEl, promptId));
-    return () => window.cancelAnimationFrame(frame);
-  }, [visibleMessages.length]);
-
-  useLayoutEffect(() => {
     if (!pendingConversationScrollRef.current) return;
     if (!conversationKey) {
       pendingConversationScrollRef.current = false;
@@ -442,9 +426,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
                 <ThreadMessages
                   messages={visibleMessages}
                   isStreaming={isStreaming}
-                  hiddenMessageCount={hiddenMessageCount}
                   hiddenUserMessageCount={hiddenUserMessageCount}
-                  onLoadEarlier={loadEarlierMessages}
                   cliApps={cliApps}
                   mcpPresets={mcpPresets}
                   forkBoundaryMessageCount={visibleForkBoundaryMessageCount}

@@ -22,7 +22,6 @@ import type {
 const EMPTY_MESSAGES: UIMessage[] = [];
 const INITIAL_HISTORY_PAGE_LIMIT = 160;
 const OLDER_HISTORY_PAGE_LIMIT = 120;
-const CHAT_CREATE_TIMEOUT_MS = 60_000;
 
 function persistedMessagesToUi(messages: UIMessage[]): UIMessage[] {
   return messages.map((m, idx) => ({
@@ -30,16 +29,6 @@ function persistedMessagesToUi(messages: UIMessage[]): UIMessage[] {
     id: m.id ?? `hist-${idx}`,
     createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
   }));
-}
-
-function hasPendingToolCallsFromThread(
-  body: Awaited<ReturnType<typeof fetchWebuiThread>>,
-  messages: UIMessage[],
-): boolean {
-  if (typeof body?.has_pending_tool_calls === "boolean") {
-    return body.has_pending_tool_calls;
-  }
-  return hasPendingAgentActivity(messages);
 }
 
 /** Sidebar state: fetches the full session list and exposes create / delete actions. */
@@ -241,6 +230,9 @@ export function useSessionHistory(key: string | null): {
     error: string | null;
     hasPendingToolCalls: boolean;
     forkBoundaryMessageCount: number | null;
+    beforeCursor: string | null;
+    hasMoreBefore: boolean;
+    userMessageOffset: number;
     version: number;
   }>({
     key: null,
@@ -250,6 +242,9 @@ export function useSessionHistory(key: string | null): {
     error: null,
     hasPendingToolCalls: false,
     forkBoundaryMessageCount: null,
+    beforeCursor: null,
+    hasMoreBefore: false,
+    userMessageOffset: 0,
     version: 0,
   });
 
@@ -263,6 +258,9 @@ export function useSessionHistory(key: string | null): {
         error: null,
         hasPendingToolCalls: false,
         forkBoundaryMessageCount: null,
+        beforeCursor: null,
+        hasMoreBefore: false,
+        userMessageOffset: 0,
         version: 0,
       });
       return;
@@ -280,6 +278,9 @@ export function useSessionHistory(key: string | null): {
           error: null,
           hasPendingToolCalls: false,
           forkBoundaryMessageCount: null,
+          beforeCursor: null,
+          hasMoreBefore: false,
+          userMessageOffset: 0,
           version: 0,
         });
     (async () => {
@@ -298,15 +299,14 @@ export function useSessionHistory(key: string | null): {
             error: null,
             hasPendingToolCalls: false,
             forkBoundaryMessageCount: null,
+            beforeCursor: null,
+            hasMoreBefore: false,
+            userMessageOffset: 0,
             version: prev.key === key ? prev.version + 1 : 1,
           }));
           return;
         }
-        const ui: UIMessage[] = body.messages.map((m, idx) => ({
-          ...m,
-          id: m.id ?? `hist-${idx}`,
-          createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
-        }));
+        const ui = persistedMessagesToUi(body.messages);
         const last = ui[ui.length - 1];
         const hasPending = last?.kind === "trace";
         const forkBoundary = typeof body.fork_boundary_message_count === "number"
@@ -320,6 +320,9 @@ export function useSessionHistory(key: string | null): {
           error: null,
           hasPendingToolCalls: hasPending,
           forkBoundaryMessageCount: forkBoundary,
+          beforeCursor: body.page?.before_cursor ?? null,
+          hasMoreBefore: body.page?.has_more_before === true,
+          userMessageOffset: Math.max(0, body.page?.user_message_offset ?? 0),
           version: prev.key === key ? prev.version + 1 : 1,
         }));
       } catch (e) {
@@ -333,6 +336,9 @@ export function useSessionHistory(key: string | null): {
             error: null,
             hasPendingToolCalls: false,
             forkBoundaryMessageCount: null,
+            beforeCursor: null,
+            hasMoreBefore: false,
+            userMessageOffset: 0,
             version: prev.key === key ? prev.version + 1 : 1,
           }));
         } else {
@@ -344,6 +350,9 @@ export function useSessionHistory(key: string | null): {
             error: (e as Error).message,
             hasPendingToolCalls: false,
             forkBoundaryMessageCount: null,
+            beforeCursor: null,
+            hasMoreBefore: false,
+            userMessageOffset: 0,
             version: prev.key === key ? prev.version : 0,
           }));
         }
@@ -383,12 +392,13 @@ export function useSessionHistory(key: string | null): {
           ? null
           : prev.forkBoundaryMessageCount + older.length;
         const nextMessages = [...older, ...prev.messages];
+        const last = nextMessages[nextMessages.length - 1];
         return {
           ...prev,
           messages: nextMessages,
           loadingOlder: false,
           error: null,
-          hasPendingToolCalls: hasPendingAgentActivity(nextMessages),
+          hasPendingToolCalls: last?.kind === "trace",
           forkBoundaryMessageCount: olderBoundary ?? shiftedBoundary,
           beforeCursor: body.page?.before_cursor ?? null,
           hasMoreBefore: body.page?.has_more_before === true,

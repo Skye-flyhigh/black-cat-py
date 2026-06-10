@@ -9,9 +9,7 @@ interface ThreadMessagesProps {
   messages: UIMessage[];
   /** When true, agent turn still in flight — keeps activity timeline expanded. */
   isStreaming?: boolean;
-  hiddenMessageCount?: number;
   hiddenUserMessageCount?: number;
-  onLoadEarlier?: () => void;
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
   forkBoundaryMessageCount?: number | null;
@@ -65,9 +63,7 @@ export function assistantCopyFlags(units: DisplayUnit[]): boolean[] {
 export function ThreadMessages({
   messages,
   isStreaming = false,
-  hiddenMessageCount = 0,
   hiddenUserMessageCount = 0,
-  onLoadEarlier,
   cliApps = [],
   mcpPresets = [],
   forkBoundaryMessageCount = null,

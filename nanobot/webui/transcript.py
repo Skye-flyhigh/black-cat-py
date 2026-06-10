@@ -718,25 +718,6 @@ def _is_user_transcript_row(row: dict[str, Any]) -> bool:
     return row.get("event") == "user" or row.get("role") == "user"
 
 
-def _write_transcript_lines(session_key: str, rows: list[dict[str, Any]]) -> None:
-    path = webui_transcript_path(session_key)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(".jsonl.tmp")
-    try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            for row in rows:
-                raw = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
-                if len(raw.encode("utf-8")) > _MAX_TRANSCRIPT_FILE_BYTES:
-                    raise ValueError("webui transcript line too large")
-                f.write(raw + "\n")
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, path)
-    except BaseException:
-        tmp_path.unlink(missing_ok=True)
-        raise
-
-
 def fork_transcript_before_user_index(
     source_key: str,
     target_key: str,
