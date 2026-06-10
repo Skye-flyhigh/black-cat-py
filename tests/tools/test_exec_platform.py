@@ -221,6 +221,8 @@ class TestPathAppendPlatform:
         with (
             patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
             patch("blackcat.agent.tools.shell.os.pathsep", ":"),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
+            patch("blackcat.agent.tools.shell.os.pathsep", ":"),
             patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):
@@ -229,6 +231,8 @@ class TestPathAppendPlatform:
 
         assert captured_cmd == 'export PATH="$BLACKCAT_PATH_PREPEND:$PATH"; python --version'
         assert captured_env["BLACKCAT_PATH_PREPEND"] == "/venv/bin; echo INJECTED"
+        assert captured_cmd == 'export PATH="$NANOBOT_PATH_PREPEND:$PATH"; python --version'
+        assert captured_env["NANOBOT_PATH_PREPEND"] == "/venv/bin; echo INJECTED"
         assert "INJECTED" not in captured_cmd
 
     @pytest.mark.asyncio
@@ -249,6 +253,8 @@ class TestPathAppendPlatform:
         with (
             patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
             patch("blackcat.agent.tools.shell.os.pathsep", ":"),
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", False),
+            patch("blackcat.agent.tools.shell.os.pathsep", ":"),
             patch.object(ExecTool, "_spawn", side_effect=capture_spawn),
             patch.object(ExecTool, "_guard_command", return_value=None),
         ):
@@ -260,6 +266,10 @@ class TestPathAppendPlatform:
         )
         assert captured_env["BLACKCAT_PATH_PREPEND"] == "/venv/bin"
         assert captured_env["BLACKCAT_PATH_APPEND"] == "/usr/sbin"
+            'export PATH="$NANOBOT_PATH_PREPEND:$PATH:$NANOBOT_PATH_APPEND"; python --version'
+        )
+        assert captured_env["NANOBOT_PATH_PREPEND"] == "/venv/bin"
+        assert captured_env["NANOBOT_PATH_APPEND"] == "/usr/sbin"
 
     @pytest.mark.asyncio
     async def test_windows_modifies_env(self):
@@ -298,6 +308,8 @@ class TestPathAppendPlatform:
             return mock_proc
 
         with (
+            patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
+            patch("blackcat.agent.tools.shell.os.pathsep", ";"),
             patch("blackcat.agent.tools.shell._IS_WINDOWS", True),
             patch("blackcat.agent.tools.shell.os.pathsep", ";"),
             patch.object(ExecTool, "_build_env", return_value={"PATH": r"C:\Windows\System32"}),

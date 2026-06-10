@@ -453,6 +453,12 @@ class ExecTool(Tool):
         if self.path_append:
             env["BLACKCAT_PATH_APPEND"] = self.path_append
             segments.append("$BLACKCAT_PATH_APPEND")
+            env["NANOBOT_PATH_PREPEND"] = self.path_prepend
+            segments.append("$NANOBOT_PATH_PREPEND")
+        segments.append("$PATH")
+        if self.path_append:
+            env["NANOBOT_PATH_APPEND"] = self.path_append
+            segments.append("$NANOBOT_PATH_APPEND")
         path_expr = os.pathsep.join(segments)
         return f'export PATH="{path_expr}"; {command}'
 
