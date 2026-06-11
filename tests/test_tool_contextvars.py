@@ -340,6 +340,35 @@ async def test_webui_cron_tool_uses_visible_session_under_unified_session(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_webui_cron_tool_uses_visible_session_under_unified_session(tmp_path) -> None:
+    """WebUI-created automations should attach to the visible thread, not unified memory."""
+    tool = CronTool(CronService(tmp_path / "jobs.json"))
+
+    class _Tools:
+        tool_names = ["cron"]
+
+        def get(self, name: str):
+            return tool if name == "cron" else None
+
+    loop = object.__new__(AgentLoop)
+    loop._unified_session = True
+    loop.tools = _Tools()
+    loop._set_tool_context(
+        "websocket",
+        "chat-123",
+        metadata={"webui": True},
+        session_key="unified:default",
+    )
+
+    result = await tool.execute(action="add", message="standup", every_seconds=300)
+    assert result.startswith("Created job")
+
+    jobs = tool._cron.list_jobs()
+    assert len(jobs) == 1
+    assert jobs[0].payload.session_key == "websocket:chat-123"
+
+
+@pytest.mark.asyncio
 async def test_cron_tool_no_context_returns_error(tmp_path) -> None:
     """Without set_context, add should fail with a clear error."""
     tool = CronTool(CronService(tmp_path / "jobs.json"))
