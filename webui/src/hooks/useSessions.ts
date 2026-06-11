@@ -12,66 +12,19 @@ import { deriveTitle } from "@/lib/format";
 import type { ChatSummary, UIMessage, WorkspaceScopePayload } from "@/lib/types";
 
 const EMPTY_MESSAGES: UIMessage[] = [];
-
-/** Sidebar state: fetches the full session list and exposes create / delete actions. */
-export function useSessions(): {
-  sessions: ChatSummary[];
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-  createChat: (workspaceScope?: WorkspaceScopePayload | null) => Promise<string>;
-  deleteChat: (key: string) => Promise<void>;
-} {
-  const { client, token } = useClient();
-  const [sessions, setSessions] = useState<ChatSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const tokenRef = useRef(token);
-  const optimisticKeysRef = useRef<Set<string>>(new Set());
-  tokenRef.current = token;
-
-  const refresh = useCallback(async () => {
-    try {
-      setLoading(true);
-      const rows = await listSessions(tokenRef.current);
-      const serverKeys = new Set(rows.map((row) => row.key));
-      setSessions((prev) => [
-        ...rows,
-        ...prev.filter(
-          (session) =>
-            optimisticKeysRef.current.has(session.key) &&
-            !serverKeys.has(session.key),
-        ),
-      ]);
-      for (const key of Array.from(optimisticKeysRef.current)) {
-        if (serverKeys.has(key)) optimisticKeysRef.current.delete(key);
-      }
-      setError(null);
-    } catch (e) {
-      const msg =
-        e instanceof ApiError ? `HTTP ${e.status}` : (e as Error).message;
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    return client.onSessionUpdate(() => {
-      void refresh();
-    });
-  }, [client, refresh]);
-
-  const createChat = useCallback(async (workspaceScope?: WorkspaceScopePayload | null): Promise<string> => {
-    const chatId = await client.newChat(5_000, workspaceScope);
+  const forkChat = useCallback(async (
+    sourceChatId: string,
+    beforeUserIndex: number,
+    title?: string,
+  ): Promise<string> => {
+    const chatId = await client.forkChat(
+      sourceChatId,
+      beforeUserIndex,
+      title,
+      CHAT_CREATE_TIMEOUT_MS,
+    );
     const key = `websocket:${chatId}`;
     optimisticKeysRef.current.add(key);
-    // Optimistic insert; a subsequent refresh will replace it with the
-    // authoritative row once the server persists the session.
     setSessions((prev) => [
       {
         key,
@@ -79,9 +32,9 @@ export function useSessions(): {
         chatId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        title: "",
+        title: title ?? "",
         preview: "",
-        workspaceScope: workspaceScope ?? null,
+        workspaceScope: null,
       },
       ...prev.filter((s) => s.key !== key),
     ]);
