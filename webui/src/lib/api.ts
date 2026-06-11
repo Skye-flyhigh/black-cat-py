@@ -12,6 +12,7 @@ import type {
   NetworkSafetySettingsUpdate,
   ProviderModelsPayload,
   ProviderSettingsUpdate,
+  SessionDeleteResult,
   SessionAutomationsPayload,
   SettingsPayload,
   SettingsUpdate,
@@ -185,90 +186,6 @@ export async function fetchSessionAutomations(
     `${base}/api/sessions/${encodeURIComponent(key)}/automations`,
     token,
     undefined,
-    API_READ_TIMEOUT_MS,
-  );
-}
-
-export async function fetchSkills(
-  token: string,
-  base: string = "",
-): Promise<SkillsPayload> {
-  return request<SkillsPayload>(
-    `${base}/api/webui/skills`,
-    token,
-    undefined,
-    API_READ_TIMEOUT_MS,
-  );
-}
-
-export async function fetchSkillDetail(
-  token: string,
-  name: string,
-  base: string = "",
-): Promise<SkillDetail> {
-  return request<SkillDetail>(
-    `${base}/api/webui/skills/${encodeURIComponent(name)}`,
-    token,
-    undefined,
-    API_READ_TIMEOUT_MS,
-  );
-}
-
-export async function deleteSession(
-  token: string,
-  key: string,
-  base: string = "",
-): Promise<SessionAutomationsPayload> {
-  return request<SessionAutomationsPayload>(
-    `${base}/api/sessions/${encodeURIComponent(key)}/automations`,
-    token,
-    undefined,
-    API_READ_TIMEOUT_MS,
-  );
-}
-
-export async function fetchAutomations(
-  token: string,
-  base: string = "",
-): Promise<AutomationsPayload> {
-  return request<AutomationsPayload>(
-    `${base}/api/webui/automations`,
-    token,
-    undefined,
-    API_READ_TIMEOUT_MS,
-  );
-}
-
-export async function runAutomationAction(
-  token: string,
-  action: "enable" | "disable" | "delete" | "run",
-  id: string,
-  base: string = "",
-): Promise<AutomationsPayload> {
-  const query = new URLSearchParams();
-  query.set("id", id);
-  return request<AutomationsPayload>(
-    `${base}/api/webui/automations/${action}?${query}`,
-    token,
-    undefined,
-    API_READ_TIMEOUT_MS,
-  );
-}
-
-export async function updateAutomation(
-  token: string,
-  id: string,
-  values: AutomationUpdatePayload,
-  base: string = "",
-): Promise<AutomationsPayload> {
-  const query = new URLSearchParams();
-  query.set("id", id);
-  return request<AutomationsPayload>(
-    `${base}/api/webui/automations/update?${query}`,
-    token,
-    {
-      headers: automationValuesHeader(values),
-    },
     API_READ_TIMEOUT_MS,
   );
 }

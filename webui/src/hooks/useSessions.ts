@@ -13,7 +13,6 @@ import { hasPendingAgentActivity } from "@/lib/activity-timeline";
 import { deriveTitle } from "@/lib/format";
 import type {
   ChatSummary,
-  SessionAutomationJob,
   SessionDeleteResult,
   UIMessage,
   WorkspaceScopePayload,
@@ -39,7 +38,10 @@ export function useSessions(): {
   refresh: () => Promise<void>;
   createChat: (workspaceScope?: WorkspaceScopePayload | null) => Promise<string>;
   forkChat: (sourceChatId: string, beforeUserIndex: number, title?: string) => Promise<string>;
-  deleteChat: (key: string) => Promise<void>;
+  deleteChat: (
+    key: string,
+    options?: { deleteAutomations?: boolean },
+  ) => Promise<SessionDeleteResult>;
 } {
   const { client, token } = useClient();
   const [sessions, setSessions] = useState<ChatSummary[]>([]);

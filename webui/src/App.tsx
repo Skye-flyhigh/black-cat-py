@@ -545,6 +545,7 @@ function Shell({
     key: string;
     label: string;
     automations?: SessionAutomationJob[];
+    confirmAutomations?: boolean;
   } | null>(null);
   const [pendingRename, setPendingRename] = useState<{
     key: string;
@@ -1291,12 +1292,13 @@ function Shell({
     try {
       const result = await deleteChat(
         key,
-        hasAutomations ? { deleteAutomations: true } : undefined,
+        pendingDelete.confirmAutomations ? { deleteAutomations: true } : undefined,
       );
       if (result.blocked_by_automations) {
         setPendingDelete({
           ...pendingDelete,
           automations: result.automations ?? [],
+          confirmAutomations: true,
         });
         return;
       }
@@ -1584,7 +1586,7 @@ function Shell({
         <DeleteConfirm
           open={!!pendingDelete}
           title={pendingDelete?.label ?? ""}
-          automations={pendingDelete?.automations}
+          automations={pendingDelete?.confirmAutomations ? pendingDelete.automations : undefined}
           onCancel={() => setPendingDelete(null)}
           onConfirm={onConfirmDelete}
         />
