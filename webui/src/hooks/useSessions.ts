@@ -31,6 +31,16 @@ function persistedMessagesToUi(messages: UIMessage[]): UIMessage[] {
   }));
 }
 
+function hasPendingToolCallsFromThread(
+  body: Awaited<ReturnType<typeof fetchWebuiThread>>,
+  messages: UIMessage[],
+): boolean {
+  if (typeof body?.has_pending_tool_calls === "boolean") {
+    return body.has_pending_tool_calls;
+  }
+  return hasPendingAgentActivity(messages);
+}
+
 /** Sidebar state: fetches the full session list and exposes create / delete actions. */
 export function useSessions(): {
   sessions: ChatSummary[];
@@ -286,8 +296,7 @@ export function useSessionHistory(key: string | null): {
           return;
         }
         const ui = persistedMessagesToUi(body.messages);
-        const last = ui[ui.length - 1];
-        const hasPending = last?.kind === "trace";
+        const hasPending = hasPendingToolCallsFromThread(body, ui);
         const forkBoundary = typeof body.fork_boundary_message_count === "number"
           ? Math.max(0, Math.min(body.fork_boundary_message_count, ui.length))
           : null;
@@ -371,13 +380,12 @@ export function useSessionHistory(key: string | null): {
           ? null
           : prev.forkBoundaryMessageCount + older.length;
         const nextMessages = [...older, ...prev.messages];
-        const last = nextMessages[nextMessages.length - 1];
         return {
           ...prev,
           messages: nextMessages,
           loadingOlder: false,
           error: null,
-          hasPendingToolCalls: last?.kind === "trace",
+          hasPendingToolCalls: hasPendingAgentActivity(nextMessages),
           forkBoundaryMessageCount: olderBoundary ?? shiftedBoundary,
           beforeCursor: body.page?.before_cursor ?? null,
           hasMoreBefore: body.page?.has_more_before === true,
