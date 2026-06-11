@@ -21,6 +21,7 @@ import type {
 const EMPTY_MESSAGES: UIMessage[] = [];
 const INITIAL_HISTORY_PAGE_LIMIT = 160;
 const OLDER_HISTORY_PAGE_LIMIT = 120;
+const CHAT_CREATE_TIMEOUT_MS = 60_000;
 
 function persistedMessagesToUi(messages: UIMessage[]): UIMessage[] {
   return messages.map((m, idx) => ({
@@ -170,7 +171,12 @@ export function useSessions(): {
     beforeUserIndex: number,
     title?: string,
   ): Promise<string> => {
-    const chatId = await client.forkChat(sourceChatId, beforeUserIndex, title);
+    const chatId = await client.forkChat(
+      sourceChatId,
+      beforeUserIndex,
+      title,
+      CHAT_CREATE_TIMEOUT_MS,
+    );
     const key = `websocket:${chatId}`;
     optimisticKeysRef.current.add(key);
     setSessions((prev) => [
