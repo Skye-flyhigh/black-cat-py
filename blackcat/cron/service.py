@@ -508,7 +508,7 @@ class CronService:
         return [
             job
             for job in self.list_jobs(include_disabled=include_disabled)
-            if job.payload.kind == "agent_turn"
+            if is_bound_agent_job(job)
             and job.payload.session_key == session_key
         ]
 
