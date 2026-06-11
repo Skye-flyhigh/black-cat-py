@@ -238,6 +238,8 @@ Custom provider keys are treated as direct OpenAI-compatible providers. `apiBase
 
 This named custom provider path is not for Anthropic-compatible endpoints. For Anthropic-compatible proxies, use `providers.anthropic.apiBase` and set the preset provider to `anthropic`.
 
+This named custom provider path is not for Anthropic-compatible endpoints. For Anthropic-compatible proxies, use `providers.anthropic.apiBase` and set the preset provider to `anthropic`.
+
 ### Ollama
 
 Start Ollama separately, then point nanobot at the OpenAI-compatible endpoint.
