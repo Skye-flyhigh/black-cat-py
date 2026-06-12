@@ -121,6 +121,10 @@ async def test_cron_tool_keeps_task_local_context(tmp_path) -> None:
 
     jobs = tool._cron.list_jobs()
     assert {job.payload.session_key for job in jobs} == {"feishu:chat-a", "email:chat-b"}
+    assert {(job.payload.origin_channel, job.payload.origin_chat_id) for job in jobs} == {
+        ("feishu", "chat-a"),
+        ("email", "chat-b"),
+    }
 
 
 # --- Basic single-task regression tests ---
@@ -241,6 +245,8 @@ async def test_cron_tool_basic_set_context_and_execute(tmp_path) -> None:
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
     assert jobs[0].payload.session_key == "wechat:user-789"
+    assert jobs[0].payload.origin_channel == "wechat"
+    assert jobs[0].payload.origin_chat_id == "user-789"
 
 
 @pytest.mark.asyncio
@@ -270,6 +276,9 @@ async def test_webui_cron_tool_uses_origin_session_when_unified_enabled(tmp_path
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
     assert jobs[0].payload.session_key == "websocket:chat-123"
+    assert jobs[0].payload.origin_channel == "websocket"
+    assert jobs[0].payload.origin_chat_id == "chat-123"
+    assert jobs[0].payload.origin_metadata == {"webui": True}
 
 
 @pytest.mark.asyncio
