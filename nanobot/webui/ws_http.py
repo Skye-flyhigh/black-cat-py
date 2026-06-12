@@ -146,7 +146,6 @@ class GatewayHTTPHandler:
         runtime_model_name: Callable[[], str | None] | None,
         runtime_surface: str,
         runtime_capabilities_overrides: dict[str, Any] | None,
-        unified_session: bool = False,
         bus: MessageBus,
         tokens: GatewayTokenStore,
         media: WebUIMediaGateway,
@@ -171,7 +170,6 @@ class GatewayHTTPHandler:
         self.cron_pending_job_ids = cron_pending_job_ids
         self._log = log
         self._runtime_surface = runtime_surface
-        self._unified_session = unified_session
 
         from nanobot.webui.settings_api import runtime_capabilities as _rc
         from nanobot.webui.settings_routes import WebUISettingsRouter

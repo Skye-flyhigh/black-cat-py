@@ -59,7 +59,6 @@ def _make_handler(
         runtime_model_name=runtime_model_name,
         runtime_surface="browser",
         runtime_capabilities_overrides=None,
-        unified_session=unified_session,
         cron_service=cron_service,
         cron_pending_job_ids=cron_pending_job_ids,
     )
@@ -373,7 +372,7 @@ async def test_session_automations_route_ignores_unified_owner(
 
 
 @pytest.mark.asyncio
-async def test_session_automations_route_uses_origin_owner_when_unified_enabled(
+async def test_session_automations_route_ignores_unified_owner(
     bus: MagicMock, tmp_path: Path
 ) -> None:
     cron = CronService(tmp_path / "cron" / "jobs.json")
@@ -394,7 +393,6 @@ async def test_session_automations_route_uses_origin_owner_when_unified_enabled(
         bus,
         session_manager=_seed_session(tmp_path, key="websocket:abc"),
         cron_service=cron,
-        unified_session=True,
         port=29917,
     )
     server_task = asyncio.create_task(channel.start())
@@ -1379,7 +1377,6 @@ async def test_session_delete_blocks_origin_automation_when_unified_enabled(
         bus,
         session_manager=sm,
         cron_service=cron,
-        unified_session=True,
         port=29918,
     )
     server_task = asyncio.create_task(channel.start())
