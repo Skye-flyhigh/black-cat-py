@@ -36,7 +36,7 @@ _FORK_VOLATILE_METADATA_KEYS = {
     "pending_user_turn",
     "runtime_checkpoint",
     "thread_goal",
-    "_routing_context",
+    SESSION_ROUTING_METADATA_KEY,
     "title",
     "title_user_edited",
 }

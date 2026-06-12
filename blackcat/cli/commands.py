@@ -1108,17 +1108,20 @@ def _run_gateway(
             ),
         }
         metadata[AUTOMATION_DEFER_UNTIL_IDLE_META] = True
+        run_record_base: dict[str, Any] = {
+            "job_id": job.id,
+            "job_name": job.name,
+            "session_key": session_key,
+            "prompt_ref": prompt_ref,
+            "prompt_vars": {"message": job.payload.message},
+            "rendered_prompt": prompt,
+        }
 
         cron.write_run_record(
             run_id,
             {
-                "job_id": job.id,
-                "job_name": job.name,
-                "session_key": session_key,
+                **run_record_base,
                 "status": "queued",
-                "prompt_ref": prompt_ref,
-                "prompt_vars": {"message": job.payload.message},
-                "rendered_prompt": prompt,
             },
         )
 
@@ -1142,14 +1145,9 @@ def _run_gateway(
             cron.write_run_record(
                 run_id,
                 {
-                    "job_id": job.id,
-                    "job_name": job.name,
-                    "session_key": session_key,
+                    **run_record_base,
                     "status": "error",
                     "error": error_text,
-                    "prompt_ref": prompt_ref,
-                    "prompt_vars": {"message": job.payload.message},
-                    "rendered_prompt": prompt,
                 },
             )
             raise
@@ -1161,13 +1159,8 @@ def _run_gateway(
         cron.write_run_record(
             run_id,
             {
-                "job_id": job.id,
-                "job_name": job.name,
-                "session_key": session_key,
+                **run_record_base,
                 "status": "ok",
-                "prompt_ref": prompt_ref,
-                "prompt_vars": {"message": job.payload.message},
-                "rendered_prompt": prompt,
                 "response": response,
             },
         )
