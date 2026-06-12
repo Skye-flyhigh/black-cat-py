@@ -68,6 +68,8 @@ def _title_inputs(session: Session) -> tuple[str, str]:
     for message in session.messages:
         if message.get("_command") is True:
             continue
+        if message.get(CRON_HISTORY_META) is True:
+            continue
         role = message.get("role")
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():

@@ -319,6 +319,8 @@ def _session_user_event(
 ) -> dict[str, Any] | None:
     if message.get("role") != "user":
         return None
+    if message.get(CRON_HISTORY_META) is True:
+        return None
     content = message.get("content")
     text = content if isinstance(content, str) else ""
     media = message.get("media")
