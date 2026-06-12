@@ -422,6 +422,9 @@ async def test_webui_cron_tool_uses_origin_session_when_unified_enabled(tmp_path
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
     assert jobs[0].payload.session_key == "websocket:chat-123"
+    assert jobs[0].payload.origin_channel == "websocket"
+    assert jobs[0].payload.origin_chat_id == "chat-123"
+    assert jobs[0].payload.origin_metadata == {"webui": True}
 
 
 @pytest.mark.asyncio
@@ -443,6 +446,9 @@ async def test_cron_tool_preserves_thread_scoped_session_key(tmp_path) -> None:
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
     assert jobs[0].payload.session_key == "slack:C123:1700.42"
+    assert jobs[0].payload.origin_channel == "slack"
+    assert jobs[0].payload.origin_chat_id == "C123"
+    assert jobs[0].payload.origin_metadata == {"slack": {"thread_ts": "1700.42"}}
 
 
 @pytest.mark.asyncio
