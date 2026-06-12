@@ -1292,7 +1292,7 @@ async def test_session_delete_does_not_cascade_unified_automations(
         assert resp.status_code == 200
         assert resp.json()["deleted"] is True
         assert not path.exists()
-        assert [job.name for job in cron.list_bound_agent_jobs_for_session(UNIFIED_SESSION_KEY)] == [
+        assert [job.name for job in cron.list_bound_cron_jobs_for_session(UNIFIED_SESSION_KEY)] == [
             "Shared daily check"
         ]
     finally:
