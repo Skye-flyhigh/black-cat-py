@@ -684,7 +684,7 @@
     "confirm": "Supprimer",
     "automationsDescription": "Cette discussion contient des automatisations planifiées. La supprimer les supprimera aussi.",
     "moreAutomations": "+ {{count}} autres",
-    "confirmWithAutomations": "Supprimer",
+    "confirmWithAutomations": "Supprimer la discussion et les automatisations",
     "schedule": {
       "at": "{{time}}",
       "every": "Tous les {{duration}}",

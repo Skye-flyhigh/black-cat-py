@@ -11,6 +11,8 @@ import {
 import type { TFunction } from "i18next";
 import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { currentLocale } from "@/i18n";
+import { fmtDateTime } from "@/lib/format";
 import type { SessionAutomationJob } from "@/lib/types";
 
 interface DeleteConfirmProps {
@@ -29,6 +31,7 @@ export function DeleteConfirm({
   onConfirm,
 }: DeleteConfirmProps) {
   const { t } = useTranslation();
+  const locale = currentLocale();
   const hasAutomations = automations.length > 0;
   const visibleAutomations = automations.slice(0, 4);
   const hiddenCount = Math.max(0, automations.length - visibleAutomations.length);
@@ -50,23 +53,29 @@ export function DeleteConfirm({
             {hasAutomations
               ? t("deleteConfirm.automationsDescription", {
                   count: automations.length,
-                  defaultValue:
-                    "This chat has scheduled automations. Deleting it will also delete them.",
                 })
               : t("deleteConfirm.description")}
           </AlertDialogDescription>
           {hasAutomations ? (
-            <div className="mt-4 max-h-32 w-full overflow-y-auto rounded-2xl bg-muted/55 px-3 py-2 text-left">
+            <div className="mt-4 max-h-40 w-full overflow-y-auto rounded-2xl bg-muted/55 px-3 py-2 text-left">
               {visibleAutomations.map((job) => (
-                <div key={job.id} className="truncate text-[13px] leading-6 text-foreground">
-                  {job.name || job.id}
+                <div key={job.id} className="min-w-0 py-1.5">
+                  <div className="truncate text-[13px] font-medium leading-5 text-foreground">
+                    {job.name || job.id}
+                  </div>
+                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] leading-5 text-muted-foreground">
+                    <span className="truncate">
+                      {formatAutomationSchedule(job, t, locale)}
+                    </span>
+                    <span aria-hidden>·</span>
+                    <span className="truncate">{formatAutomationNextRun(job, t, locale)}</span>
+                  </div>
                 </div>
               ))}
               {hiddenCount > 0 ? (
                 <div className="text-[13px] leading-6 text-muted-foreground">
                   {t("deleteConfirm.moreAutomations", {
                     count: hiddenCount,
-                    defaultValue: "+ {{count}} more",
                   })}
                 </div>
               ) : null}
@@ -86,7 +95,7 @@ export function DeleteConfirm({
           >
             {hasAutomations
               ? t("deleteConfirm.confirmWithAutomations", {
-                  defaultValue: "Delete all",
+                  count: automations.length,
                 })
               : t("deleteConfirm.confirm")}
           </AlertDialogAction>
