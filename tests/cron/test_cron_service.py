@@ -304,6 +304,37 @@ def test_list_bound_agent_jobs_excludes_legacy_delivery_payloads(tmp_path) -> No
     assert service.list_bound_cron_jobs_for_session("websocket:chat-1") == [bound]
 
 
+def test_add_job_preserves_origin_delivery_context(tmp_path) -> None:
+    service = CronService(tmp_path / "cron" / "jobs.json")
+    metadata = {"slack": {"thread_ts": "1234567890.123456", "channel_type": "channel"}}
+
+    job = service.add_job(
+        name="bound thread",
+        schedule=CronSchedule(kind="every", every_ms=60_000),
+        message="hello",
+        session_key="slack:C123:1234567890.123456",
+        origin_channel="slack",
+        origin_chat_id="C123",
+        origin_metadata=metadata,
+    )
+
+    assert job.payload.origin_channel == "slack"
+    assert job.payload.origin_chat_id == "C123"
+    assert job.payload.origin_metadata == metadata
+
+    raw = json.loads((tmp_path / "cron" / "action.jsonl").read_text(encoding="utf-8"))
+    payload = raw["params"]["payload"]
+    assert payload["origin_channel"] == "slack"
+    assert payload["origin_chat_id"] == "C123"
+    assert payload["origin_metadata"] == metadata
+
+    reloaded = service.get_job(job.id)
+    assert reloaded is not None
+    assert reloaded.payload.origin_channel == "slack"
+    assert reloaded.payload.origin_chat_id == "C123"
+    assert reloaded.payload.origin_metadata == metadata
+
+
 @pytest.mark.asyncio
 async def test_channel_meta_and_session_key_survive_store_reload(tmp_path) -> None:
     store_path = tmp_path / "cron" / "jobs.json"

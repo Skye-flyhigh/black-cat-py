@@ -1028,12 +1028,12 @@ def _run_gateway(
         )
 
     def _bound_session_delivery_context(
-        session_key: str,
+        job: CronJob,
         *,
         turn_seed: str,
         source_label: str | None,
     ) -> tuple[str, str, dict[str, Any]]:
-        channel, chat_id, metadata = bound_session_inbound_context(session_key)
+        channel, chat_id, metadata = origin_delivery_context(job)
 
         if channel == "websocket":
             metadata["webui"] = True
@@ -1068,7 +1068,7 @@ def _run_gateway(
         prompt_ref = _cron_prompt_ref(prompt)
         run_id = f"{job.id}:{int(time.time() * 1000)}:{uuid.uuid4().hex[:8]}"
         channel, chat_id, metadata = _bound_session_delivery_context(
-            session_key,
+            job,
             turn_seed=f"cron:{job.id}",
             source_label=job.name,
         )

@@ -1936,6 +1936,8 @@ def test_gateway_bound_cron_runs_as_session_turn(
         payload=CronPayload(
             message="Check repository health.",
             session_key="websocket:chat-1",
+            origin_channel="websocket",
+            origin_chat_id="chat-1",
         ),
     )
 
@@ -1971,6 +1973,13 @@ def test_gateway_bound_cron_runs_as_session_turn(
         payload=CronPayload(
             message="Check the Discord thread.",
             session_key="discord:456:thread:777",
+            origin_channel="discord",
+            origin_chat_id="777",
+            origin_metadata={
+                "context_chat_id": "456",
+                "parent_channel_id": "456",
+                "thread_id": "777",
+            },
         ),
     )
 
@@ -1992,6 +2001,9 @@ def test_gateway_bound_cron_runs_as_session_turn(
         payload=CronPayload(
             message="Check the Telegram topic.",
             session_key="telegram:-100123:topic:42",
+            origin_channel="telegram",
+            origin_chat_id="-100123",
+            origin_metadata={"message_thread_id": 42},
         ),
     )
 
@@ -2011,6 +2023,13 @@ def test_gateway_bound_cron_runs_as_session_turn(
         payload=CronPayload(
             message="Check the Feishu topic.",
             session_key="feishu:oc_abc:om_root123",
+            origin_channel="feishu",
+            origin_chat_id="oc_abc",
+            origin_metadata={
+                "chat_type": "group",
+                "message_id": "om_root123",
+                "thread_id": "om_root123",
+            },
         ),
     )
 
