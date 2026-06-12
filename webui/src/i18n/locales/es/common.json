@@ -666,6 +666,7 @@
       },
       "next": {
         "label": "Siguiente {{time}}",
+        "pending": "Se ejecutará pronto",
         "disabled": "En pausa",
         "none": "Sin próxima ejecución"
       }

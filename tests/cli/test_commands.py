@@ -1458,9 +1458,9 @@ def test_gateway_unbound_agent_cron_is_skipped(
         ),
     )
 
-    response = asyncio.run(cron.on_job(job))
+    with pytest.raises(CronJobSkippedError, match="unbound agent cron job"):
+        asyncio.run(cron.on_job(job))
 
-    assert response is None
     bus.publish_outbound.assert_not_awaited()
 
 

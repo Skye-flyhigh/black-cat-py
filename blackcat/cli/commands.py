@@ -1183,12 +1183,14 @@ def _run_gateway(
         if is_bound_cron_job(job):
             return await run_bound_cron_job(job, agent=agent, cron=cron)
 
+        reason = "unbound agent cron job must be recreated from a chat session"
         logger.warning(
-            "Cron: skipped unbound agent job '{}' ({}); recreate it from a chat session",
+            "Cron: skipped unbound agent job '{}' ({}): {}",
             job.name,
             job.id,
+            reason,
         )
-        return None
+        raise CronJobSkippedError(reason)
 
     cron.on_job = on_cron_job
 
@@ -1207,6 +1209,7 @@ def _run_gateway(
         session_manager=session_manager,
         cron_service=cron,
         webui_runtime_model_name=_webui_runtime_model_name,
+        webui_cron_pending_job_ids=getattr(agent, "pending_cron_job_ids_for_session", None),
         webui_static_dist=webui_static_dist,
         webui_runtime_surface=webui_runtime_surface,
         webui_runtime_capabilities=webui_runtime_capabilities,
