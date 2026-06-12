@@ -2028,7 +2028,7 @@ def test_gateway_bound_cron_runs_as_session_turn(
             to="chat-1",
             channel_meta={
                 "webui": True,
-                "webui_turn_id": old_turn_id,
+                WEBUI_TURN_METADATA_KEY: old_turn_id,
                 "workspace_scope": {"mode": "default"},
             },
         ),
@@ -2043,9 +2043,9 @@ def test_gateway_bound_cron_runs_as_session_turn(
     assert delivered.chat_id == "chat-1"
     assert delivered.metadata["webui"] is True
     assert delivered.metadata["workspace_scope"] == {"mode": "default"}
-    assert delivered.metadata["webui_turn_id"].startswith("cron:drink-water:")
-    assert delivered.metadata["webui_turn_id"] != old_turn_id
-    assert delivered.metadata["_webui_message_source"] == {
+    assert delivered.metadata[WEBUI_TURN_METADATA_KEY].startswith("cron:drink-water:")
+    assert delivered.metadata[WEBUI_TURN_METADATA_KEY] != old_turn_id
+    assert delivered.metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] == {
         "kind": "cron",
         "label": "drink water",
     }
@@ -2331,14 +2331,17 @@ def test_gateway_bound_cron_runs_as_session_turn(
     assert "Automation: Check repository health." in msg.content
     assert msg.metadata["webui"] is True
     assert msg.metadata["workspace_scope"]["project_path"] == str(tmp_path)
-    assert msg.metadata["_webui_message_source"] == {"kind": "cron", "label": "Repo check"}
-    trigger = msg.metadata["_automation_trigger"]
+    assert msg.metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] == {
+        "kind": "cron",
+        "label": "Repo check",
+    }
+    trigger = msg.metadata[AUTOMATION_TRIGGER_META]
     assert trigger["job_id"] == "repo-check"
     assert trigger["job_name"] == "Repo check"
     assert trigger["persist_content"] == (
         "Scheduled automation triggered: Repo check\n\nCheck repository health."
     )
-    assert msg.metadata["_defer_until_session_idle"] is True
+    assert msg.metadata[AUTOMATION_DEFER_UNTIL_IDLE_META] is True
     statuses = [record["status"] for _run_id, record in seen["run_records"]]
     assert statuses == ["queued", "ok"]
     assert seen["run_records"][0][0] == seen["run_records"][1][0]
