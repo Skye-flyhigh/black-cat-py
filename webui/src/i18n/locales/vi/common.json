@@ -684,7 +684,7 @@
     "confirm": "Xóa",
     "automationsDescription": "Cuộc trò chuyện này có các tự động hóa đã lên lịch. Xóa cuộc trò chuyện cũng sẽ xóa chúng.",
     "moreAutomations": "+ {{count}} mục nữa",
-    "confirmWithAutomations": "Xóa",
+    "confirmWithAutomations": "Xóa trò chuyện và tự động hóa",
     "schedule": {
       "at": "{{time}}",
       "every": "Mỗi {{duration}}",
