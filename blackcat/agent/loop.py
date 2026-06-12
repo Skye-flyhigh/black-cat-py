@@ -1368,8 +1368,6 @@ class AgentLoop:
             ctx.session = self.sessions.get_or_create(ctx.session_key)
         await self._runtime_events().session_turn_started(msg, ctx.session_key)
         self.workspace_scopes.persist_message_scope(ctx.session, msg)
-        if persist_routing_context(ctx.session, msg):
-            self.sessions.save(ctx.session)
 
         if self._restore_runtime_checkpoint(ctx.session):
             self.sessions.save(ctx.session)
