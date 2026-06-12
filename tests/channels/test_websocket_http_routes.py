@@ -329,12 +329,16 @@ async def test_session_automations_route_ignores_unified_owner(
         schedule=hourly,
         message="Check the shared session",
         session_key=UNIFIED_SESSION_KEY,
+        origin_channel="websocket",
+        origin_chat_id="abc",
     )
     cron.add_job(
         name="Visible chat job",
         schedule=hourly,
         message="Show for this chat",
         session_key="websocket:abc",
+        origin_channel="websocket",
+        origin_chat_id="abc",
     )
     channel = _ch(
         bus,
@@ -1271,6 +1275,8 @@ async def test_session_delete_blocks_origin_automation_when_unified_enabled(
         schedule=CronSchedule(kind="every", every_ms=86_400_000),
         message="Check this chat",
         session_key="websocket:doomed",
+        origin_channel="websocket",
+        origin_chat_id="doomed",
     )
     channel = _ch(
         bus,

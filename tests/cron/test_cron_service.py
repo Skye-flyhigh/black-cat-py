@@ -282,7 +282,90 @@ def test_add_job_preserves_origin_delivery_context(tmp_path) -> None:
     assert reloaded.payload.origin_metadata == metadata
 
 
-def test_list_bound_agent_jobs_excludes_legacy_delivery_payloads(tmp_path) -> None:
+def test_load_store_migrates_legacy_delivery_context(tmp_path) -> None:
+    store_path = tmp_path / "cron" / "jobs.json"
+    store_path.parent.mkdir(parents=True)
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "jobs": [
+                    {
+                        "id": "legacy-1",
+                        "name": "Legacy reminder",
+                        "enabled": True,
+                        "schedule": {"kind": "every", "everyMs": 60_000},
+                        "payload": {
+                            "kind": "agent_turn",
+                            "message": "check status",
+                            "deliver": True,
+                            "channel": "telegram",
+                            "to": "user-1",
+                            "channelMeta": {"message_thread_id": 42},
+                            "sessionKey": "telegram:user-1:topic:42",
+                        },
+                        "state": {},
+                        "createdAtMs": 1,
+                        "updatedAtMs": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = CronService(store_path).get_job("legacy-1")
+
+    assert job is not None
+    assert job.payload.session_key == "telegram:user-1:topic:42"
+    assert job.payload.origin_channel == "telegram"
+    assert job.payload.origin_chat_id == "user-1"
+    assert job.payload.origin_metadata == {"message_thread_id": 42}
+    assert job.payload.deliver is False
+    assert job.payload.channel is None
+    assert job.payload.to is None
+    assert job.payload.channel_meta == {}
+
+
+def test_load_store_disables_malformed_legacy_payload(tmp_path) -> None:
+    store_path = tmp_path / "cron" / "jobs.json"
+    store_path.parent.mkdir(parents=True)
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "jobs": [
+                    {
+                        "id": "legacy-bad",
+                        "name": "Broken legacy",
+                        "enabled": True,
+                        "schedule": {"kind": "every", "everyMs": 60_000},
+                        "payload": {
+                            "kind": "agent_turn",
+                            "message": "check status",
+                            "deliver": True,
+                        },
+                        "state": {"nextRunAtMs": 123},
+                        "createdAtMs": 1,
+                        "updatedAtMs": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = CronService(store_path).get_job("legacy-bad")
+
+    assert job is not None
+    assert job.enabled is False
+    assert job.state.next_run_at_ms is None
+    assert job.state.last_status == "error"
+    assert "missing channel/to" in (job.state.last_error or "")
+    assert job.payload.deliver is False
+
+
+def test_list_bound_agent_jobs_includes_migrated_legacy_delivery_payloads(tmp_path) -> None:
     service = CronService(tmp_path / "cron" / "jobs.json")
     schedule = CronSchedule(kind="every", every_ms=60_000)
     bound = service.add_job(
@@ -290,8 +373,10 @@ def test_list_bound_agent_jobs_excludes_legacy_delivery_payloads(tmp_path) -> No
         schedule=schedule,
         message="new bound job",
         session_key="websocket:chat-1",
+        origin_channel="websocket",
+        origin_chat_id="chat-1",
     )
-    service.add_job(
+    migrated = service.add_job(
         name="Legacy same session",
         schedule=schedule,
         message="legacy job",
@@ -301,7 +386,7 @@ def test_list_bound_agent_jobs_excludes_legacy_delivery_payloads(tmp_path) -> No
         session_key="websocket:chat-1",
     )
 
-    assert service.list_bound_cron_jobs_for_session("websocket:chat-1") == [bound]
+    assert service.list_bound_cron_jobs_for_session("websocket:chat-1") == [bound, migrated]
 
 
 def test_add_job_preserves_origin_delivery_context(tmp_path) -> None:

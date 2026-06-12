@@ -1815,34 +1815,6 @@ def test_gateway_legacy_cron_payloads_with_session_key_stay_legacy(
     assert seen["evaluations"] == []
     bus.publish_outbound.assert_not_awaited()
 
-    topic_job = CronJob(
-        id="topic-legacy",
-        name="Topic legacy",
-        payload=CronPayload(
-            message="Ping the topic.",
-            deliver=True,
-            channel="telegram",
-            to="-100123",
-            channel_meta={"message_thread_id": 42},
-            session_key="telegram:-100123:topic:42",
-        ),
-    )
-
-    response = asyncio.run(cron.on_job(topic_job))
-
-    assert response == "Legacy response."
-    _prompt, kwargs = seen["process_calls"][-1]
-    assert kwargs["session_key"] == "cron:topic-legacy"
-    assert kwargs["channel"] == "telegram"
-    assert kwargs["chat_id"] == "-100123"
-    assert len(seen["evaluations"]) == 1
-    bus.publish_outbound.assert_awaited_once()
-    delivered = bus.publish_outbound.await_args.args[0]
-    assert delivered.channel == "telegram"
-    assert delivered.chat_id == "-100123"
-    assert delivered.metadata["message_thread_id"] == 42
-    assert seen["saved_keys"] == ["telegram:-100123:topic:42"]
-
 
 def test_gateway_bound_cron_runs_as_session_turn(
     monkeypatch, tmp_path: Path
