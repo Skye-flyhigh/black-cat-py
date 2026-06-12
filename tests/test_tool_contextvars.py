@@ -340,8 +340,8 @@ async def test_webui_cron_tool_uses_visible_session_under_unified_session(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_webui_cron_tool_uses_unified_session_when_enabled(tmp_path) -> None:
-    """WebUI-created automations should follow unified session ownership."""
+async def test_webui_cron_tool_uses_origin_session_when_unified_enabled(tmp_path) -> None:
+    """WebUI-created cron jobs stay attached to the creating chat."""
     tool = CronTool(CronService(tmp_path / "jobs.json"))
 
     class _Tools:
@@ -365,7 +365,7 @@ async def test_webui_cron_tool_uses_unified_session_when_enabled(tmp_path) -> No
 
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
-    assert jobs[0].payload.session_key == UNIFIED_SESSION_KEY
+    assert jobs[0].payload.session_key == "websocket:chat-123"
 
 
 @pytest.mark.asyncio
