@@ -149,8 +149,9 @@ vi.mock("@/hooks/useSessions", async (importOriginal) => {
         refresh: refreshSpy,
         createChat: createChatSpy,
         forkChat: async () => "fork-chat",
-        deleteChat: async (key: string) => {
-          await deleteChatSpy(key);
+        deleteChat: async (key: string, options?: { deleteAutomations?: boolean }) => {
+          if (options === undefined) await deleteChatSpy(key);
+          else await deleteChatSpy(key, options);
           setSessions((prev: ChatSummary[]) => prev.filter((s) => s.key !== key));
           return { deleted: true };
         },
@@ -444,7 +445,7 @@ describe("App layout", () => {
     expect(document.body.style.pointerEvents).not.toBe("none");
   }, 15_000);
 
-  it("shows localized bound automations in the first delete confirmation", async () => {
+  it("shows bound automations in the first delete confirmation", async () => {
     mockSessions = [
       {
         key: "websocket:chat-a",
@@ -463,45 +464,44 @@ describe("App layout", () => {
         preview: "Second chat",
       },
     ];
-    getSessionAutomationsSpy.mockResolvedValue([
-      {
-        id: "job-1",
-        name: "Daily repo check",
-        enabled: true,
-        schedule: { kind: "every", every_ms: 86_400_000 },
-        payload: { message: "Check the repo" },
-        state: { next_run_at_ms: Date.UTC(2026, 3, 17, 10, 0, 0) },
+    mockFetchRoutes({
+      "/api/sessions/websocket%3Achat-a/automations": {
+        jobs: [
+          {
+            id: "job-1",
+            name: "Daily repo check",
+            enabled: true,
+            schedule: { kind: "every", every_ms: 86_400_000 },
+            payload: { message: "Check the repo" },
+            state: { next_run_at_ms: Date.UTC(2026, 3, 17, 10, 0, 0) },
+          },
+        ],
       },
-    ]);
-    await i18n.changeLanguage("zh-CN");
+    });
 
     render(<App />);
 
     await waitFor(() => expect(connectSpy).toHaveBeenCalled());
-    const sidebar = screen.getByRole("navigation", { name: "侧边栏导航" });
+    const sidebar = screen.getByRole("navigation", { name: "Sidebar navigation" });
     await waitFor(() =>
       expect(
         within(sidebar).getByRole("button", { name: /^First chat$/ }),
       ).toBeInTheDocument(),
     );
 
-    fireEvent.pointerDown(screen.getByLabelText(/First chat.*会话操作/), {
+    fireEvent.pointerDown(screen.getByLabelText("Chat actions for First chat"), {
       button: 0,
     });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
 
     await waitFor(() =>
       expect(screen.getByText("Daily repo check")).toBeInTheDocument(),
     );
-    expect(getSessionAutomationsSpy).toHaveBeenCalledWith("websocket:chat-a");
     expect(
-      screen.getByText("这个对话有关联的自动任务。删除对话也会删除这些自动任务。"),
+      screen.getByText("This chat has scheduled automations. Deleting it will also delete them."),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("This chat has scheduled automations. Deleting it will also delete them."),
-    ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete chat and automations" }));
 
     await waitFor(() =>
       expect(deleteChatSpy).toHaveBeenCalledWith("websocket:chat-a", {

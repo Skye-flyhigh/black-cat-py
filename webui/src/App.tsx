@@ -36,7 +36,7 @@ import type {
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { fetchSettings, fetchWorkspaces } from "@/lib/api";
+import { fetchSessionAutomations, fetchSettings, fetchWorkspaces } from "@/lib/api";
 import {
   createRuntimeHost,
   getHostApi,
@@ -545,7 +545,6 @@ function Shell({
     key: string;
     label: string;
     automations?: SessionAutomationJob[];
-    confirmAutomations?: boolean;
   } | null>(null);
   const [pendingRename, setPendingRename] = useState<{
     key: string;
@@ -1292,13 +1291,12 @@ function Shell({
     try {
       const result = await deleteChat(
         key,
-        pendingDelete.confirmAutomations ? { deleteAutomations: true } : undefined,
+        hasAutomations ? { deleteAutomations: true } : undefined,
       );
       if (result.blocked_by_automations) {
         setPendingDelete({
           ...pendingDelete,
           automations: result.automations ?? [],
-          confirmAutomations: true,
         });
         return;
       }
@@ -1318,12 +1316,12 @@ function Shell({
   const onRequestDelete = useCallback(async (key: string, label: string) => {
     let automations: SessionAutomationJob[] = [];
     try {
-      automations = await getSessionAutomations(key);
+      automations = (await fetchSessionAutomations(token, key)).jobs;
     } catch {
       // Delete remains protected by the backend block; prefetch only improves the first prompt.
     }
     setPendingDelete({ key, label, automations });
-  }, [getSessionAutomations]);
+  }, [token]);
 
   const headerTitle = activeSession
     ? sidebarState.title_overrides[activeSession.key] ||
@@ -1586,7 +1584,7 @@ function Shell({
         <DeleteConfirm
           open={!!pendingDelete}
           title={pendingDelete?.label ?? ""}
-          automations={pendingDelete?.confirmAutomations ? pendingDelete.automations : undefined}
+          automations={pendingDelete?.automations}
           onCancel={() => setPendingDelete(null)}
           onConfirm={onConfirmDelete}
         />
