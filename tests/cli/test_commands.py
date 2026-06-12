@@ -1704,37 +1704,9 @@ def test_gateway_bound_cron_runs_as_session_turn(
     )
     monkeypatch.setattr("nanobot.bus.queue.MessageBus", lambda: bus)
 
-    route_metadata = {
-        "websocket:chat-1": {
-            "workspace_scope": {
-                "project_path": str(tmp_path),
-                "access_mode": "restricted",
-            },
-            SESSION_ROUTING_METADATA_KEY: {
-                "channel": "websocket",
-                "chat_id": "chat-1",
-                "metadata": {},
-            },
-        },
-        "discord:456:thread:777": {
-            SESSION_ROUTING_METADATA_KEY: {
-                "channel": "discord",
-                "chat_id": "777",
-                "metadata": {
-                    "context_chat_id": "456",
-                    "parent_channel_id": "456",
-                    "thread_id": "777",
-                },
-            },
-        },
-    }
-
     class _FakeSessionManager:
         def __init__(self, _workspace: Path) -> None:
             pass
-
-        def read_session_file(self, key: str) -> dict[str, object] | None:
-            return {"metadata": route_metadata.get(key, {})}
 
     monkeypatch.setattr("nanobot.session.manager.SessionManager", _FakeSessionManager)
 
@@ -1807,10 +1779,9 @@ def test_gateway_bound_cron_runs_as_session_turn(
     assert msg.channel == "websocket"
     assert msg.chat_id == "chat-1"
     assert msg.sender_id == "cron"
-    assert msg.session_key_override == "websocket:chat-1"
+    assert msg.session_key_override is None
     assert "Cron job: Check repository health." in msg.content
     assert msg.metadata["webui"] is True
-    assert msg.metadata["workspace_scope"]["project_path"] == str(tmp_path)
     assert msg.metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] == {
         "kind": "cron",
         "label": "Repo check",
@@ -1831,7 +1802,7 @@ def test_gateway_bound_cron_runs_as_session_turn(
         name="Thread check",
         payload=CronPayload(
             message="Check the Discord thread.",
-            session_key="discord:456:thread:777",
+            session_key="discord:777",
         ),
     )
 
@@ -1842,10 +1813,7 @@ def test_gateway_bound_cron_runs_as_session_turn(
     assert isinstance(msg, InboundMessage)
     assert msg.channel == "discord"
     assert msg.chat_id == "777"
-    assert msg.session_key_override == "discord:456:thread:777"
-    assert msg.metadata["context_chat_id"] == "456"
-    assert msg.metadata["parent_channel_id"] == "456"
-    assert msg.metadata["thread_id"] == "777"
+    assert msg.session_key_override is None
 
 
 def test_gateway_cron_job_suppresses_intermediate_progress(

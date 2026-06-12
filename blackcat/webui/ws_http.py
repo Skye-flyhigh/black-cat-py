@@ -499,8 +499,6 @@ class GatewayHTTPHandler:
 
     def _automation_display_key(self, session_key: str) -> str:
         """Return the cron ownership key shown for this WebUI thread."""
-        if self._unified_session:
-            return UNIFIED_SESSION_KEY
         return session_key
 
     # -- Media routes -------------------------------------------------------
