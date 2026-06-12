@@ -261,7 +261,7 @@ async def test_webui_cron_tool_uses_unified_session_when_enabled(tmp_path) -> No
         "websocket",
         "chat-123",
         metadata={"webui": True},
-        session_key="unified:default",
+        session_key=UNIFIED_SESSION_KEY,
     )
 
     result = await tool.execute(action="add", message="standup", every_seconds=300)
@@ -269,7 +269,7 @@ async def test_webui_cron_tool_uses_unified_session_when_enabled(tmp_path) -> No
 
     jobs = tool._cron.list_jobs()
     assert len(jobs) == 1
-    assert jobs[0].payload.session_key == "unified:default"
+    assert jobs[0].payload.session_key == UNIFIED_SESSION_KEY
 
 
 @pytest.mark.asyncio

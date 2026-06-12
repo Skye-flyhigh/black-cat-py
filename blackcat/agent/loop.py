@@ -71,8 +71,6 @@ if TYPE_CHECKING:
     from blackcat.cron.service import CronService
 
 
-UNIFIED_SESSION_KEY = "unified:default"
-
 class TurnState(Enum):
     RESTORE = auto()
     COMPACT = auto()
@@ -511,12 +509,11 @@ class AgentLoop:
         """Update context for all tools that need routing info."""
         from blackcat.agent.tools.context import ContextAware
 
-        if session_key is not None:
-            effective_key = session_key
-        elif self._unified_session:
-            effective_key = UNIFIED_SESSION_KEY
-        else:
-            effective_key = f"{channel}:{chat_id}"
+        effective_key = session_key or session_key_for_channel(
+            channel,
+            chat_id,
+            unified_session=self._unified_session,
+        )
         request_ctx = RequestContext(
             channel=channel,
             chat_id=chat_id,
@@ -635,7 +632,7 @@ class AgentLoop:
                 if isinstance(persist_content, str) and persist_content.strip():
                     text = persist_content
                 extra.update({
-                    "_automation_trigger": True,
+                    AUTOMATION_HISTORY_META: True,
                     "automation_id": trigger.get("job_id"),
                     "automation_name": trigger.get("job_name"),
                     "automation_run_id": trigger.get("run_id"),
