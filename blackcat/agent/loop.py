@@ -527,24 +527,6 @@ class AgentLoop:
             if tool and isinstance(tool, ContextAware):
                 tool.set_context(request_ctx)
 
-    def _tool_context_session_key(
-        self,
-        *,
-        channel: str,
-        chat_id: str,
-        metadata: dict | None,
-        session_key: str,
-    ) -> str:
-        """Return the session key tools should use for ownership-scoped resources."""
-        if (
-            self._unified_session
-            and channel == "websocket"
-            and (metadata or {}).get("webui") is True
-            and chat_id
-        ):
-            return f"websocket:{chat_id}"
-        return session_key
-
     @staticmethod
     def _runtime_chat_id(msg: InboundMessage) -> str:
         """Return the chat id shown in runtime metadata for the model."""

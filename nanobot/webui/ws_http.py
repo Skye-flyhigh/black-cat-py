@@ -23,6 +23,7 @@ from loguru import logger
 from websockets.http11 import Request as WsRequest
 from websockets.http11 import Response
 
+from nanobot.agent.loop import UNIFIED_SESSION_KEY
 from nanobot.command.builtin import builtin_command_palette
 from nanobot.cron.session_turns import is_bound_cron_job
 from nanobot.cron.types import CronJob, CronSchedule
@@ -146,6 +147,7 @@ class GatewayHTTPHandler:
         runtime_model_name: Callable[[], str | None] | None,
         runtime_surface: str,
         runtime_capabilities_overrides: dict[str, Any] | None,
+        unified_session: bool = False,
         bus: MessageBus,
         tokens: GatewayTokenStore,
         media: WebUIMediaGateway,
@@ -170,6 +172,7 @@ class GatewayHTTPHandler:
         self.cron_pending_job_ids = cron_pending_job_ids
         self._log = log
         self._runtime_surface = runtime_surface
+        self._unified_session = unified_session
 
         from nanobot.webui.settings_api import runtime_capabilities as _rc
         from nanobot.webui.settings_routes import WebUISettingsRouter
