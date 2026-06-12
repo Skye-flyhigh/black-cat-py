@@ -26,7 +26,7 @@ def test_proactive_websocket_delivery_gets_fresh_turn_id() -> None:
         "workspace_scope": {"mode": "default"},
     }
 
-    out = _proactive_delivery_metadata(
+    out = cron_proactive_delivery_metadata(
         "websocket",
         metadata,
         turn_seed="cron:drink-water",
