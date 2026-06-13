@@ -474,7 +474,6 @@
     "automations": {
       "kicker": "Automatizaciones del espacio",
       "title": "Automatizaciones",
-      "newInChat": "Crear en chat",
       "stats": {
         "active": "Activas",
         "paused": "Pausadas",
