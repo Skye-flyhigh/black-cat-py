@@ -7,7 +7,12 @@ import { ThreadHeader } from "@/components/thread/ThreadHeader";
 import { ThreadViewport } from "@/components/thread/ThreadViewport";
 import { useBlackcatStream, type SendImage, type SendOptions } from "@/hooks/useBlackcatStream";
 import { useSessionHistory } from "@/hooks/useSessions";
-import { fetchCliApps, fetchMcpPresets, fetchSettings, listSlashCommands } from "@/lib/api";
+import {
+  fetchInstalledCliApps,
+  fetchMcpPresets,
+  fetchSettings,
+  listSlashCommands,
+} from "@/lib/api";
 import {
   CLI_APPS_CHANGED_EVENT,
   installedCliAppsFromPayload,
@@ -166,8 +171,20 @@ export function ThreadShell({
   const { client, modelName, token } = useClient();
   const [booting, setBooting] = useState(false);
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
-  const [cliApps, setCliApps] = useState<CliAppInfo[]>([]);
-  const [mcpPresets, setMcpPresets] = useState<McpPresetInfo[]>([]);
+  const cliApps = useInstalledSettingItems({
+    token,
+    eventName: CLI_APPS_CHANGED_EVENT,
+    fetchPayload: fetchInstalledCliApps,
+    isPayload: isCliAppsPayload,
+    selectItems: installedCliAppsFromPayload,
+  });
+  const mcpPresets = useInstalledSettingItems({
+    token,
+    eventName: MCP_PRESETS_CHANGED_EVENT,
+    fetchPayload: fetchMcpPresets,
+    isPayload: isMcpPresetsPayload,
+    selectItems: installedMcpPresetsFromPayload,
+  });
   const [settings, setSettings] = useState<SettingsPayload | null>(settingsSnapshot);
   const [heroGreetingKey, setHeroGreetingKey] = useState(randomHeroGreetingKey);
   const [scrollToBottomSignal, setScrollToBottomSignal] = useState(0);

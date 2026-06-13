@@ -2563,7 +2563,7 @@ def test_sessions_list_includes_active_run_started_at() -> None:
     try:
         wth._WEBSOCKET_TURN_WALL_STARTED_AT["chat-1"] = 1_700_000_000.0
         req = Request("/api/sessions", Headers([("Authorization", "Bearer tok")]))
-        resp = channel.gateway.http._handle_sessions_list(req)
+        resp = asyncio.run(channel.gateway.http._handle_sessions_list(req))
     finally:
         wth._WEBSOCKET_TURN_WALL_STARTED_AT.clear()
 
