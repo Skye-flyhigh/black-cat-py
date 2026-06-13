@@ -55,6 +55,7 @@
       "ariaLabel": "Đổi ngôn ngữ"
     },
     "apps": "Ứng dụng",
+    "automations": "Tự động hóa",
     "skills": {
       "title": "Kỹ năng"
     }
@@ -80,6 +81,7 @@
       "cliApps": "Ứng dụng CLI",
       "mcp": "MCP",
       "apps": "Ứng dụng",
+      "automations": "Tự động hóa",
       "skills": "Kỹ năng"
     },
     "sections": {
@@ -470,124 +472,71 @@
       "empty": "Không có ứng dụng phù hợp."
     },
     "automations": {
+      "kicker": "Tự động hóa không gian làm việc",
+      "title": "Tự động hóa",
+      "description": "Xem nhắc nhở cron, lượt agent định kỳ, tự động hóa một lần và tự động hóa hệ thống được bảo vệ tại một nơi.",
+      "refresh": "Làm mới",
+      "newInChat": "Tạo trong chat",
+      "stats": {
+        "active": "Đang chạy",
+        "paused": "Đã tạm dừng",
+        "failed": "Thất bại",
+        "system": "Hệ thống"
+      },
       "filters": {
         "all": "Tất cả",
         "active": "Đang chạy",
         "paused": "Đã tạm dừng",
-        "failed": "Cần xử lý",
+        "failed": "Thất bại",
         "system": "Hệ thống"
       },
-      "sort": {
-        "next": "Lần chạy tiếp theo",
-        "last": "Lần chạy trước",
-        "updated": "Đã cập nhật",
-        "name": "Tên"
-      },
-      "search": "Tìm tác vụ, tin nhắn, cuộc trò chuyện liên kết hoặc lịch",
+      "search": "Tìm tác vụ, tin nhắn, phiên hoặc biểu thức cron",
       "queue": "Hàng đợi",
       "loading": "Đang tải tự động hóa...",
       "noMatches": "Không có tự động hóa phù hợp với chế độ xem này.",
       "empty": "Chưa có tự động hóa.",
-      "emptyHint": "Tạo từ nơi tác vụ sẽ chạy để nanobot giữ đúng ngữ cảnh.",
       "oneShot": "Một lần",
       "systemTask": "Tự động hóa do hệ thống quản lý",
       "labels": {
         "schedule": "Lịch",
         "next": "Tiếp theo",
-        "origin": "Cuộc trò chuyện liên kết",
-        "created": "Đã tạo",
-        "updated": "Đã cập nhật"
+        "last": "Lần trước",
+        "origin": "Nguồn"
       },
       "runNow": "Chạy ngay",
       "pause": "Tạm dừng",
       "resume": "Tiếp tục",
-      "edit": "Sửa",
       "delete": "Xóa",
       "protected": "Được bảo vệ",
-      "editTitle": "Sửa tự động hóa",
-      "save": "Lưu",
       "deleteTitle": "Xóa tự động hóa",
       "deleteDescription": "Thao tác này xóa {{name}} khỏi kho cron. Tin nhắn chat trước đó vẫn ở trong phiên.",
       "cancel": "Hủy",
       "status": {
         "system": "Hệ thống",
-        "running": "Đang chạy",
+        "pending": "Đang chờ",
         "paused": "Đã tạm dừng",
         "failed": "Thất bại",
-        "completed": "Hoàn tất",
-        "noSchedule": "Không có lịch",
         "active": "Đang chạy"
       },
       "origin": {
         "system": "Hệ thống",
-        "unknown": "Chưa liên kết cuộc trò chuyện"
-      },
-      "channels": {
-        "api": "API",
-        "cli": "CLI",
-        "dingtalk": "DingTalk",
-        "discord": "Discord",
-        "email": "Email",
-        "feishu": "Feishu",
-        "matrix": "Matrix",
-        "msteams": "Microsoft Teams",
-        "qq": "QQ",
-        "slack": "Slack",
-        "telegram": "Telegram",
-        "wechat": "WeChat",
-        "wecom": "WeCom",
-        "weixin": "WeChat",
-        "whatsapp": "WhatsApp"
+        "unknown": "Phiên không xác định"
       },
       "schedule": {
         "at": "Vào {{time}}",
         "every": "Mỗi {{duration}}",
         "cron": "Cron {{expr}}",
         "cronWithTz": "Cron {{expr}} · {{tz}}",
-        "withTz": "{{summary}} · {{tz}}",
-        "dailyAt": "Hằng ngày lúc {{time}}",
-        "weekdaysAt": "Ngày làm việc lúc {{time}}",
-        "hourlyAt": "Mỗi giờ tại :{{minute}}",
-        "hourlyWindow": "Mỗi giờ {{start}}-{{end}} tại :{{minute}}",
         "custom": "Lịch tùy chỉnh"
       },
       "next": {
         "paused": "Đã tạm dừng",
-        "pending": "Đang chạy",
+        "pending": "Sắp chạy",
         "none": "Không có lần chạy tiếp theo"
       },
-      "message": {
-        "showMore": "Hiển thị toàn bộ tin nhắn",
-        "showLess": "Thu gọn"
-      },
-      "fields": {
-        "name": "Tên",
-        "message": "Tin nhắn",
-        "scheduleType": "Loại lịch",
-        "every": "Mỗi",
-        "unit": "Đơn vị",
-        "cronExpression": "Biểu thức cron",
-        "timezone": "Múi giờ",
-        "runAt": "Chạy lúc"
-      },
-      "scheduleTypes": {
-        "every": "Khoảng lặp",
-        "cron": "Cron",
-        "at": "Một lần"
-      },
-      "everyUnits": {
-        "second": "Giây",
-        "minute": "Phút",
-        "hour": "Giờ",
-        "day": "Ngày"
-      },
-      "validation": {
-        "nameRequired": "Tên là bắt buộc.",
-        "messageRequired": "Tin nhắn là bắt buộc.",
-        "intervalRequired": "Khoảng lặp phải là số dương.",
-        "cronRequired": "Biểu thức cron là bắt buộc.",
-        "timeRequired": "Thời gian chạy là bắt buộc.",
-        "futureRequired": "Thời gian chạy phải ở tương lai."
+      "last": {
+        "never": "Chưa từng chạy",
+        "unknown": "không xác định"
       }
     },
     "oauth": {

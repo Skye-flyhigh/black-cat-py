@@ -55,6 +55,7 @@
       "ariaLabel": "Changer de langue"
     },
     "apps": "Apps",
+    "automations": "Automatisations",
     "skills": {
       "title": "Compétences"
     }
@@ -80,6 +81,7 @@
       "cliApps": "Apps CLI",
       "mcp": "MCP",
       "apps": "Applications",
+      "automations": "Automatisations",
       "skills": "Compétences"
     },
     "sections": {
@@ -470,124 +472,71 @@
       "empty": "Aucune app ne correspond."
     },
     "automations": {
+      "kicker": "Automatisations de l’espace",
+      "title": "Automatisations",
+      "description": "Passez en revue les rappels cron, tours récurrents de l’agent, automatisations ponctuelles et automatisations système protégées au même endroit.",
+      "refresh": "Actualiser",
+      "newInChat": "Créer dans le chat",
+      "stats": {
+        "active": "Actives",
+        "paused": "En pause",
+        "failed": "Échouées",
+        "system": "Système"
+      },
       "filters": {
         "all": "Toutes",
         "active": "Actives",
         "paused": "En pause",
-        "failed": "À traiter",
+        "failed": "Échouées",
         "system": "Système"
       },
-      "sort": {
-        "next": "Prochaine exécution",
-        "last": "Dernière exécution",
-        "updated": "Mise à jour",
-        "name": "Nom"
-      },
-      "search": "Rechercher tâche, message, discussion liée ou planning",
+      "search": "Rechercher une tâche, un message, une session ou une expression cron",
       "queue": "File",
       "loading": "Chargement des automatisations...",
       "noMatches": "Aucune automatisation ne correspond à cette vue.",
       "empty": "Aucune automatisation pour le moment.",
-      "emptyHint": "Créez-la depuis son point d'exécution pour que nanobot conserve le bon contexte.",
       "oneShot": "Ponctuelle",
       "systemTask": "Automatisation gérée par le système",
       "labels": {
         "schedule": "Planning",
         "next": "Prochaine",
-        "origin": "Discussion liée",
-        "created": "Créée",
-        "updated": "Modifiée"
+        "last": "Dernière",
+        "origin": "Origine"
       },
       "runNow": "Exécuter maintenant",
       "pause": "Mettre en pause",
       "resume": "Reprendre",
-      "edit": "Modifier",
       "delete": "Supprimer",
       "protected": "Protégée",
-      "editTitle": "Modifier l’automatisation",
-      "save": "Enregistrer",
       "deleteTitle": "Supprimer l’automatisation",
       "deleteDescription": "Cela supprime {{name}} du stockage cron. Les anciens messages de chat restent dans la session.",
       "cancel": "Annuler",
       "status": {
         "system": "Système",
-        "running": "En cours d’exécution",
+        "pending": "En attente",
         "paused": "En pause",
         "failed": "Échouée",
-        "completed": "Terminée",
-        "noSchedule": "Aucun planning",
         "active": "En cours"
       },
       "origin": {
         "system": "Système",
-        "unknown": "Aucune discussion liée"
-      },
-      "channels": {
-        "api": "API",
-        "cli": "CLI",
-        "dingtalk": "DingTalk",
-        "discord": "Discord",
-        "email": "Email",
-        "feishu": "Feishu",
-        "matrix": "Matrix",
-        "msteams": "Microsoft Teams",
-        "qq": "QQ",
-        "slack": "Slack",
-        "telegram": "Telegram",
-        "wechat": "WeChat",
-        "wecom": "WeCom",
-        "weixin": "WeChat",
-        "whatsapp": "WhatsApp"
+        "unknown": "Session inconnue"
       },
       "schedule": {
         "at": "À {{time}}",
         "every": "Toutes les {{duration}}",
         "cron": "Cron {{expr}}",
         "cronWithTz": "Cron {{expr}} · {{tz}}",
-        "withTz": "{{summary}} · {{tz}}",
-        "dailyAt": "Chaque jour à {{time}}",
-        "weekdaysAt": "Jours ouvrés à {{time}}",
-        "hourlyAt": "Toutes les heures à :{{minute}}",
-        "hourlyWindow": "Toutes les heures {{start}}-{{end}} à :{{minute}}",
         "custom": "Planning personnalisé"
       },
       "next": {
         "paused": "En pause",
-        "pending": "En cours d’exécution",
+        "pending": "Exécution prochaine",
         "none": "Aucune prochaine exécution"
       },
-      "message": {
-        "showMore": "Afficher le message complet",
-        "showLess": "Afficher moins"
-      },
-      "fields": {
-        "name": "Nom",
-        "message": "Message",
-        "scheduleType": "Type de planning",
-        "every": "Toutes les",
-        "unit": "Unité",
-        "cronExpression": "Expression cron",
-        "timezone": "Fuseau horaire",
-        "runAt": "Exécuter à"
-      },
-      "scheduleTypes": {
-        "every": "Intervalle",
-        "cron": "Cron",
-        "at": "Une fois"
-      },
-      "everyUnits": {
-        "second": "Secondes",
-        "minute": "Minutes",
-        "hour": "Heures",
-        "day": "Jours"
-      },
-      "validation": {
-        "nameRequired": "Le nom est obligatoire.",
-        "messageRequired": "Le message est obligatoire.",
-        "intervalRequired": "L’intervalle doit être un nombre positif.",
-        "cronRequired": "L’expression cron est obligatoire.",
-        "timeRequired": "L’heure d’exécution est obligatoire.",
-        "futureRequired": "L’heure d’exécution doit être dans le futur."
+      "last": {
+        "never": "Jamais",
+        "unknown": "inconnu"
       }
     },
     "oauth": {

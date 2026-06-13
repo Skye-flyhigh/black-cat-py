@@ -55,6 +55,7 @@
       "ariaLabel": "Change language"
     },
     "apps": "Apps",
+    "automations": "Automations",
     "skills": {
       "title": "Skills"
     }
@@ -80,6 +81,7 @@
       "runtime": "System",
       "advanced": "Security",
       "apps": "Apps",
+      "automations": "Automations",
       "skills": "Skills"
     },
     "sections": {
@@ -470,124 +472,71 @@
       "empty": "No apps match this filter."
     },
     "automations": {
+      "kicker": "Workspace automations",
+      "title": "Automations",
+      "description": "Review cron reminders, recurring agent turns, one-time jobs, and protected system automations in one place.",
+      "refresh": "Refresh",
+      "newInChat": "New in chat",
+      "stats": {
+        "active": "Active",
+        "paused": "Paused",
+        "failed": "Failed",
+        "system": "System"
+      },
       "filters": {
         "all": "All",
         "active": "Active",
         "paused": "Paused",
-        "failed": "Needs attention",
+        "failed": "Failed",
         "system": "System"
       },
-      "sort": {
-        "next": "Next run",
-        "last": "Last run",
-        "updated": "Updated",
-        "name": "Name"
-      },
-      "search": "Search task, message, linked chat, or schedule",
+      "search": "Search automation, message, session, or cron expression",
       "queue": "Queue",
       "loading": "Loading automations...",
       "noMatches": "No automations match this view.",
       "empty": "No automations yet.",
-      "emptyHint": "Create one from where it should run so nanobot keeps the right context.",
       "oneShot": "One-time",
       "systemTask": "System-managed automation",
       "labels": {
         "schedule": "Schedule",
         "next": "Next",
-        "origin": "Linked chat",
-        "created": "Created",
-        "updated": "Updated"
+        "last": "Last",
+        "origin": "Origin"
       },
       "runNow": "Run now",
       "pause": "Pause",
       "resume": "Resume",
-      "edit": "Edit",
       "delete": "Delete",
       "protected": "Protected",
-      "editTitle": "Edit automation",
-      "save": "Save",
       "deleteTitle": "Delete automation",
       "deleteDescription": "This removes {{name}} from the cron store. Past chat messages stay in the session.",
       "cancel": "Cancel",
       "status": {
         "system": "System",
-        "running": "Running now",
+        "pending": "Pending",
         "paused": "Paused",
         "failed": "Failed",
-        "completed": "Completed",
-        "noSchedule": "No schedule",
         "active": "Active"
       },
       "origin": {
         "system": "System",
-        "unknown": "No linked chat"
-      },
-      "channels": {
-        "api": "API",
-        "cli": "CLI",
-        "dingtalk": "DingTalk",
-        "discord": "Discord",
-        "email": "Email",
-        "feishu": "Feishu",
-        "matrix": "Matrix",
-        "msteams": "Microsoft Teams",
-        "qq": "QQ",
-        "slack": "Slack",
-        "telegram": "Telegram",
-        "wechat": "WeChat",
-        "wecom": "WeCom",
-        "weixin": "WeChat",
-        "whatsapp": "WhatsApp"
+        "unknown": "Unknown session"
       },
       "schedule": {
         "at": "At {{time}}",
         "every": "Every {{duration}}",
         "cron": "Cron {{expr}}",
         "cronWithTz": "Cron {{expr}} · {{tz}}",
-        "withTz": "{{summary}} · {{tz}}",
-        "dailyAt": "Daily at {{time}}",
-        "weekdaysAt": "Weekdays at {{time}}",
-        "hourlyAt": "Hourly at :{{minute}}",
-        "hourlyWindow": "Hourly {{start}}-{{end}} at :{{minute}}",
         "custom": "Custom schedule"
       },
       "next": {
         "paused": "Paused",
-        "pending": "Running now",
+        "pending": "Running soon",
         "none": "No next run"
       },
-      "message": {
-        "showMore": "Show full message",
-        "showLess": "Show less"
-      },
-      "fields": {
-        "name": "Name",
-        "message": "Message",
-        "scheduleType": "Schedule type",
-        "every": "Every",
-        "unit": "Unit",
-        "cronExpression": "Cron expression",
-        "timezone": "Timezone",
-        "runAt": "Run at"
-      },
-      "scheduleTypes": {
-        "every": "Interval",
-        "cron": "Cron",
-        "at": "Once"
-      },
-      "everyUnits": {
-        "second": "Seconds",
-        "minute": "Minutes",
-        "hour": "Hours",
-        "day": "Days"
-      },
-      "validation": {
-        "nameRequired": "Name is required.",
-        "messageRequired": "Message is required.",
-        "intervalRequired": "Interval must be a positive number.",
-        "cronRequired": "Cron expression is required.",
-        "timeRequired": "Run time is required.",
-        "futureRequired": "Run time must be in the future."
+      "last": {
+        "never": "Never",
+        "unknown": "unknown"
       }
     },
     "oauth": {

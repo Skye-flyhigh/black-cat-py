@@ -55,6 +55,7 @@
       "ariaLabel": "切換語言"
     },
     "apps": "應用",
+    "automations": "自動任務",
     "skills": {
       "title": "技能"
     }
@@ -80,6 +81,7 @@
       "cliApps": "CLI 應用",
       "mcp": "MCP",
       "apps": "應用",
+      "automations": "自動任務",
       "skills": "技能"
     },
     "sections": {
@@ -470,124 +472,71 @@
       "empty": "沒有符合的應用。"
     },
     "automations": {
+      "kicker": "工作區自動任務",
+      "title": "自動任務",
+      "description": "集中查看 cron 提醒、週期性 agent 任務、一次性自動任務和受保護的系統自動任務。",
+      "refresh": "重新整理",
+      "newInChat": "在聊天中建立",
+      "stats": {
+        "active": "執行中",
+        "paused": "已暫停",
+        "failed": "失敗",
+        "system": "系統"
+      },
       "filters": {
         "all": "全部",
         "active": "執行中",
         "paused": "已暫停",
-        "failed": "異常",
+        "failed": "失敗",
         "system": "系統"
       },
-      "sort": {
-        "next": "下次執行",
-        "last": "上次執行",
-        "updated": "更新時間",
-        "name": "名稱"
-      },
-      "search": "搜尋任務、訊息、關聯對話或排程",
+      "search": "搜尋任務、訊息、會話或 cron 表達式",
       "queue": "任務佇列",
       "loading": "正在載入自動任務...",
       "noMatches": "目前檢視沒有符合的自動任務。",
       "empty": "尚無自動任務。",
-      "emptyHint": "請從它應該執行的來源處建立，這樣 nanobot 才能保留正確上下文。",
       "oneShot": "一次性",
       "systemTask": "系統管理的自動任務",
       "labels": {
         "schedule": "排程",
         "next": "下次",
-        "origin": "關聯會話",
-        "created": "建立於",
-        "updated": "更新於"
+        "last": "上次",
+        "origin": "來源"
       },
       "runNow": "立即執行",
       "pause": "暫停",
       "resume": "恢復",
-      "edit": "編輯",
       "delete": "刪除",
       "protected": "受保護",
-      "editTitle": "編輯自動任務",
-      "save": "儲存",
       "deleteTitle": "刪除自動任務",
       "deleteDescription": "這會從 cron 儲存中刪除 {{name}}，歷史聊天訊息會保留在會話中。",
       "cancel": "取消",
       "status": {
         "system": "系統",
-        "running": "正在執行",
+        "pending": "等待中",
         "paused": "已暫停",
         "failed": "失敗",
-        "completed": "已完成",
-        "noSchedule": "無排程",
         "active": "執行中"
       },
       "origin": {
         "system": "系統",
-        "unknown": "未關聯會話"
-      },
-      "channels": {
-        "api": "API",
-        "cli": "CLI",
-        "dingtalk": "釘釘",
-        "discord": "Discord",
-        "email": "電子郵件",
-        "feishu": "飛書",
-        "matrix": "Matrix",
-        "msteams": "Microsoft Teams",
-        "qq": "QQ",
-        "slack": "Slack",
-        "telegram": "Telegram",
-        "wechat": "微信",
-        "wecom": "企業微信",
-        "weixin": "微信",
-        "whatsapp": "WhatsApp"
+        "unknown": "未知會話"
       },
       "schedule": {
         "at": "於 {{time}}",
         "every": "每 {{duration}}",
         "cron": "Cron {{expr}}",
         "cronWithTz": "Cron {{expr}} · {{tz}}",
-        "withTz": "{{summary}} · {{tz}}",
-        "dailyAt": "每天 {{time}}",
-        "weekdaysAt": "工作日 {{time}}",
-        "hourlyAt": "每小時第 {{minute}} 分鐘",
-        "hourlyWindow": "{{start}}-{{end}} 點每小時第 {{minute}} 分鐘",
         "custom": "自訂排程"
       },
       "next": {
         "paused": "已暫停",
-        "pending": "正在執行",
+        "pending": "即將執行",
         "none": "沒有下次執行"
       },
-      "message": {
-        "showMore": "查看完整訊息",
-        "showLess": "收起訊息"
-      },
-      "fields": {
-        "name": "名稱",
-        "message": "訊息",
-        "scheduleType": "排程類型",
-        "every": "每隔",
-        "unit": "單位",
-        "cronExpression": "Cron 表達式",
-        "timezone": "時區",
-        "runAt": "執行時間"
-      },
-      "scheduleTypes": {
-        "every": "間隔",
-        "cron": "Cron",
-        "at": "一次性"
-      },
-      "everyUnits": {
-        "second": "秒",
-        "minute": "分鐘",
-        "hour": "小時",
-        "day": "天"
-      },
-      "validation": {
-        "nameRequired": "名稱不能為空。",
-        "messageRequired": "訊息不能為空。",
-        "intervalRequired": "間隔必須是正整數。",
-        "cronRequired": "Cron 表達式不能為空。",
-        "timeRequired": "執行時間不能為空。",
-        "futureRequired": "執行時間必須晚於目前時間。"
+      "last": {
+        "never": "從未執行",
+        "unknown": "未知"
       }
     },
     "oauth": {
