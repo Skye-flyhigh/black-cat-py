@@ -537,6 +537,14 @@
       "last": {
         "never": "Chưa từng chạy",
         "unknown": "không xác định"
+      },
+      "history": {
+        "ok": "Hoàn tất",
+        "error": "Lỗi",
+        "skipped": "Đã bỏ qua"
+      },
+      "duration": {
+        "lessThanSecond": "dưới 1 giây"
       }
     },
     "oauth": {
