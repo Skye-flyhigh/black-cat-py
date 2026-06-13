@@ -501,7 +501,7 @@
         "schedule": "Schedule",
         "next": "Next",
         "last": "Last",
-        "origin": "Origin"
+        "origin": "Linked chat"
       },
       "runNow": "Run now",
       "pause": "Pause",
@@ -520,7 +520,8 @@
       },
       "origin": {
         "system": "System",
-        "unknown": "Unknown session"
+        "unknown": "No linked chat",
+        "legacy": "Recreate in target chat"
       },
       "schedule": {
         "at": "At {{time}}",

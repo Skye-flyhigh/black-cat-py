@@ -501,7 +501,7 @@
         "schedule": "Jadwal",
         "next": "Berikutnya",
         "last": "Terakhir",
-        "origin": "Asal"
+        "origin": "Chat tertaut"
       },
       "runNow": "Jalankan sekarang",
       "pause": "Jeda",
@@ -520,7 +520,8 @@
       },
       "origin": {
         "system": "Sistem",
-        "unknown": "Sesi tidak dikenal"
+        "unknown": "Tidak ada chat tertaut",
+        "legacy": "Buat ulang di chat tujuan"
       },
       "schedule": {
         "at": "Pada {{time}}",
