@@ -302,8 +302,7 @@ class WebUISettingsRouter:
     async def _handle_settings_cli_apps(self, request: WsRequest) -> Response:
         if not self._authorized(request):
             return self._unauthorized()
-        query = self._query(request)
-        installed_only = (query.get("installed_only") or [""])[0].lower() in {
+        installed_only = (_query_first(self._query(request), "installed_only") or "").lower() in {
             "1",
             "true",
             "yes",
