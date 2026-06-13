@@ -270,7 +270,7 @@ export function ThreadShell({
   const cliApps = useInstalledSettingItems({
     token,
     eventName: CLI_APPS_CHANGED_EVENT,
-    fetchPayload: fetchCliApps,
+    fetchPayload: fetchInstalledCliApps,
     isPayload: isCliAppsPayload,
     selectItems: installedCliAppsFromPayload,
   });
