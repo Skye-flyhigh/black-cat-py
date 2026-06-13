@@ -19,6 +19,9 @@ from blackcat.agent.tools.schema import (
 from blackcat.config_base import Base
 from blackcat.security.workspace_access import current_tool_workspace
 from blackcat.utils.media import build_image_content_blocks, detect_image_mime
+from blackcat.config_base import Base
+from blackcat.security.workspace_access import current_tool_workspace
+from blackcat.utils.helpers import build_image_content_blocks, detect_image_mime
 
 
 class FileToolsConfig(Base):
