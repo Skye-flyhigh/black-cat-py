@@ -1376,6 +1376,8 @@ async def _parse_codex_sse_images(
                         logger.error("Codex SSE failure: {}", raw[:2000])
                     _collect_images_from_sse_event(event, images)
                     _collect_text_from_sse_event(event, text_parts)
+                    if ev_type == "response.completed":
+                        break
             continue
         buffer.append(line)
 
