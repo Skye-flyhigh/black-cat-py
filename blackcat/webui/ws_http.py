@@ -73,6 +73,8 @@ from blackcat.webui.workspaces import WebUIWorkspaceController
 
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
 
+_SLOW_WEBUI_HTTP_LOG_MS = 1_000
+
 if TYPE_CHECKING:
     from blackcat.bus.queue import MessageBus
     from blackcat.cron.service import CronService
