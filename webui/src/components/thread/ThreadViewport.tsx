@@ -32,6 +32,7 @@ interface ThreadViewportProps {
 const NEAR_BOTTOM_PX = 48;
 const DEFAULT_SCROLL_BUTTON_BOTTOM_PX = 192;
 const SCROLL_BUTTON_COMPOSER_GAP_PX = 16;
+const SOFT_KEYBOARD_MIN_INSET_PX = 80;
 export const INITIAL_HISTORY_WINDOW = 160;
 export const HISTORY_WINDOW_INCREMENT = 120;
 
@@ -48,7 +49,36 @@ export function windowMessages(messages: UIMessage[], visibleCount: number): UIM
   return messages.slice(start);
 }
 
-export function ThreadViewport({
+function isKeyboardEditableElement(element: Element | null): element is HTMLElement {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.isContentEditable) return true;
+  if (element instanceof HTMLTextAreaElement) return true;
+  if (!(element instanceof HTMLInputElement)) return false;
+  return ![
+    "button",
+    "checkbox",
+    "color",
+    "file",
+    "hidden",
+    "image",
+    "radio",
+    "range",
+    "reset",
+    "submit",
+  ].includes(element.type);
+}
+
+function readSoftKeyboardInsetBottom(container: HTMLElement | null): number {
+  const viewport = window.visualViewport;
+  if (!viewport) return 0;
+  const active = document.activeElement;
+  if (!isKeyboardEditableElement(active) || !container?.contains(active)) return 0;
+  const layoutHeight = window.innerHeight || document.documentElement.clientHeight;
+  const inset = layoutHeight - viewport.height - viewport.offsetTop;
+  return inset >= SOFT_KEYBOARD_MIN_INSET_PX ? Math.ceil(inset) : 0;
+}
+
+export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportProps>(function ThreadViewport({
   messages,
   isStreaming,
   composer,
@@ -73,6 +103,7 @@ export function ThreadViewport({
   const userReadingHistoryRef = useRef(false);
   const [atBottom, setAtBottom] = useState(true);
   const [composerDockHeight, setComposerDockHeight] = useState(0);
+  const [keyboardInsetBottom, setKeyboardInsetBottom] = useState(0);
   const [visibleMessageCount, setVisibleMessageCount] =
     useState(INITIAL_HISTORY_WINDOW);
   const hasMessages = messages.length > 0;
@@ -81,9 +112,22 @@ export function ThreadViewport({
     [messages, visibleMessageCount],
   );
   const hiddenMessageCount = messages.length - visibleMessages.length;
-  const scrollButtonBottom = composerDockHeight > 0
-    ? composerDockHeight + SCROLL_BUTTON_COMPOSER_GAP_PX
-    : DEFAULT_SCROLL_BUTTON_BOTTOM_PX;
+  const hiddenUserMessageCount =
+    userMessageOffset
+    + (hiddenMessageCount > 0
+      ? messages.slice(0, hiddenMessageCount).filter((message) => message.role === "user").length
+      : 0);
+  const visibleForkBoundaryMessageCount =
+    forkBoundaryMessageCount !== null && forkBoundaryMessageCount > hiddenMessageCount
+      ? forkBoundaryMessageCount - hiddenMessageCount
+      : null;
+  const scrollButtonBottom =
+    keyboardInsetBottom
+    + (composerDockHeight > 0
+      ? composerDockHeight + SCROLL_BUTTON_COMPOSER_GAP_PX
+      : DEFAULT_SCROLL_BUTTON_BOTTOM_PX);
+  const scrollViewportStyle =
+    keyboardInsetBottom > 0 ? { bottom: keyboardInsetBottom } : undefined;
 
   const cancelScheduledBottomScroll = useCallback(() => {
     for (const id of scrollFrameIdsRef.current) {
@@ -148,12 +192,40 @@ export function ThreadViewport({
     );
   }, []);
 
+  useLayoutEffect(() => {
+    const updateKeyboardInset = () => {
+      const next = readSoftKeyboardInsetBottom(scrollRef.current);
+      setKeyboardInsetBottom((current) =>
+        Math.abs(current - next) < 1 ? current : next,
+      );
+    };
+    updateKeyboardInset();
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", updateKeyboardInset);
+    viewport?.addEventListener("scroll", updateKeyboardInset);
+    window.addEventListener("resize", updateKeyboardInset);
+    document.addEventListener("focusin", updateKeyboardInset);
+    document.addEventListener("focusout", updateKeyboardInset);
+    return () => {
+      viewport?.removeEventListener("resize", updateKeyboardInset);
+      viewport?.removeEventListener("scroll", updateKeyboardInset);
+      window.removeEventListener("resize", updateKeyboardInset);
+      document.removeEventListener("focusin", updateKeyboardInset);
+      document.removeEventListener("focusout", updateKeyboardInset);
+    };
+  }, []);
+
   useEffect(() => {
     if (!atBottom) return;
     // Instant jump: CSS scroll-smooth + behavior "auto" still animates in some
     // browsers; session switches and history hydration should never slide from top.
     scrollToBottom(false);
   }, [messages, atBottom, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    if (userReadingHistoryRef.current) return;
+    scrollToBottom(false, 4);
+  }, [keyboardInsetBottom, scrollToBottom]);
 
   useEffect(() => {
     if (scrollToBottomSignal <= 0) return;
@@ -244,6 +316,7 @@ export function ThreadViewport({
           "[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30",
           "[&::-webkit-scrollbar-track]:bg-transparent",
         )}
+        style={scrollViewportStyle}
       >
         {hasMessages ? (
           <div ref={contentRef} className="mx-auto flex min-h-full w-full max-w-[64rem] flex-col">
