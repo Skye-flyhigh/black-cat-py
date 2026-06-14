@@ -1772,7 +1772,7 @@ export function ThreadComposer({
               />
             ) : null}
           </div>
-          <div className={cn("flex shrink-0 items-center", isHero ? "gap-1.5" : "gap-2")}>
+          <div className={cn("ml-auto flex min-w-0 shrink-0 items-center", isHero ? "gap-1.5" : "gap-2")}>
             {modelLabel && !voiceRecorder.isRecording ? (
               <ComposerModelBadge
                 label={modelLabel}
@@ -1794,6 +1794,7 @@ export function ThreadComposer({
                       disabled={voiceRecorder.buttonDisabled}
                       aria-label={voiceButtonLabel}
                       aria-keyshortcuts={VOICE_SHORTCUT_ARIA}
+                      title={voiceButtonTooltip}
                       onPointerDown={voiceRecorder.beginPress}
                       onPointerUp={voiceRecorder.endPress}
                       onPointerCancel={voiceRecorder.endPress}
@@ -2097,7 +2098,9 @@ function ComposerModelBadge({
         "shadow-[0_2px_8px_rgba(15,23,42,0.045)]",
         interactive && "cursor-pointer hover:bg-accent/55 hover:text-foreground",
         needsSetup && "border-amber-500/35 bg-amber-50/70 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200",
-        isHero ? "h-8 max-w-[12.5rem] gap-1.5 px-2 text-[11.5px]" : "h-9 max-w-[12rem] gap-2 px-2.5 text-[12px]",
+        isHero
+          ? "h-8 max-w-[min(12.5rem,44vw)] gap-1.5 px-2 text-[11.5px]"
+          : "h-9 max-w-[min(12rem,44vw)] gap-2 px-2.5 text-[12px]",
       )}
     >
       <span
