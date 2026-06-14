@@ -176,6 +176,11 @@ def _origin_payload(
     }
 
 
+def _expose_origin_identifiers(job: CronJob) -> bool:
+    channel = job.payload.origin_channel
+    return not channel or channel == "websocket"
+
+
 def _session_preview(messages: Any) -> str:
     if not isinstance(messages, list):
         return ""
