@@ -237,9 +237,44 @@ describe("ThreadViewport", () => {
   });
 
   it("scrolls recent messages into view when the composer receives focus", async () => {
-    const scrollIntoView = vi.fn();
-    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const scrollTo = vi.fn();
+    const { container } = render(
+      <ThreadViewport
+        messages={messages}
+        isStreaming={false}
+        composer={<textarea aria-label="Message input" />}
+      />,
+    );
+    const scroller = container.firstElementChild?.firstElementChild as HTMLElement;
+    Object.defineProperties(scroller, {
+      scrollHeight: { configurable: true, value: 2400 },
+      clientHeight: { configurable: true, value: 600 },
+      scrollTop: { configurable: true, writable: true, value: 0 },
+      scrollTo: { configurable: true, value: scrollTo },
+    });
+
+    act(() => {
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+    scrollTo.mockClear();
+
+    const input = screen.getByLabelText("Message input");
+    act(() => {
+      input.focus();
+      fireEvent.focusIn(input);
+    });
+
+    await waitFor(() =>
+      expect(scrollTo).toHaveBeenCalledWith({
+        top: 1800,
+        behavior: "auto",
+      }),
+    );
+  });
+
+  it("scrolls recent messages into view when the focused composer resizes the visual viewport without an inset", async () => {
+    const visualViewport = stubVisualViewport({ innerHeight: 500, height: 500 });
+    const scrollTo = vi.fn();
 
     try {
       const { container } = render(
@@ -253,28 +288,30 @@ describe("ThreadViewport", () => {
       Object.defineProperties(scroller, {
         scrollHeight: { configurable: true, value: 2400 },
         clientHeight: { configurable: true, value: 600 },
-        scrollTop: { configurable: true, value: 0 },
+        scrollTop: { configurable: true, writable: true, value: 0 },
+        scrollTo: { configurable: true, value: scrollTo },
       });
-
-      act(() => {
-        scroller.dispatchEvent(new Event("scroll"));
-      });
-      scrollIntoView.mockClear();
 
       const input = screen.getByLabelText("Message input");
+      Object.defineProperty(document, "activeElement", {
+        configurable: true,
+        get: () => input,
+      });
+
       act(() => {
-        input.focus();
-        fireEvent.focusIn(input);
+        visualViewport.viewport.dispatchEvent(new Event("resize"));
       });
 
       await waitFor(() =>
-        expect(scrollIntoView).toHaveBeenCalledWith({
-          block: "end",
+        expect(scrollTo).toHaveBeenCalledWith({
+          top: 1800,
           behavior: "auto",
         }),
       );
+      expect(scroller).not.toHaveStyle({ bottom: "320px" });
     } finally {
-      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      Reflect.deleteProperty(document, "activeElement");
+      visualViewport.restore();
     }
   });
 

@@ -56,6 +56,7 @@ const NEAR_TOP_PX = 96;
 const DEFAULT_SCROLL_BUTTON_BOTTOM_PX = 192;
 const SCROLL_BUTTON_COMPOSER_GAP_PX = 16;
 const SOFT_KEYBOARD_MIN_INSET_PX = 80;
+const KEYBOARD_SCROLL_FRAMES = 18;
 export const INITIAL_HISTORY_WINDOW = 160;
 export const HISTORY_WINDOW_INCREMENT = 120;
 
@@ -272,10 +273,18 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
 
   useLayoutEffect(() => {
     const updateKeyboardInset = () => {
-      const next = readSoftKeyboardInsetBottom(scrollRef.current);
+      const scrollEl = scrollRef.current;
+      const next = readSoftKeyboardInsetBottom(scrollEl);
+      const active = document.activeElement;
+      const composerFocused =
+        hasMessages && isKeyboardEditableElement(active) && Boolean(scrollEl?.contains(active));
       setKeyboardInsetBottom((current) =>
         Math.abs(current - next) < 1 ? current : next,
       );
+      if (composerFocused) {
+        userReadingHistoryRef.current = false;
+        scrollToBottom(false, KEYBOARD_SCROLL_FRAMES, { force: true });
+      }
     };
     updateKeyboardInset();
     const viewport = window.visualViewport;
@@ -291,7 +300,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
       document.removeEventListener("focusin", updateKeyboardInset);
       document.removeEventListener("focusout", updateKeyboardInset);
     };
-  }, []);
+  }, [hasMessages, scrollToBottom]);
 
   useEffect(() => {
     if (!atBottom) return;
@@ -303,7 +312,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   useLayoutEffect(() => {
     if (keyboardInsetBottom > 0) {
       userReadingHistoryRef.current = false;
-      scrollToBottom(false, 8, { force: true });
+      scrollToBottom(false, KEYBOARD_SCROLL_FRAMES, { force: true });
       return;
     }
     if (userReadingHistoryRef.current) return;
@@ -318,7 +327,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
       const active = document.activeElement;
       if (!hasMessages || !isKeyboardEditableElement(active) || !scrollEl.contains(active)) return;
       userReadingHistoryRef.current = false;
-      scrollToBottom(false, 8, { force: true });
+      scrollToBottom(false, KEYBOARD_SCROLL_FRAMES, { force: true });
     };
 
     document.addEventListener("focusin", onComposerFocus);
