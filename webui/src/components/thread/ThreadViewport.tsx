@@ -33,6 +33,7 @@ const NEAR_BOTTOM_PX = 48;
 const DEFAULT_SCROLL_BUTTON_BOTTOM_PX = 192;
 const SCROLL_BUTTON_COMPOSER_GAP_PX = 16;
 const SOFT_KEYBOARD_MIN_INSET_PX = 80;
+const KEYBOARD_SCROLL_FRAMES = 18;
 export const INITIAL_HISTORY_WINDOW = 160;
 export const HISTORY_WINDOW_INCREMENT = 120;
 
@@ -140,10 +141,20 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
     const el = scrollRef.current;
     const marker = bottomRef.current;
     const behavior: ScrollBehavior = smooth ? "smooth" : "auto";
-    if (marker) {
+    if (el) {
+      const top = Math.max(0, el.scrollHeight - el.clientHeight);
+      try {
+        el.scrollTo?.({ top, behavior });
+        if (!smooth) el.scrollTop = top;
+      } catch {
+        try {
+          el.scrollTop = top;
+        } catch {
+          // Test DOMs can expose read-only scrollTop; browsers keep this writable.
+        }
+      }
+    } else if (marker) {
       marker.scrollIntoView({ block: "end", behavior });
-    } else if (el) {
-      el.scrollTo({ top: el.scrollHeight, behavior });
     }
     setAtBottom(true);
   }, []);
@@ -156,14 +167,18 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
         if (!force && userReadingHistoryRef.current) return;
         scrollToBottomNow(smooth);
       };
-      run();
-      for (let i = 1; i < frames; i += 1) {
+      const scheduleNext = (remainingFrames: number) => {
+        if (remainingFrames <= 0) return;
         const id = window.requestAnimationFrame(() => {
+          scrollFrameIdsRef.current = scrollFrameIdsRef.current.filter((frameId) => frameId !== id);
           if (!force && userReadingHistoryRef.current) return;
           scrollToBottomNow(smooth);
+          scheduleNext(remainingFrames - 1);
         });
         scrollFrameIdsRef.current.push(id);
-      }
+      };
+      run();
+      scheduleNext(frames - 1);
     },
     [cancelScheduledBottomScroll, scrollToBottomNow],
   );
@@ -194,10 +209,18 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
 
   useLayoutEffect(() => {
     const updateKeyboardInset = () => {
-      const next = readSoftKeyboardInsetBottom(scrollRef.current);
+      const scrollEl = scrollRef.current;
+      const next = readSoftKeyboardInsetBottom(scrollEl);
+      const active = document.activeElement;
+      const composerFocused =
+        hasMessages && isKeyboardEditableElement(active) && Boolean(scrollEl?.contains(active));
       setKeyboardInsetBottom((current) =>
         Math.abs(current - next) < 1 ? current : next,
       );
+      if (composerFocused) {
+        userReadingHistoryRef.current = false;
+        scrollToBottom(false, KEYBOARD_SCROLL_FRAMES, { force: true });
+      }
     };
     updateKeyboardInset();
     const viewport = window.visualViewport;
@@ -213,7 +236,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
       document.removeEventListener("focusin", updateKeyboardInset);
       document.removeEventListener("focusout", updateKeyboardInset);
     };
-  }, []);
+  }, [hasMessages, scrollToBottom]);
 
   useEffect(() => {
     if (!atBottom) return;
@@ -225,7 +248,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
   useLayoutEffect(() => {
     if (keyboardInsetBottom > 0) {
       userReadingHistoryRef.current = false;
-      scrollToBottom(false, 8, { force: true });
+      scrollToBottom(false, KEYBOARD_SCROLL_FRAMES, { force: true });
       return;
     }
     if (userReadingHistoryRef.current) return;
@@ -240,7 +263,7 @@ export const ThreadViewport = forwardRef<ThreadViewportHandle, ThreadViewportPro
       const active = document.activeElement;
       if (!hasMessages || !isKeyboardEditableElement(active) || !scrollEl.contains(active)) return;
       userReadingHistoryRef.current = false;
-      scrollToBottom(false, 8, { force: true });
+      scrollToBottom(false, KEYBOARD_SCROLL_FRAMES, { force: true });
     };
 
     document.addEventListener("focusin", onComposerFocus);
