@@ -148,6 +148,28 @@ describe("webui API helpers", () => {
     );
   });
 
+  it("serializes workspace automation updates", async () => {
+    await updateAutomation("tok", "job 1/2", {
+      name: "Daily quiz",
+      message: "Ask the quiz",
+      schedule: { kind: "cron", expr: "0 9 * * *", tz: "Asia/Shanghai" },
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/webui/automations/update?id=job+1%2F2",
+      expect.objectContaining({
+        headers: {
+          Authorization: "Bearer tok",
+          "X-Nanobot-Automation-Values": JSON.stringify({
+            name: "Daily quiz",
+            message: "Ask the quiz",
+            schedule: { kind: "cron", expr: "0 9 * * *", tz: "Asia/Shanghai" },
+          }),
+        },
+      }),
+    );
+  });
+
   it("fetches the WebUI skill summary", async () => {
     await fetchSkills("tok");
 
