@@ -1361,10 +1361,22 @@ export function SettingsView({
           )}
         >
           <div className="mb-7">
-            <p className="mb-2 text-[13px] font-medium text-muted-foreground">
-              {t("settings.sidebar.title")}
-            </p>
-            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground sm:text-[34px]">
+            {!showSidebar ? (
+              <button
+                type="button"
+                onClick={onBackToChat}
+                className="mb-4 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground lg:hidden"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                {t("settings.backToChat")}
+              </button>
+            ) : null}
+            {activeSection !== "automations" ? (
+              <p className="mb-2 text-[12px] font-normal text-muted-foreground">
+                {t("settings.sidebar.title")}
+              </p>
+            ) : null}
+            <h1 className="text-[24px] font-normal leading-tight tracking-normal text-foreground sm:text-[28px]">
               {text(`settings.nav.${activeSection}`, titleForSection(activeSection))}
             </h1>
           </div>
