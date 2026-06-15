@@ -162,6 +162,13 @@ export function Sidebar(props: SidebarProps) {
           active={props.activeUtility === "skills"}
           icon={<Brain className="h-4 w-4" />}
         />
+        <SidebarActionButton
+          collapsed={collapsed}
+          label={t("sidebar.automations", { defaultValue: "Automations" })}
+          onClick={props.onOpenAutomations}
+          active={props.activeUtility === "automations"}
+          icon={<CalendarClock className="h-4 w-4" />}
+        />
         {props.archivedCount ? (
           <SidebarActionButton
             collapsed={collapsed}
