@@ -62,6 +62,8 @@ GoalContinueMessage = str | Callable[[], str | None]
 
 GoalContinueMessage = str | Callable[[], str | None]
 
+GoalContinueMessage = str | Callable[[], str | None]
+
 _DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
 _ARREARAGE_ERROR_MESSAGE = (
     "The AI provider rejected the request because the API key is out of quota or the "
