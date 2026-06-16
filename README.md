@@ -89,10 +89,20 @@ Built on lightweight [nanobot](https://github.com/HKUDS/nanobot), extended with 
 
 > [!CAUTION]
 > **Security Advisory (March 2026):** Due to a supply chain attack in `litellm` (CVE-2024-6825, CVE-2025-0330, CVE-2025-0628, CVE-2025-11203), we have **completely removed LiteLLM** and migrated to native SDKs. See [SECURITY.md](SECURITY.md) for details.
+- **2026-06-01** 🚀 Released **v0.2.1** — **The Workbench Release** turns the packaged WebUI into a daily agent workbench: clearer Thought/response timelines, live file-edit activity, project workspaces, model and context controls, steadier sustained goals, CLI Apps + MCP extensions, and broader provider/channel support. Please see [release notes](https://github.com/HKUDS/blackcat/releases/tag/v0.2.1) for details.
+- **2026-05-30** 🔐 Safer Matrix verification, bounded media downloads, clearer WebUI model timeline.
+- **2026-05-29** 🧩 Extension registry, context-window tuning, document extraction controls.
+- **2026-05-28** 🗂️ Project workspaces, access controls, steadier goals and streaming.
+- **2026-05-27** ⏱️ Codex streams respect idle timeouts during long runs.
+- **2026-05-26** 📡 Telegram webhooks, refreshed Kagi search, cleaner transport errors.
+- **2026-05-25** 🔌 Unified CLI Apps and MCP, Step Plan support, steadier sustained goals.
+- **2026-05-24** 🧰 MCP presets, richer slash actions, configurable OpenAI-compatible requests.
+- **2026-05-23** 🖼️ Zhipu image generation, longer exec windows, cleaner transcription config.
+- **2026-05-22** 🛠️ CLI Apps, more image providers, safer web redirects and edits.
 
-- **2026-06-01** 🚀 Upstream [nanobot v0.2.1](https://github.com/HKUDS/nanobot/releases/tag/v0.2.1) — The Workbench Release: packaged WebUI, clearer timelines, live file-edit activity, project workspaces, CLI Apps + MCP, and broader provider/channel support.
-- **2026-05-15** 🚀 Upstream [nanobot v0.2.0](https://github.com/HKUDS/nanobot/releases/tag/v0.2.0) — goal system, WebUI in-wheel, image generation, fallback models, agent loop refactor.
-- **2026-04-14** 🚀 Upstream [nanobot v0.1.5.post1](https://github.com/HKUDS/nanobot/releases/tag/v0.1.5.post1) — Dream skill discovery, mid-turn follow-up injection, WebSocket channel.
+- **2026-06-01** 🚀 Upstream [nanobot v0.2.1](https://github.com/HKUDS/blackcat/releases/tag/v0.2.1) — The Workbench Release: packaged WebUI, clearer timelines, live file-edit activity, project workspaces, CLI Apps + MCP, and broader provider/channel support.
+- **2026-05-15** 🚀 Upstream [nanobot v0.2.0](https://github.com/HKUDS/blackcat/releases/tag/v0.2.0) — goal system, WebUI in-wheel, image generation, fallback models, agent loop refactor.
+- **2026-04-14** 🚀 Upstream [nanobot v0.1.5.post1](https://github.com/HKUDS/blackcat/releases/tag/v0.1.5.post1) — Dream skill discovery, mid-turn follow-up injection, WebSocket channel.
 - **2026-03-21** 🔒 LiteLLM replaced with native `openai` + `anthropic` SDKs.
 
 ## Core Philosophy
