@@ -145,12 +145,14 @@ class CronService:
         store_path: Path,
         on_job: Callable[[CronJob], Coroutine[Any, Any, str | None]] | None = None,
         max_sleep_ms: int = 300_000,  # 5 minutes
+        require_bound_agent_jobs: bool = False,
     ):
         self.store_path = store_path
         self._action_path = store_path.parent / "action.jsonl"
         self._run_records_dir = store_path.parent / "runs"
         self._lock = FileLock(str(self._action_path.parent) + ".lock")
         self.on_job = on_job
+        self.require_bound_agent_jobs = require_bound_agent_jobs
         self._store: CronStore | None = None
         self._timer_task: asyncio.Task | None = None
         self._running = False
