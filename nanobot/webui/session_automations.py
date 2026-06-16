@@ -175,6 +175,7 @@ def _origin_payload(
         "preview": preview,
     }
 
+
 def _session_preview(messages: Any) -> str:
     if not isinstance(messages, list):
         return ""
