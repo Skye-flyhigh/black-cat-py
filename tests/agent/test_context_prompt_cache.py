@@ -175,7 +175,7 @@ async def test_recent_history_truncated_at_max_chars(tmp_path) -> None:
     workspace = _make_workspace(tmp_path)
     builder = ContextBuilder(workspace)
 
-    big_entry = "x" * (builder._MAX_HISTORY_CHARS + 5_000)
+    big_entry = "word " * (builder._MAX_HISTORY_TOKENS + 5_000)
     builder.memory.append_history(big_entry)
 
     prompt = await builder.build_system_prompt()
