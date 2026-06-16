@@ -86,8 +86,6 @@ from blackcat.webui.skills_api import webui_skill_detail_payload, webui_skills_p
 
 
 def _decode_api_key(raw_key: str) -> str | None:
-    from urllib.parse import unquote
-
     key = unquote(raw_key)
     _api_key_re = re.compile(r"^[A-Za-z0-9_:.-]{1,128}$")
     if _api_key_re.match(key) is None:
