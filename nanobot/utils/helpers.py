@@ -317,9 +317,21 @@ def truncate_text_to_tokens(text: str, max_tokens: int) -> str:
         tokens = enc.encode(text)
         if len(tokens) <= max_tokens:
             return text
-        return enc.decode(tokens[:max_tokens]) + "\n... (truncated)"
+        suffix_tokens = enc.encode(_TRUNCATED_SUFFIX)
+        body_budget = max_tokens - len(suffix_tokens)
+        if body_budget <= 0:
+            return enc.decode(tokens[:max_tokens])
+        result = enc.decode(tokens[:body_budget]) + _TRUNCATED_SUFFIX
+        while len(enc.encode(result)) > max_tokens and body_budget > 0:
+            body_budget -= 1
+            result = enc.decode(tokens[:body_budget]) + _TRUNCATED_SUFFIX
+        return result
     except Exception:
-        return truncate_text(text, max_tokens * 4)
+        max_chars = max_tokens * 4
+        suffix_chars = len(_TRUNCATED_SUFFIX)
+        if max_chars <= suffix_chars:
+            return text[:max_chars]
+        return truncate_text(text, max_chars - suffix_chars)
 
 
 def find_legal_message_start(messages: list[dict[str, Any]]) -> int:
