@@ -58,6 +58,8 @@ from blackcat.utils.tools import maybe_persist_tool_result
 
 GoalContinueMessage = str | Callable[[], str | None]
 
+GoalContinueMessage = str | Callable[[], str | None]
+
 _DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
 _ARREARAGE_ERROR_MESSAGE = (
     "The AI provider rejected the request because the API key is out of quota or the "
@@ -113,7 +115,7 @@ class AgentRunSpec:
     injection_callback: Any | None = None
     llm_timeout_s: float | None = None
     goal_active_predicate: Callable[[], bool] | None = None
-    goal_continue_message: str | None = None
+    goal_continue_message: GoalContinueMessage | None = None
     finalize_on_max_iterations: bool = True
 
 
