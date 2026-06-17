@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from blackcat.webui.thread_disk import delete_webui_thread, webui_thread_file_path
-from blackcat.webui.transcript import append_transcript_object, webui_transcript_path
+from blackcat.webui.transcript import (
+    append_transcript_object,
+    webui_transcript_path,
+    webui_transcript_segments_dir,
+)
 
 
 def test_delete_webui_thread_removes_legacy_json_and_transcript(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.webui.transcript._MAX_TRANSCRIPT_FILE_BYTES", 520)
+    monkeypatch.setattr("blackcat.webui.transcript._TARGET_ACTIVE_TRANSCRIPT_BYTES", 260)
     key = "websocket:k1"
     json_path = webui_thread_file_path(key)
     json_path.parent.mkdir(parents=True, exist_ok=True)

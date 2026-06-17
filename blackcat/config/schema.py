@@ -8,6 +8,7 @@ from pydantic import AliasChoices, ConfigDict, Field, model_validator
 from pydantic_settings import BaseSettings
 
 from blackcat.config.paths import get_workspace_path
+from blackcat.config_base import Base
 from blackcat.cron.types import CronSchedule
 
 if TYPE_CHECKING:
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from blackcat.agent.tools.image_generation import ImageGenerationToolConfig
     from blackcat.agent.tools.self import MyToolConfig
     from blackcat.agent.tools.shell import ExecToolConfig
+    from blackcat.agent.tools.filesystem import FileToolsConfig
     from blackcat.agent.tools.web import WebToolsConfig
 
 
@@ -267,33 +269,6 @@ class ProvidersConfig(Base):
                 raise ValueError("providers.<name>.api_type is only supported for providers.openai")
         return self
 
-    @model_validator(mode="after")
-    def convert_extra_providers(self):
-        """Convert extra fields (custom providers) to ProviderConfig objects."""
-        if self.model_extra:
-            for key, value in self.model_extra.items():
-                if isinstance(value, dict):
-                    self.model_extra[key] = ProviderConfig.model_validate(value)
-        return self
-
-    @model_validator(mode="after")
-    def convert_extra_providers(self):
-        """Convert extra fields (custom providers) to ProviderConfig objects."""
-        if self.model_extra:
-            for key, value in self.model_extra.items():
-                if isinstance(value, dict):
-                    self.model_extra[key] = ProviderConfig.model_validate(value)
-        return self
-
-    @model_validator(mode="after")
-    def convert_extra_providers(self):
-        """Convert extra fields (custom providers) to ProviderConfig objects."""
-        if self.model_extra:
-            for key, value in self.model_extra.items():
-                if isinstance(value, dict):
-                    self.model_extra[key] = ProviderConfig.model_validate(value)
-        return self
-
 
 class HeartbeatConfig(Base):
     """Heartbeat service configuration (now backed by cron)."""
@@ -414,6 +389,7 @@ class ToolsConfig(Base):
 
     web: WebToolsConfig = Field(default_factory=lambda: _lazy_default("blackcat.agent.tools.web", "WebToolsConfig"))
     exec: ExecToolConfig = Field(default_factory=lambda: _lazy_default("blackcat.agent.tools.shell", "ExecToolConfig"))
+    file: FileToolsConfig = Field(default_factory=lambda: _lazy_default("blackcat.agent.tools.filesystem", "FileToolsConfig"))
     cli_apps: CliAppsToolConfig = Field(default_factory=lambda: _lazy_default("blackcat.agent.tools.cli_apps", "CliAppsToolConfig"))
     my: MyToolConfig = Field(default_factory=lambda: _lazy_default("blackcat.agent.tools.self", "MyToolConfig"))
     image_generation: ImageGenerationToolConfig = Field(
@@ -667,6 +643,7 @@ def _resolve_tool_config_refs() -> None:
     import sys
 
     from blackcat.agent.tools.cli_apps import CliAppsToolConfig
+    from blackcat.agent.tools.filesystem import FileToolsConfig
     from blackcat.agent.tools.image_generation import ImageGenerationToolConfig
     from blackcat.agent.tools.self import MyToolConfig
     from blackcat.agent.tools.shell import ExecToolConfig

@@ -15,7 +15,6 @@ from blackcat.providers.base import (
     LLMResponse,
     ToolCallRequest,
     parse_tool_arguments,
-    resolve_stream_idle_timeout_s,
     tool_arguments_object_for_replay,
 )
 

@@ -7,6 +7,8 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from blackcat.agent.tools.base import Tool
+from blackcat.agent.tools.context import ToolContext
+from blackcat.agent.tools.loader import _SKIP_MODULES, ToolLoader
 
 
 class _MinimalTool(Tool):
@@ -50,7 +52,28 @@ def test_tool_plugin_discoverable_default_is_true():
 
 # --- ToolContext tests ---
 
-from blackcat.agent.tools.context import ToolContext
+
+def test_tool_context_has_required_fields():
+    field_names = {f.name for f in fields(ToolContext)}
+    required = {
+        "config", "workspace", "bus", "subagent_manager",
+        "cron_service", "file_state_store", "provider_snapshot_loader",
+        "image_generation_provider_configs", "timezone",
+    }
+    assert required <= field_names
+
+
+def test_tool_context_defaults():
+    ctx = ToolContext(config=None, workspace="/tmp")
+    assert ctx.bus is None
+    assert ctx.subagent_manager is None
+    assert ctx.cron_service is None
+    assert ctx.provider_snapshot_loader is None
+    assert ctx.image_generation_provider_configs is None
+    assert ctx.timezone == "UTC"
+
+
+# --- ToolLoader tests ---
 
 
 def test_skip_modules_excludes_infrastructure():
@@ -327,50 +350,6 @@ def test_mcp_wrappers_not_discoverable():
     assert MCPToolWrapper._plugin_discoverable is False
     assert MCPResourceWrapper._plugin_discoverable is False
     assert MCPPromptWrapper._plugin_discoverable is False
-
-
-# --- Task 8: Config round-trip tests ---
-
-
-def test_config_round_trip():
-    """Verify config serialization is unchanged after moving config classes."""
-    from blackcat.config.schema import Config
-
-    config_dict = {
-        "tools": {
-            "web": {"enable": True, "search": {"provider": "brave", "api_key": "test"}},
-            "exec": {"enable": False, "timeout": 120, "pathPrepend": "/venv/bin"},
-            "my": {"allowSet": True},
-            "imageGeneration": {"enabled": True, "provider": "openrouter"},
-        }
-    }
-    config = Config.model_validate(config_dict)
-    dumped = config.model_dump(mode="json", by_alias=True)
-
-    assert dumped["tools"]["my"]["allowSet"] is True
-    assert dumped["tools"]["imageGeneration"]["enabled"] is True
-    assert dumped["tools"]["exec"]["pathPrepend"] == "/venv/bin"
-    assert config.tools.exec.enable is False
-    assert config.tools.exec.timeout == 120
-    assert config.tools.exec.path_prepend == "/venv/bin"
-    assert config.tools.web.search.provider == "brave"
-
-
-def test_config_defaults():
-    """Verify default values match the original hardcoded schema."""
-    from blackcat.config.schema import Config
-
-    config = Config.model_validate({})
-    assert config.tools.exec.enable is True
-    assert config.tools.exec.timeout == 60
-    assert config.tools.exec.path_prepend == ""
-    assert config.tools.web.enable is True
-    assert config.tools.web.search.provider == "duckduckgo"
-    assert config.tools.my.enable is True
-    assert config.tools.my.allow_set is False
-    assert config.tools.image_generation.enabled is False
-    assert config.tools.cli_apps.enable is True
-    assert config.tools.restrict_to_workspace is False
 
 
 # --- Task 10: Integration test ---

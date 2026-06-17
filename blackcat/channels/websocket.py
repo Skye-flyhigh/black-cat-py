@@ -28,6 +28,7 @@ from blackcat.security.workspace_access import (
     WorkspaceScopeError,
 )
 from blackcat.session.goal_state import goal_state_ws_blob
+from blackcat.webui.forking import handle_webui_fork_chat
 from blackcat.session.webui_turns import websocket_turn_wall_started_at
 from blackcat.utils.media_decode import (
     FileSizeExceeded,

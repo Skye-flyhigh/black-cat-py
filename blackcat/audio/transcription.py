@@ -21,6 +21,7 @@ from blackcat.audio.transcription_registry import (
     resolve_transcription_provider,
 )
 from blackcat.config.paths import get_media_dir
+from blackcat.providers.registry import find_by_name
 from blackcat.utils.media_decode import FileSizeExceeded, save_base64_data_url
 
 TranscriptionProviderName = str

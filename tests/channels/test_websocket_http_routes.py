@@ -597,7 +597,7 @@ async def test_cli_apps_catalog_does_not_block_other_webui_http_routes(
         release.wait(2.0)
         return {"apps": [], "installed_count": 0, "catalog_updated_at": None}
 
-    monkeypatch.setattr("nanobot.webui.settings_routes.cli_apps_payload", slow_payload)
+    monkeypatch.setattr("blackcat.webui.settings_routes.cli_apps_payload", slow_payload)
     channel = _ch(bus, session_manager=_seed_session(tmp_path), port=29935)
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
@@ -640,7 +640,7 @@ async def test_cli_apps_route_supports_installed_only_payload(
         calls.append(installed_only)
         return {"apps": [], "installed_count": 0, "catalog_updated_at": None}
 
-    monkeypatch.setattr("nanobot.webui.settings_routes.cli_apps_payload", payload)
+    monkeypatch.setattr("blackcat.webui.settings_routes.cli_apps_payload", payload)
     channel = _ch(bus, session_manager=_seed_session(tmp_path), port=29936)
     server_task = asyncio.create_task(channel.start())
     await asyncio.sleep(0.3)
@@ -1185,7 +1185,7 @@ async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
 async def test_session_delete_blocks_when_bound_automation_exists(
     bus: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     sm = _seed_session(tmp_path, key="websocket:doomed")
     cron = CronService(tmp_path / "cron" / "jobs.json")
     cron.add_job(
@@ -1226,7 +1226,7 @@ async def test_session_delete_blocks_when_bound_automation_exists(
 async def test_session_delete_can_cascade_bound_automations(
     bus: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     sm = _seed_session(tmp_path, key="websocket:doomed")
     cron = CronService(tmp_path / "cron" / "jobs.json")
     cron.add_job(
@@ -1272,7 +1272,7 @@ async def test_session_delete_can_cascade_bound_automations(
 async def test_session_delete_blocks_origin_automation_when_unified_enabled(
     bus: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     sm = _seed_session(tmp_path, key="websocket:doomed")
     cron = CronService(tmp_path / "cron" / "jobs.json")
     cron.add_job(
@@ -1320,7 +1320,7 @@ async def test_session_delete_blocks_origin_automation_when_unified_enabled(
 async def test_session_delete_blocks_origin_automation_when_unified_enabled(
     bus: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     sm = _seed_session(tmp_path, key="websocket:doomed")
     cron = CronService(tmp_path / "cron" / "jobs.json")
     cron.add_job(
@@ -1368,7 +1368,7 @@ async def test_session_delete_blocks_origin_automation_when_unified_enabled(
 async def test_session_delete_blocks_origin_automation_when_unified_enabled(
     bus: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     sm = _seed_session(tmp_path, key="websocket:doomed")
     cron = CronService(tmp_path / "cron" / "jobs.json")
     cron.add_job(

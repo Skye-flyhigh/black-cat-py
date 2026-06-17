@@ -17,6 +17,8 @@ from urllib.parse import unquote, urlparse
 from loguru import logger
 
 from blackcat.config.paths import get_webui_dir
+from blackcat.cron.session_turns import CRON_HISTORY_META
+from blackcat.webui.metadata import WEBUI_MESSAGE_SOURCE_METADATA_KEY, WEBUI_TURN_METADATA_KEY
 from blackcat.session.manager import SessionManager
 
 WEBUI_TRANSCRIPT_SCHEMA_VERSION = 3

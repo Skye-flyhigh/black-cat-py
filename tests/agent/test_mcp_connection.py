@@ -338,6 +338,39 @@ async def test_mcp_reconnect_handler_uses_sanitized_server_prefix(
 
 
 @pytest.mark.asyncio
+async def test_concurrent_mcp_reconnect_reuses_fresh_session(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    loop = _make_loop(tmp_path, mcp_servers={"remote": object()})
+    closed: list[str] = []
+    connect_count = 0
+
+    async def _mark_closed(name: str) -> None:
+        closed.append(name)
+
+    class _DeadSession:
+        async def read_resource(self, _uri: str) -> Any:
+            raise McpError(ErrorData(code=-32000, message="Session terminated"))
+
+    class _LiveSession:
+        async def read_resource(self, uri: str) -> Any:
+            await asyncio.sleep(0)
+            return SimpleNamespace(
+                contents=[
+                    SimpleNamespace(uri=uri, text=f"fresh:{uri.split(":")[-1]}"),
+                ],
+            )
+
+    async def _connect(name: str) -> Any:
+        nonlocal connect_count
+        connect_count += 1
+        if connect_count == 1:
+            return _DeadSession()
+        return _LiveSession()
+
+    monkeypatch.setattr(loop.mcp_manager, "connect", _connect)
+    monkeypatch.setattr(loop.mcp_manager, "close", _mark_closed)
 
     await loop._connect_mcp()
     old_alpha = loop.tools.get("mcp_remote_resource_alpha")

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from blackcat.config.schema import Config, InlineFallbackConfig, ModelPresetConfig
+from blackcat.providers.registry import create_dynamic_spec
 from blackcat.providers.base import LLMProvider
 from blackcat.providers.fallback_provider import FallbackProvider
 from blackcat.providers.registry import find_by_name

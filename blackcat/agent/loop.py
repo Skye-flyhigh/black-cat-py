@@ -52,7 +52,9 @@ from blackcat.session.goal_state import (
     runner_wall_llm_timeout_s,
     sustained_goal_active,
 )
+from blackcat.session.keys import UNIFIED_SESSION_KEY, session_key_for_channel
 from blackcat.session.manager import Session, SessionManager
+from blackcat.cron.session_turns import cron_history_overrides
 from blackcat.utils.document import extract_documents, reference_non_image_attachments
 from blackcat.utils.formatting import truncate_text as truncate_text_fn
 from blackcat.utils.image_generation_intent import image_generation_prompt

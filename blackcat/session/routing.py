@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from nanobot.bus.events import InboundMessage
-from nanobot.cron.session_turns import is_cron_turn
-from nanobot.session.manager import Session
-from nanobot.session.metadata import SESSION_ROUTING_METADATA_KEY
+from blackcat.bus.events import InboundMessage
+from blackcat.cron.session_turns import is_cron_turn
+from blackcat.session.manager import Session
+from blackcat.session.metadata import SESSION_ROUTING_METADATA_KEY
 
 _ROUTING_METADATA_KEYS = {
     "chat_type",

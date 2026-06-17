@@ -1,6 +1,6 @@
 import { SettingsSectionKey } from "@/components/settings/SettingsView";
 
-export type ShellView = "chat" | "settings" | "apps";
+export type ShellView = "chat" | "settings" | "apps" | "automations" | "skills";
 
 export type ShellRoute = {
   view: ShellView;
@@ -13,29 +13,21 @@ export const SETTINGS_SECTION_KEYS: SettingsSectionKey[] = [
   "appearance",
   "models",
   "image",
+  "voice",
   "browser",
   "apps",
+  "automations",
+  "skills",
   "runtime",
   "advanced",
 ];
-
-export function defaultShellRoute(): ShellRoute {
+function defaultShellRoute(): ShellRoute {
   return { view: "chat", activeKey: null, settingsSection: "overview" };
 }
 
-export function writeShellRoute(route: ShellRoute, replace = false): void {
-  if (typeof window === "undefined") return;
-  const nextHash = shellRouteHash(route);
-  if (window.location.hash === nextHash) return;
-  if (replace) {
-    window.history.replaceState(
-      null,
-      "",
-      `${window.location.pathname}${window.location.search}${nextHash}`,
-    );
-    return;
-  }
-  window.location.hash = nextHash;
+function shellViewForSettingsSection(section: SettingsSectionKey): ShellView {
+  if (section === "apps" || section === "automations" || section === "skills") return section;
+  return "settings";
 }
 
 export function readShellRoute(): ShellRoute {
@@ -54,10 +46,20 @@ export function readShellRoute(): ShellRoute {
   const activeKey = params.get("chat")?.trim() || null;
 
   if (path === "/settings") {
-    return { view: "settings", activeKey, settingsSection };
+    return {
+      view: shellViewForSettingsSection(settingsSection),
+      activeKey,
+      settingsSection,
+    };
   }
   if (path === "/apps") {
     return { view: "apps", activeKey, settingsSection: "apps" };
+  }
+  if (path === "/automations") {
+    return { view: "automations", activeKey, settingsSection: "automations" };
+  }
+  if (path === "/skills") {
+    return { view: "skills", activeKey, settingsSection: "skills" };
   }
   if (path.startsWith("/chat/")) {
     const encoded = path.slice("/chat/".length);
@@ -73,8 +75,7 @@ export function readShellRoute(): ShellRoute {
   return defaultShellRoute();
 }
 
-
-export function shellRouteHash(route: ShellRoute): string {
+function shellRouteHash(route: ShellRoute): string {
   if (route.view === "chat") {
     return route.activeKey
       ? `#/chat/${encodeURIComponent(route.activeKey)}`
@@ -87,6 +88,25 @@ export function shellRouteHash(route: ShellRoute): string {
   }
   const query = params.toString();
   return `#/${route.view}${query ? `?${query}` : ""}`;
+}
+
+export function writeShellRoute(route: ShellRoute, replace = false): void {
+  if (typeof window === "undefined") return;
+  const nextHash = shellRouteHash(route);
+  if (window.location.hash === nextHash) return;
+  if (replace) {
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}${nextHash}`,
+    );
+    return;
+  }
+  window.location.hash = nextHash;
+}
+
+export function bootstrapTokenExpiresAt(expiresInSeconds: number): number {
+  return Date.now() + Math.max(0, expiresInSeconds) * 1000;
 }
 
 function isSettingsSectionKey(value: string | null): value is SettingsSectionKey {

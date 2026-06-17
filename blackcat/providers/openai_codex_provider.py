@@ -1,6 +1,7 @@
 """OpenAI Codex Responses Provider."""
 
 from __future__ import annotations
+import os
 
 import asyncio
 import hashlib

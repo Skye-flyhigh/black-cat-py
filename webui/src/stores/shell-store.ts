@@ -1,13 +1,15 @@
-import { create } from "zustand";
-import { type ShellRoute, type ShellView, readShellRoute, writeShellRoute } from "@/utils/shell";
-import { readSidebarOpen } from "@/utils/helpers";
 import { SIDEBAR_STORAGE_KEY } from "@/constants";
+import { SessionAutomationJob } from "@/lib/types";
+import { readSidebarOpen } from "@/utils/helpers";
+import { type ShellRoute, type ShellView, readShellRoute, writeShellRoute } from "@/utils/shell";
+import { create } from "zustand";
 
 /* ── Types ───────────────────────────────────────── */
 
 export interface PendingAction {
   key: string;
   label: string;
+  automations?: SessionAutomationJob[];
 }
 
 export interface ShellStore {
@@ -17,6 +19,7 @@ export interface ShellStore {
   settingsSection: string;
 
   /* sidebar */
+  hostSidebarPreviewOpen: boolean;
   hostSidebarOpen: boolean;
   mobileSidebarOpen: boolean;
 
@@ -63,6 +66,7 @@ export const useShellStore = create<ShellStore>((set) => {
     settingsSection: initial.settingsSection,
 
     /* sidebar */
+    hostSidebarPreviewOpen: false,
     hostSidebarOpen: readSidebarOpen(),
     mobileSidebarOpen: false,
 

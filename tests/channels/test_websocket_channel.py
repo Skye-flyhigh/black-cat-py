@@ -440,9 +440,9 @@ async def test_webui_message_envelope_persists_user_transcript_for_refresh(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from nanobot.webui.transcript import build_webui_thread_response, read_transcript_lines
+    from blackcat.webui.transcript import build_webui_thread_response, read_transcript_lines
 
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -473,9 +473,9 @@ async def test_webui_stop_control_message_is_not_persisted_as_user_bubble(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from nanobot.webui.transcript import read_transcript_lines
+    from blackcat.webui.transcript import read_transcript_lines
 
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -499,7 +499,7 @@ async def test_webui_user_transcript_append_failure_does_not_block_inbound(
     def fail_append(_session_key: str, _obj: dict[str, Any]) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("nanobot.webui.transcript.append_transcript_object", fail_append)
+    monkeypatch.setattr("blackcat.webui.transcript.append_transcript_object", fail_append)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -521,9 +521,9 @@ async def test_webui_message_envelope_persists_user_transcript_for_refresh(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from nanobot.webui.transcript import build_webui_thread_response, read_transcript_lines
+    from blackcat.webui.transcript import build_webui_thread_response, read_transcript_lines
 
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -554,9 +554,9 @@ async def test_webui_stop_control_message_is_not_persisted_as_user_bubble(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from nanobot.webui.transcript import read_transcript_lines
+    from blackcat.webui.transcript import read_transcript_lines
 
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -580,7 +580,7 @@ async def test_webui_user_transcript_append_failure_does_not_block_inbound(
     def fail_append(_session_key: str, _obj: dict[str, Any]) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("nanobot.webui.transcript.append_transcript_object", fail_append)
+    monkeypatch.setattr("blackcat.webui.transcript.append_transcript_object", fail_append)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -602,9 +602,9 @@ async def test_webui_message_envelope_persists_user_transcript_for_refresh(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from nanobot.webui.transcript import build_webui_thread_response, read_transcript_lines
+    from blackcat.webui.transcript import build_webui_thread_response, read_transcript_lines
 
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -635,9 +635,9 @@ async def test_webui_stop_control_message_is_not_persisted_as_user_bubble(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from nanobot.webui.transcript import read_transcript_lines
+    from blackcat.webui.transcript import read_transcript_lines
 
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -661,7 +661,7 @@ async def test_webui_user_transcript_append_failure_does_not_block_inbound(
     def fail_append(_session_key: str, _obj: dict[str, Any]) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("nanobot.webui.transcript.append_transcript_object", fail_append)
+    monkeypatch.setattr("blackcat.webui.transcript.append_transcript_object", fail_append)
     channel = _ch(bus)
     conn = AsyncMock()
     conn.remote_address = ("127.0.0.1", 50123)
@@ -2699,7 +2699,7 @@ async def test_fork_chat_copies_only_prefix_session_and_transcript(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     sessions = SessionManager(tmp_path / "sessions")
     source = sessions.get_or_create("websocket:source")
     source.metadata["webui"] = True
@@ -2751,7 +2751,7 @@ async def test_webui_message_envelope_appends_user_transcript(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     sessions = SessionManager(tmp_path / "sessions")
     channel = WebSocketChannel(
         {"enabled": True, "allowFrom": ["*"], "host": "127.0.0.1"},
@@ -3008,9 +3008,9 @@ def test_handle_webui_thread_get_accepts_pagination_query(tmp_path, monkeypatch)
     from websockets.datastructures import Headers
     from websockets.http11 import Request
 
-    from nanobot.webui.transcript import append_transcript_object
+    from blackcat.webui.transcript import append_transcript_object
 
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:paged-route"
     for idx in range(1, 4):
         append_transcript_object(
@@ -3159,10 +3159,10 @@ def test_handle_webui_thread_get_does_not_backfill_cron_internal_prompt(
     from websockets.datastructures import Headers
     from websockets.http11 import Request
 
-    from nanobot.cron.session_turns import CRON_HISTORY_META
-    from nanobot.webui.transcript import append_transcript_object
+    from blackcat.cron.session_turns import CRON_HISTORY_META
+    from blackcat.webui.transcript import append_transcript_object
 
-    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr("blackcat.config.paths.get_data_dir", lambda: tmp_path)
     workspace = tmp_path / "workspace"
     sessions = SessionManager(workspace)
     key = "websocket:c-cron"

@@ -556,4 +556,12 @@ def create_dynamic_spec(name: str) -> ProviderSpec:
     """Create a dynamic ProviderSpec for custom user-defined providers."""
     normalized = to_snake(name.replace("-", "_"))
     strip_prefixes = tuple(dict.fromkeys((name, normalized)))
+    return ProviderSpec(
+        name=normalized,
+        keywords=(),
+        env_key="",
+        display_name=name.title(),
+        backend="openai_compat",
+        is_direct=True,
+        strip_model_prefixes=strip_prefixes,
     )

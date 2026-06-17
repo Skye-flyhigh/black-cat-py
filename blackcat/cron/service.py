@@ -14,6 +14,7 @@ from typing import Any, Callable, Coroutine, Literal
 from filelock import FileLock
 from loguru import logger
 
+from blackcat.cron.session_turns import is_bound_cron_job
 from blackcat.cron.types import (
     CronJob,
     CronJobState,
@@ -651,6 +652,9 @@ class CronService:
         session_key: str | None = None,
         delete_after_run: bool = False,
         metadata: dict | None = None,
+        origin_channel: str | None = None,
+        origin_chat_id: str | None = None,
+        origin_metadata: dict | None = None,
     ) -> CronJob:
         """Add a new job."""
         _validate_schedule_for_add(schedule)

@@ -20,6 +20,12 @@ EMPTY_FINAL_RESPONSE_MESSAGE = (
     "Please try again or narrow the task."
 )
 
+BUDGET_EXHAUSTED_FINALIZATION_PROMPT = (
+    "You have reached the maximum number of iterations for this task. "
+    "Please provide your final response now, summarizing what you accomplished "
+    "and any remaining steps. Do not attempt to call any more tools."
+)
+
 LENGTH_RECOVERY_PROMPT = (
     "Output limit reached. Continue exactly where you left off "
     "— no recap, no apology. Break remaining work into smaller steps if needed."
@@ -73,6 +79,10 @@ def build_length_recovery_message() -> dict[str, str]:
 def build_goal_continue_message(custom: str | None = None) -> dict[str, str]:
     """Prompt the model to continue when a sustained goal is still active."""
     return {"role": "user", "content": custom or SUSTAINED_GOAL_CONTINUE_PROMPT}
+
+def build_budget_exhausted_finalization_message() -> dict[str, str]:
+    """Prompt the model for a no-tools final response after budget exhaustion."""
+    return {"role": "user", "content": BUDGET_EXHAUSTED_FINALIZATION_PROMPT}
 
 
 def external_lookup_signature(tool_name: str, arguments: Any) -> str | None:

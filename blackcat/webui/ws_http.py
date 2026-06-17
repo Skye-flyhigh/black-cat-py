@@ -79,11 +79,18 @@ _AUTOMATION_VALUES_HEADER = "X-Nanobot-Automation-Values"
 
 if TYPE_CHECKING:
     from blackcat.bus.queue import MessageBus
-    from blackcat.cron.service import CronService
-    from blackcat.session.manager import SessionManager
-from blackcat.webui.session_automations import session_automations_payload
-from blackcat.webui.skills_api import webui_skill_detail_payload, webui_skills_payload
 
+from blackcat.cron.types import CronJob, CronSchedule
+from blackcat.cron.session_turns import is_bound_cron_job
+from blackcat.cron.service import CronService
+from blackcat.session.manager import SessionManager
+from blackcat.webui.session_automations import (
+    session_automation_jobs,
+    serialize_automation_jobs,
+    all_automations_payload,
+    session_automations_payload,
+)
+from blackcat.webui.skills_api import webui_skill_detail_payload, webui_skills_payload
 
 def _decode_api_key(raw_key: str) -> str | None:
     key = unquote(raw_key)
@@ -91,7 +98,6 @@ def _decode_api_key(raw_key: str) -> str | None:
     if _api_key_re.match(key) is None:
         return None
     return key
-
 
 def _default_model_name_from_config() -> str | None:
     try:
@@ -101,7 +107,6 @@ def _default_model_name_from_config() -> str | None:
     except Exception as e:
         logger.debug("bootstrap model_name could not load from config: {}", e)
         return None
-
 
 def _resolve_bootstrap_model_name(
     runtime_name: Callable[[], str | None] | None,
@@ -118,11 +123,9 @@ def _resolve_bootstrap_model_name(
                     return stripped
     return _default_model_name_from_config() or ""
 
-
 # ---------------------------------------------------------------------------
 # GatewayHTTPHandler
 # ---------------------------------------------------------------------------
-
 
 class GatewayHTTPHandler:
     """Handles all HTTP routes served alongside the WebSocket endpoint.
@@ -765,7 +768,6 @@ class GatewayHTTPHandler:
             extra_headers=[("Cache-Control", cache)],
         )
 
-
 def _automation_values_from_request(request: WsRequest) -> dict[str, Any] | None:
     raw = _case_insensitive_header(request.headers, _AUTOMATION_VALUES_HEADER)
     if not raw:
@@ -778,7 +780,6 @@ def _automation_values_from_request(request: WsRequest) -> dict[str, Any] | None
         except Exception:
             return None
     return values if isinstance(values, dict) else None
-
 
 def _parse_automation_update(
     values: dict[str, Any],
@@ -818,7 +819,6 @@ def _parse_automation_update(
         update["delete_after_run"] = parsed_schedule.kind == "at"
     return update
 
-
 def _parse_automation_schedule(values: dict[str, Any]) -> CronSchedule | str:
     raw_kind = values.get("kind")
     if not isinstance(raw_kind, str):
@@ -848,7 +848,6 @@ def _parse_automation_schedule(values: dict[str, Any]) -> CronSchedule | str:
         return CronSchedule(kind="at", at_ms=at_ms)
     return "unknown schedule kind"
 
-
 def _schedule_matches_job(schedule: CronSchedule, job: CronJob) -> bool:
     current = job.schedule
     if schedule.kind != current.kind:
@@ -862,7 +861,6 @@ def _schedule_matches_job(schedule: CronSchedule, job: CronJob) -> bool:
             schedule.tz or None
         ) == (current.tz or None)
     return False
-
 
 def _validate_automation_schedule(schedule: CronSchedule) -> str | None:
     if schedule.kind == "at":
@@ -885,12 +883,10 @@ def _validate_automation_schedule(schedule: CronSchedule) -> str | None:
         return "cron schedule is invalid"
     return None
 
-
 def _positive_int(value: Any) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value if value > 0 else None
-
 
 def _is_websocket_channel_session_key(key: str) -> bool:
     return key.startswith("websocket:")

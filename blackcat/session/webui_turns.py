@@ -27,6 +27,7 @@ from blackcat.session.goal_state import goal_state_ws_blob
 from blackcat.session.manager import Session, SessionManager
 from blackcat.utils.formatting import strip_think, truncate_text
 from blackcat.utils.llm_runtime import LLMRuntime
+from blackcat.cron.session_turns import CRON_HISTORY_META
 
 WEBUI_SESSION_METADATA_KEY = "webui"
 WEBUI_TITLE_METADATA_KEY = "title"

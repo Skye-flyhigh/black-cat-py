@@ -1604,7 +1604,6 @@ async def test_on_message_pairs_unauthorized_private_user_before_side_effects(
     started_typing: list[str] = []
     handled: list[dict] = []
     channel._start_typing = AsyncMock(side_effect=lambda chat_id: started_typing.append(chat_id))
-    )
 
     await channel._on_message(_make_telegram_update(text="hello", chat_type="private"), None)
 

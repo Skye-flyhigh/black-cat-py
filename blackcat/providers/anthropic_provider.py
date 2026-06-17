@@ -1,6 +1,7 @@
 """Anthropic provider — direct SDK integration for Claude models."""
 
 from __future__ import annotations
+import os
 
 import asyncio
 import re
@@ -13,7 +14,6 @@ from blackcat.providers.base import (
     LLMProvider,
     LLMResponse,
     ToolCallRequest,
-    resolve_stream_idle_timeout_s,
     tool_arguments_object_for_replay,
 )
 

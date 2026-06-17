@@ -1,6 +1,6 @@
+import { COMPLETED_RUNS_STORAGE_KEY, SIDEBAR_STORAGE_KEY, TOKEN_REFRESH_MARGIN_MS, TOKEN_REFRESH_MIN_DELAY_MS } from "@/constants";
 import { WorkspaceScopePayload } from "@/lib/types";
 import { projectNameFromPath } from "@/lib/workspace";
-import { COMPLETED_RUNS_STORAGE_KEY, SIDEBAR_STORAGE_KEY } from "@/constants";
 
 export function readSidebarOpen(): boolean {
   if (typeof window === "undefined") return true;
@@ -44,4 +44,13 @@ export function normalizeWorkspaceScope(scope: WorkspaceScopePayload): Workspace
     access_mode: accessMode,
     restrict_to_workspace: accessMode === "restricted",
   };
+}
+
+export function tokenRefreshDelayMs(expiresAt: number): number {
+  const remaining = Math.max(0, expiresAt - Date.now());
+  const margin = Math.min(
+    TOKEN_REFRESH_MARGIN_MS,
+    Math.max(1_000, remaining / 2),
+  );
+  return Math.max(TOKEN_REFRESH_MIN_DELAY_MS, remaining - margin);
 }

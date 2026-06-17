@@ -21,7 +21,8 @@ from blackcat.audio.transcription_registry import (
     transcription_provider_names,
 )
 from blackcat.config.loader import get_config_path, load_config, save_config
-from blackcat.config.schema import ModelPresetConfig
+from blackcat.config.schema import ProviderConfig, ModelPresetConfig
+from blackcat.providers.registry import create_dynamic_spec
 from blackcat.providers.image_generation import (
     get_image_gen_provider,
     image_gen_provider_names,

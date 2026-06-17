@@ -45,6 +45,7 @@ if sys.platform == "win32":
 # Keep console encoding setup before importing CLI UI/logging libraries.
 import typer  # noqa: E402
 from loguru import logger  # noqa: E402
+from blackcat.session.keys import session_key_for_channel
 
 # Remove default handler and re-add with unified blackcat format
 logger.remove()
@@ -939,12 +940,12 @@ def _run_gateway(
     health_server_enabled: bool = True,
 ) -> None:
     """Shared gateway runtime; ``open_browser_url`` opens a tab once channels are up."""
-    from blackcat.agent.tools.cron import CronTool
     from blackcat.agent.tools.message import MessageTool
     from blackcat.bus.queue import MessageBus
     from blackcat.bus.runtime_events import RuntimeEventBus
     from blackcat.channels.manager import ChannelManager
     from blackcat.cron.service import CronService
+    from blackcat.cron.session_turns import is_bound_cron_job, run_bound_cron_job, CronJobSkippedError
     from blackcat.cron.types import CronJob
     from blackcat.providers.factory import build_provider_snapshot, load_provider_snapshot
     from blackcat.providers.image_generation import image_gen_provider_configs
@@ -1013,7 +1014,6 @@ def _run_gateway(
         schedule_background=lambda coro: agent._schedule_background(coro),
     ).subscribe(runtime_events)
 
-    from blackcat.agent.loop import UNIFIED_SESSION_KEY
     from blackcat.bus.events import OutboundMessage
 
     def _channel_session_key(channel: str, chat_id: str) -> str:

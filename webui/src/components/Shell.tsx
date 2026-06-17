@@ -1,20 +1,23 @@
+import { useSkills } from "@/hooks/useSkills";
+import { displayTitle } from "@/lib/chat-groups";
 import { useSessionStore } from "@/stores/session-store";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useShellStore } from "@/stores/shell-store";
+import { Moon, Sun } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RESTART_STARTED_KEY, SIDEBAR_RAIL_WIDTH, SIDEBAR_WIDTH } from "../constants";
+import { MOBILE_SIDEBAR_WIDTH, RESTART_STARTED_KEY, SIDEBAR_RAIL_WIDTH, SIDEBAR_STORAGE_KEY, SIDEBAR_WIDTH } from "../constants";
 import { useDeferredTitleRefresh } from "../hooks/useDeferredTitleRefresh";
 import { useSessions } from "../hooks/useSessions";
 import { useSidebarState } from "../hooks/useSidebarState";
 import { ThemeProvider, useTheme } from "../hooks/useTheme";
 import { fetchSettings, fetchWorkspaces } from "../lib/api";
 import { deriveTitle } from "../lib/format";
-import { ChatSummary, RuntimeSurface, WorkspaceScopePayload } from "../lib/types";
+import { ChatSummary, RuntimeSurface, SessionAutomationJob, WorkspaceScopePayload } from "../lib/types";
 import { cn } from "../lib/utils";
 import { projectNameFromPath } from "../lib/workspace";
 import { useClient } from "../providers/ClientProvider";
-import { useShellStore } from "../stores/shell-store";
-import { normalizeWorkspaceScope, writeCompletedRunChatIds } from "../utils/helpers";
-import { defaultShellRoute, readShellRoute, ShellView } from "../utils/shell";
+import { normalizeWorkspaceScope } from "../utils/helpers";
+import { defaultShellRoute, readShellRoute, ShellRoute, ShellView } from "../utils/shell";
 import { DeleteConfirm } from "./DeleteConfirm";
 import { RenameChatDialog } from "./RenameChatDialog";
 import { SessionSearchDialog } from "./SessionSearchDialog";
@@ -22,28 +25,42 @@ import { SettingsSectionKey, SettingsView } from "./settings/SettingsView";
 import { Sidebar } from "./Sidebar";
 import HostChrome from "./ThemeSwitch";
 import { ThreadShell } from "./thread/ThreadShell";
+import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTitle } from "./ui/sheet";
 
 export default function Shell({
   runtimeSurface,
   onModelNameChange,
   onLogout,
+  onNativeEngineRestart,
 }: {
   runtimeSurface: RuntimeSurface;
   onModelNameChange: (modelName: string | null) => void;
   onLogout: () => void;
+  onNativeEngineRestart: () => Promise<string>;
 }) {
   const { t, i18n } = useTranslation();
   const { client, token } = useClient();
   const { theme, toggle } = useTheme();
-  const { sessions, loading, refresh, createChat, deleteChat } = useSessions();
+  const {
+    sessions,
+    loading,
+    refresh,
+    createChat,
+    forkChat,
+    deleteChat,
+    getSessionAutomations,
+  } = useSessions();
   const { state: sidebarState, update: updateSidebarState } =
     useSidebarState(sessions, !loading);
+  const initialRouteRef = useRef<ShellRoute | null>(null);
+  if (!initialRouteRef.current) initialRouteRef.current = readShellRoute();
 
   /* ── routing, sidebar, dialogs — from the store ── */
   const activeKey = useShellStore((s) => s.activeKey);
   const view = useShellStore((s) => s.view);
   const settingsInitialSection = useShellStore((s) => s.settingsSection);
+  const hostSidebarPreviewOpen = useShellStore((s) => s.hostSidebarPreviewOpen)
   const hostSidebarOpen = useShellStore((s) => s.hostSidebarOpen);
   const mobileSidebarOpen = useShellStore((s) => s.mobileSidebarOpen);
   const sessionSearchOpen = useShellStore((s) => s.sessionSearchOpen);
@@ -90,12 +107,31 @@ export default function Shell({
 
   /* ── local state (not yet extracted) ── */
   const restartSawDisconnectRef = useRef(false);
+  const [updatedChatIds, setUpdatedChatIds] = useState<Set<string>>(readSessionUpdateChatIds);
+  const skills = useSkills(token);
+  const runningChatIdsRef = useRef<Set<string>>(new Set());
   const activeChatIdRef = useRef<string | null>(null);
+  const hostSidebarPreviewCloseTimerRef = useRef<number | null>(null);
+  const effectiveRuntimeSurface =
+    settingsSnapshot?.surface ?? settingsSnapshot?.runtime_surface ?? runtimeSurface;
+  const showHostChrome = effectiveRuntimeSurface === "native";
+  const showMainSidebar = view !== "settings";
+
 
   useEffect(() => {
+    const applyRoute = () => {
+      const route = readShellRoute();
+      setActiveKey(route.activeKey);
+      setView(route.view);
+      setSettingsInitialSection(route.settingsSection);
+      setWorkspaceError(null);
+      if (route.view === "chat" && !route.activeKey) {
+        setDraftWorkspaceScope(null);
+      }
+    };
     window.addEventListener("hashchange", applyRoute);
     return () => window.removeEventListener("hashchange", applyRoute);
-  }, [applyRoute]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,25 +147,37 @@ export default function Shell({
     };
   }, [token]);
 
-  /* sidebar localStorage is handled by the store — this effect is gone */
-  /* completedChatIds localStorage stays until we extract that store */
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        SIDEBAR_STORAGE_KEY,
+        hostSidebarOpen ? "1" : "0",
+      );
+    } catch {
+      // ignore storage errors (private mode, etc.)
+    }
+  }, [hostSidebarOpen]);
 
   useEffect(() => {
-    writeCompletedRunChatIds(completedChatIds);
-  }, [completedChatIds]);
+    writeSessionUpdateChatIds(updatedChatIds);
+  }, [updatedChatIds]);
 
   const activeSession = useMemo<ChatSummary | null>(() => {
     if (!activeKey) return null;
     return sessions.find((s) => s.key === activeKey) ?? null;
   }, [sessions, activeKey]);
   const runningChatIdList = useMemo(() => Array.from(runningChatIds), [runningChatIds]);
-  const completedChatIdList = useMemo(() => Array.from(completedChatIds), [completedChatIds]);
+  const updatedChatIdList = useMemo(() => Array.from(updatedChatIds), [updatedChatIds]);
   const activeChatId = activeSession?.chatId ?? null;
-  
   useEffect(() => {
     activeChatIdRef.current = activeChatId;
     if (!activeChatId) return;
-    removeCompleted(activeChatId);
+    setUpdatedChatIds((current) => {
+      if (!current.has(activeChatId)) return current;
+      const next = new Set(current);
+      next.delete(activeChatId);
+      return next;
+    });
   }, [activeChatId]);
   const activeWorkspaceScope = useMemo<WorkspaceScopePayload | null>(() => {
     if (activeChatId && workspaceOverrides[activeChatId]) {
@@ -164,8 +212,16 @@ export default function Shell({
   useEffect(() => {
     if (loading) return;
     const knownChatIds = new Set(sessions.map((session) => session.chatId));
-    pruneCompleted(knownChatIds);
-    pruneWorkspaceOverrides(knownChatIds);
+    setUpdatedChatIds((current) => {
+      const next = new Set(
+        Array.from(current).filter((chatId) => knownChatIds.has(chatId)),
+      );
+      return next.size === current.size ? current : next;
+    });
+    setWorkspaceOverrides((current) => {
+      const entries = Object.entries(current).filter(([chatId]) => knownChatIds.has(chatId));
+      return entries.length === Object.keys(current).length ? current : Object.fromEntries(entries);
+    });
   }, [loading, sessions]);
 
   useEffect(() => {
@@ -184,10 +240,26 @@ export default function Shell({
   }, [activeKey, loading, navigate, sessions]);
 
   useEffect(() => {
-    return client.onSessionUpdate((_chatId, _scope, workspaceScope) => {
+    return client.onSessionUpdate((chatId, scope, workspaceScope) => {
+      if (scope === "thread") {
+        setUpdatedChatIds((current) => {
+          const next = new Set(current);
+          if (activeChatIdRef.current === chatId) {
+            next.delete(chatId);
+          } else {
+            next.add(chatId);
+          }
+          return next.size === current.size && next.has(chatId) === current.has(chatId)
+            ? current
+            : next;
+        });
+      }
       if (!workspaceScope) return;
       const next = normalizeWorkspaceScope(workspaceScope);
-      setWorkspaceOverride(_chatId, next);
+      setWorkspaceOverrides((current) => ({
+        ...current,
+        [chatId]: next,
+      }));
       setDraftWorkspaceScope(next);
       setWorkspaceError(null);
       void refreshWorkspaces();
@@ -211,10 +283,87 @@ export default function Shell({
 
     for (const chatId of activeRunIds) {
       client.attach(chatId);
-      addRunning(chatId);
-      removeCompleted(chatId);
     }
+    setRunningChatIds((current) => {
+      let changed = false;
+      const next = new Set(current);
+      for (const chatId of activeRunIds) {
+        if (!next.has(chatId)) changed = true;
+        next.add(chatId);
+      }
+      if (!changed) return current;
+      runningChatIdsRef.current = next;
+      return next;
+    });
+    setUpdatedChatIds((current) => {
+      let changed = false;
+      const next = new Set(current);
+      for (const chatId of activeRunIds) {
+        if (next.delete(chatId)) changed = true;
+      }
+      return changed ? next : current;
+    });
   }, [client, loading, sessions]);
+
+  const clearHostSidebarPreviewCloseTimer = useCallback(() => {
+    if (hostSidebarPreviewCloseTimerRef.current === null) return;
+    window.clearTimeout(hostSidebarPreviewCloseTimerRef.current);
+    hostSidebarPreviewCloseTimerRef.current = null;
+  }, []);
+
+  const closeHostSidebarPreview = useCallback(() => {
+    clearHostSidebarPreviewCloseTimer();
+    setHostSidebarPreviewOpen(false);
+  }, [clearHostSidebarPreviewCloseTimer]);
+
+  const openHostSidebarPreview = useCallback(() => {
+    if (!showHostChrome || !showMainSidebar || hostSidebarOpen) return;
+    clearHostSidebarPreviewCloseTimer();
+    setHostSidebarPreviewOpen(true);
+  }, [
+    clearHostSidebarPreviewCloseTimer,
+    hostSidebarOpen,
+    showHostChrome,
+    showMainSidebar,
+  ]);
+
+  const scheduleHostSidebarPreviewClose = useCallback(() => {
+    clearHostSidebarPreviewCloseTimer();
+    if (!showHostChrome || !showMainSidebar || hostSidebarOpen) {
+      setHostSidebarPreviewOpen(false);
+      return;
+    }
+    hostSidebarPreviewCloseTimerRef.current = window.setTimeout(() => {
+      setHostSidebarPreviewOpen(false);
+      hostSidebarPreviewCloseTimerRef.current = null;
+    }, 160);
+  }, [
+    clearHostSidebarPreviewCloseTimer,
+    hostSidebarOpen,
+    showHostChrome,
+    showMainSidebar,
+  ]);
+
+  useEffect(() => {
+    return () => clearHostSidebarPreviewCloseTimer();
+  }, [clearHostSidebarPreviewCloseTimer]);
+
+  useEffect(() => {
+    if (!showHostChrome || !showMainSidebar || hostSidebarOpen) {
+      closeHostSidebarPreview();
+    }
+  }, [
+    closeHostSidebarPreview,
+    hostSidebarOpen,
+    showHostChrome,
+    showMainSidebar,
+  ]);
+
+
+  const toggleHostSidebar = useCallback(() => { //TODO: put in the shell store
+    closeHostSidebarPreview();
+    setHostSidebarOpen((v) => !v);
+  }, [closeHostSidebarPreview]);
 
   const applyWorkspaceScope = useCallback(
     (scope: WorkspaceScopePayload) => {
@@ -253,6 +402,33 @@ export default function Shell({
       return null;
     }
   }, [activeWorkspaceScope, createChat, navigate, t]);
+
+  const onForkChat = useCallback(async (
+    sourceChatId: string,
+    beforeUserIndex: number,
+  ) => {
+    try {
+      const sourceSession = sessions.find((session) => session.chatId === sourceChatId);
+      const sourceTitle = sourceSession
+        ? displayTitle(sourceSession, sidebarState.title_overrides, t("chat.newChat"))
+        : t("chat.newChat");
+      const chatId = await forkChat(
+        sourceChatId,
+        beforeUserIndex,
+        t("chat.forkTitle", { title: sourceTitle }),
+      );
+      navigate({
+        view: "chat",
+        activeKey: `websocket:${chatId}`,
+        settingsSection: "overview",
+      });
+      setMobileSidebarOpen(false);
+      return chatId;
+    } catch (e) {
+      console.error("Failed to fork chat", e);
+      return null;
+    }
+  }, [forkChat, navigate, sessions, sidebarState.title_overrides, t]);
 
   const onNewChat = useCallback(() => {
     navigate(defaultShellRoute());
@@ -484,7 +660,7 @@ export default function Shell({
   const onSettingsSectionChange = useCallback(
     (section: SettingsSectionKey) => {
       navigate({
-        view: section === "apps" ? "apps" : "settings",
+        view: shellViewForSettingsSection(section),
         activeKey,
         settingsSection: section,
       });
@@ -573,32 +749,46 @@ export default function Shell({
   const onConfirmDelete = useCallback(async () => {
     if (!pendingDelete) return;
     const key = pendingDelete.key;
+    const hasAutomations = (pendingDelete.automations?.length ?? 0) > 0;
     const deletingActive = activeKey === key;
     const currentIndex = sessions.findIndex((s) => s.key === key);
     const fallbackKey = deletingActive
       ? (sessions[currentIndex + 1]?.key ?? sessions[currentIndex - 1]?.key ?? null)
       : activeKey;
-    closeDeleteDialog();
-    if (deletingActive) {
-      navigate({
-        view: "chat",
-        activeKey: fallbackKey,
-        settingsSection: "overview",
-      }, { replace: true });
-    }
     try {
-      await deleteChat(key);
-    } catch (e) {
+      const result = await deleteChat(
+        key,
+        hasAutomations ? { deleteAutomations: true } : undefined,
+      );
+      if (result.blocked_by_automations) {
+        setPendingDelete({
+          ...pendingDelete,
+          automations: result.automations ?? [],
+        });
+        return;
+      }
+      setPendingDelete(null);
       if (deletingActive) {
         navigate({
           view: "chat",
-          activeKey: key,
+          activeKey: fallbackKey,
           settingsSection: "overview",
         }, { replace: true });
       }
+    } catch (e) {
       console.error("Failed to delete session", e);
     }
   }, [pendingDelete, deleteChat, activeKey, navigate, sessions]);
+
+  const onRequestDelete = useCallback(async (key: string, label: string) => {
+    let automations: SessionAutomationJob[] = [];
+    try {
+      automations = await getSessionAutomations(key);
+    } catch {
+      // Delete remains protected by the backend block; prefetch only improves the first prompt.
+    }
+    setPendingDelete({ key, label, automations });
+  }, [getSessionAutomations]);
 
   const headerTitle = activeSession
     ? sidebarState.title_overrides[activeSession.key] ||
@@ -619,6 +809,18 @@ export default function Shell({
       });
       return;
     }
+    if (view === "automations") {
+      document.title = t("app.documentTitle.chat", {
+        title: t("settings.nav.automations", { defaultValue: "Automations" }),
+      });
+      return;
+    }
+    if (view === "skills") {
+      document.title = t("app.documentTitle.chat", {
+        title: t("settings.nav.skills", { defaultValue: "Skills" }),
+      });
+      return;
+    }
     document.title = activeSession
       ? t("app.documentTitle.chat", { title: headerTitle })
       : t("app.documentTitle.base");
@@ -630,8 +832,7 @@ export default function Shell({
     loading,
     onNewChat,
     onSelect: onSelectChat,
-    onRequestDelete: (key: string, label: string) =>
-      openDeleteDialog(key, label),
+    onRequestDelete,
     onTogglePin,
     onRequestRename,
     onToggleArchive,
@@ -640,9 +841,10 @@ export default function Shell({
     onNewChatInProject,
     onOpenSettings: () => onOpenPage("overview", "settings"),
     onOpenApps: () => onOpenPage("apps", "apps"),
+    onOpenAutomations: () => onOpenPage("automations", "apps"),
     onOpenSkills: () => onOpenPage("skills", "apps"),
     onOpenSearch: onOpenSessionSearch,
-    activeUtility: view === "apps" ? "apps" as const : null,
+    activeUtility: view === "apps" || view === "automations" || view === "skills" ? view : null,
     onToggleArchived,
     pinnedKeys: sidebarState.pinned_keys,
     archivedKeys: sidebarState.archived_keys,
@@ -650,17 +852,19 @@ export default function Shell({
     projectNameOverrides: sidebarState.project_name_overrides,
     collapsedGroups: sidebarState.collapsed_groups,
     runningChatIds: runningChatIdList,
-    completedChatIds: completedChatIdList,
+    updatedChatIds: updatedChatIdList,
     viewState: sidebarState.view,
     showArchived: sidebarState.view.show_archived,
     archivedCount: sidebarState.archived_keys.length,
     defaultWorkspacePath: workspaces?.default_scope.project_path ?? null,
   };
-  const effectiveRuntimeSurface =
-    settingsSnapshot?.surface ?? settingsSnapshot?.runtime_surface ?? runtimeSurface;
-  const isNativeHostSetupSurface = effectiveRuntimeSurface === "native";
-  const showHostChrome = isNativeHostSetupSurface;
-  const showMainSidebar = view !== "settings";
+  const hostSidebarCollapsed = showHostChrome && !hostSidebarOpen;
+  const showHostSidebarPreview =
+    showMainSidebar && hostSidebarCollapsed && hostSidebarPreviewOpen;
+  const hostSidebarFlowWidth = showHostChrome
+    ? (hostSidebarOpen ? SIDEBAR_WIDTH : 0)
+    : (hostSidebarOpen ? SIDEBAR_WIDTH : SIDEBAR_RAIL_WIDTH);
+  const renderHostSidebarFlowContent = !showHostChrome || hostSidebarOpen;
 
   useEffect(() => {
     document.documentElement.classList.toggle("native-host", showHostChrome);
@@ -679,9 +883,28 @@ export default function Shell({
       >
         {showHostChrome ? (
           <HostChrome
-            onToggleSidebar={showMainSidebar ? toggleSidebar : undefined}
-            theme={theme}
-            onToggleTheme={toggle}
+            onToggleSidebar={showMainSidebar ? toggleHostSidebar : undefined}
+            onSidebarPreviewEnter={openHostSidebarPreview}
+            onSidebarPreviewLeave={scheduleHostSidebarPreviewClose}
+            sidebarOpen={hostSidebarOpen}
+            rightAction={
+              view === "chat" ? undefined : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("thread.header.toggleTheme")}
+                  onClick={toggle}
+                  className="h-8 w-8 rounded-full text-muted-foreground/85 hover:bg-accent/40 hover:text-foreground"
+                >
+                  {theme === "dark" ? (
+                    <Sun className="h-4 w-4" />
+                  ) : (
+                    <Moon className="h-4 w-4" />
+                  )}
+                </Button>
+              )
+            }
           />
         ) : null}
         <div
@@ -692,25 +915,47 @@ export default function Shell({
           {/* Host sidebar: in normal flow, so the thread area width stays honest. */}
           {showMainSidebar ? (
             <aside
+              data-testid="host-sidebar-flow"
               className={cn(
                 "relative z-20 hidden shrink-0 overflow-hidden lg:block",
                 "transition-[width] duration-300 ease-out",
               )}
               style={{
-                width: hostSidebarOpen ? SIDEBAR_WIDTH : SIDEBAR_RAIL_WIDTH,
+                width: hostSidebarFlowWidth,
               }}
             >
-              <div
-                className={cn(
-                  "absolute inset-y-0 left-0 h-full w-full overflow-hidden",
-                  showHostChrome
-                    ? "host-sidebar-glass"
-                    : "bg-sidebar shadow-inner-right",
-                )}
-              >
+              {renderHostSidebarFlowContent ? (
+                <div
+                  className={cn(
+                    "absolute inset-y-0 left-0 h-full w-full overflow-hidden",
+                    showHostChrome
+                      ? "host-sidebar-glass"
+                      : "bg-sidebar shadow-inner-right",
+                  )}
+                >
+                  <Sidebar
+                    {...sidebarProps}
+                    collapsed={!showHostChrome && !hostSidebarOpen}
+                    hostChromeInset={showHostChrome}
+                    onCollapse={closeHostSidebar}
+                    onExpand={openHostSidebar}
+                  />
+                </div>
+              ) : null}
+            </aside>
+          ) : null}
+
+          {showHostSidebarPreview ? (
+            <aside
+              data-testid="host-sidebar-preview"
+              className="absolute inset-y-0 left-0 z-30 hidden overflow-hidden lg:block animate-in fade-in-0 slide-in-from-left-2 duration-150"
+              style={{ width: SIDEBAR_WIDTH }}
+              onMouseEnter={openHostSidebarPreview}
+              onMouseLeave={scheduleHostSidebarPreviewClose}
+            >
+              <div className="h-full w-full overflow-hidden host-sidebar-glass shadow-2xl">
                 <Sidebar
                   {...sidebarProps}
-                  collapsed={!hostSidebarOpen}
                   hostChromeInset={showHostChrome}
                   onCollapse={closeHostSidebar}
                   onExpand={openHostSidebar}
@@ -722,14 +967,14 @@ export default function Shell({
           {showMainSidebar ? (
             <Sheet
               open={mobileSidebarOpen}
-              onOpenChange={(open) => open ? openMobileSidebar() : closeMobileSidebar()}
+              onOpenChange={(open) => setMobileSidebarOpen(open)}
             >
               <SheetContent
                 side="left"
                 showCloseButton={false}
                 aria-describedby={undefined}
                 className="p-0 lg:hidden"
-                style={{ width: SIDEBAR_WIDTH, maxWidth: SIDEBAR_WIDTH }}
+                style={{ width: MOBILE_SIDEBAR_WIDTH, maxWidth: MOBILE_SIDEBAR_WIDTH }}
               >
                 <SheetTitle className="sr-only">{t("sidebar.navigation")}</SheetTitle>
                 <Sidebar
@@ -743,7 +988,7 @@ export default function Shell({
 
           <SessionSearchDialog
             open={sessionSearchOpen}
-            onOpenChange={(open) => open ? openSessionSearch() : closeSessionSearch()}
+            onOpenChange={setSessionSearchOpen}
             sessions={sessions}
             activeKey={activeKey}
             loading={loading}
@@ -753,7 +998,7 @@ export default function Shell({
         <main
           className={cn(
             "relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-background",
-            showHostChrome && "border-l border-border/55",
+            showHostChrome && hostSidebarOpen && "border-l border-border/55",
           )}
         >
             <div
@@ -768,11 +1013,12 @@ export default function Shell({
                 onToggleSidebar={toggleSidebar}
                 onNewChat={onNewChat}
                 onCreateChat={onCreateChat}
+                onForkChat={onForkChat}
                 onTurnEnd={onTurnEnd}
                 theme={theme}
                 onToggleTheme={toggle}
                 hideSidebarToggleForHostChrome
-                hideThemeButton={showHostChrome}
+                hostChromeTitleInset={hostSidebarCollapsed}
                 hideHeader={false}
                 workspaceScope={activeWorkspaceScope}
                 workspaceDefaultScope={workspaces?.default_scope ?? null}
@@ -781,22 +1027,26 @@ export default function Shell({
                 workspaceError={workspaceError}
                 onWorkspaceScopeChange={applyWorkspaceScope}
                 settingsSnapshot={settingsSnapshot}
+                onOpenModelSettings={onOpenModelSettings}
               />
             </div>
             {view !== "chat" && (
               <div className="absolute inset-0 flex flex-col">
                 <SettingsView
                   theme={theme}
-                  initialSection={settingsInitialSection as SettingsSectionKey}
+                  initialSection={settingsInitialSection}
+                  initialSettings={settingsSnapshot}
                   showSidebar={view === "settings"}
                   onToggleTheme={toggle}
                   onBackToChat={onBackToChat}
                   onModelNameChange={onModelNameChange}
                   onSettingsChange={setSettingsSnapshot}
+                  skills={skills}
                   onWorkspaceSettingsChange={refreshWorkspaces}
                   onSectionChange={onSettingsSectionChange}
                   onLogout={onLogout}
                   onRestart={onRestart}
+                  onNativeEngineRestart={onNativeEngineRestart}
                   isRestarting={isRestarting}
                   hostChromeInset={showHostChrome}
                 />
@@ -808,13 +1058,14 @@ export default function Shell({
         <DeleteConfirm
           open={!!pendingDelete}
           title={pendingDelete?.label ?? ""}
-          onCancel={closeDeleteDialog}
+          automations={pendingDelete?.automations}
+          onCancel={() => setPendingDelete(null)}
           onConfirm={onConfirmDelete}
         />
         <RenameChatDialog
           open={!!pendingRename}
           title={pendingRename?.label ?? ""}
-          onCancel={closeRenameDialog}
+          onCancel={() => setPendingRename(null)}
           onConfirm={onConfirmRename}
         />
         <RenameChatDialog
@@ -823,13 +1074,13 @@ export default function Shell({
           dialogTitle={t("chat.renameProjectTitle")}
           description={t("chat.renameProjectDescription")}
           placeholder={t("chat.renameProjectPlaceholder")}
-          onCancel={closeProjectRenameDialog}
+          onCancel={() => setPendingProjectRename(null)}
           onConfirm={onConfirmProjectRename}
         />
         {restartToast ? (
           <div
             role="status"
-            className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-full border border-border/70 bg-popover px-4 py-2 text-sm font-medium text-popover-foreground shadow-lg"
+            className="fixed left-1/2 top-[calc(0.75rem+env(safe-area-inset-top))] z-50 max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded-full border border-border/70 bg-popover px-4 py-2 text-sm font-medium text-popover-foreground shadow-lg"
           >
             {restartToast}
           </div>

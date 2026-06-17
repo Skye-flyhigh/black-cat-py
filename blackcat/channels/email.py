@@ -1,14 +1,9 @@
 """Email channel implementation using IMAP polling + SMTP replies."""
 
-import asyncio
 import html
 import imaplib
-import mimetypes
 import re
-import smtplib
-import ssl
 from contextlib import suppress
-from dataclasses import dataclass
 from datetime import date
 from email import policy
 from email.header import decode_header, make_header
@@ -22,8 +17,6 @@ from typing import Any, Literal
 from loguru import logger
 from pydantic import Field
 
-from blackcat.bus.events import OutboundMessage
-from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
 from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
@@ -57,6 +50,41 @@ class EmailConfig(Base):
     post_action: Literal["delete", "move"] | None = None
     post_action_move_mailbox: str | None = None
     post_action_expunge: bool = False
+    post_action_ignore_skipped: bool = True
+    max_body_chars: int = 12000
+    subject_prefix: str = "Re: "
+    allow_from: list[str] = Field(default_factory=list)
+
+    # Email authentication verification (anti-spoofing)
+    verify_dkim: bool = True   # Require Authentication-Results with dkim=pass
+    verify_spf: bool = True    # Require Authentication-Results with spf=pass
+
+    # Attachment handling — set allowed types to enable (e.g. ["application/pdf", "image/*"], or ["*"] for all)
+    allowed_attachment_types: list[str] = Field(default_factory=list)
+
+
+class _ServerFeatures:
+    move: bool
+    uidplus: bool
+    uid_store: bool | None = None
+
+
+class EmailChannel(BaseChannel):
+    """
+    Email channel.
+
+    Inbound:
+    - Poll IMAP mailbox for unread messages.
+    - Convert each message into an inbound event.
+
+    Outbound:
+    - Send responses via SMTP back to the sender address.
+    """
+
+    name = "email"
+    display_name = "Email"
+
+    def fetch_unseen_messages(self) -> list[EmailMessage]:
         return self._fetch_messages(
             search_criteria=("UNSEEN",),
             mark_seen=self.config.mark_seen,
