@@ -1,9 +1,14 @@
 """Email channel implementation using IMAP polling + SMTP replies."""
 
+import asyncio
 import html
 import imaplib
+import mimetypes
 import re
+import smtplib
+import ssl
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import date
 from email import policy
 from email.header import decode_header, make_header
@@ -17,6 +22,8 @@ from typing import Any, Literal
 from loguru import logger
 from pydantic import Field
 
+from blackcat.bus.events import OutboundMessage
+from blackcat.bus.queue import MessageBus
 from blackcat.channels.base import BaseChannel
 from blackcat.config.paths import get_media_dir
 from blackcat.config.schema import Base
@@ -61,8 +68,11 @@ class EmailConfig(Base):
 
     # Attachment handling — set allowed types to enable (e.g. ["application/pdf", "image/*"], or ["*"] for all)
     allowed_attachment_types: list[str] = Field(default_factory=list)
+    max_attachment_size: int = 2_000_000  # 2MB per attachment
+    max_attachments_per_email: int = 5
 
 
+@dataclass
 class _ServerFeatures:
     move: bool
     uidplus: bool
@@ -83,8 +93,36 @@ class EmailChannel(BaseChannel):
 
     name = "email"
     display_name = "Email"
+    _IMAP_MONTHS = (
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    )
+    _IMAP_RECONNECT_MARKERS = (
+        "disconnected for inactivity",
+        "eof occurred in violation of protocol",
+        "socket error",
+        "connection reset",
+        "broken pipe",
+        "bye",
+    )
+    _IMAP_MISSING_MAILBOX_MARKERS = (
+        "mailbox doesn't exist",
+        "select failed",
+        "no such mailbox",
+        "can't open mailbox",
+        "does not exist",
+    )
 
-    def fetch_unseen_messages(self) -> list[EmailMessage]:
     @classmethod
     def default_config(cls) -> dict[str, Any]:
         return EmailConfig().model_dump(by_alias=True)
@@ -196,7 +234,7 @@ class EmailChannel(BaseChannel):
             self.logger.info("Skip automatic reply to {}: auto_reply_enabled is false", to_addr)
             return
 
-        base_subject = self._last_subject_by_chat.get(to_addr, "nanobot reply")
+        base_subject = self._last_subject_by_chat.get(to_addr, "blackcat reply")
         subject = self._reply_subject(base_subject)
         if msg.metadata and isinstance(msg.metadata.get("subject"), str):
             override = msg.metadata["subject"].strip()

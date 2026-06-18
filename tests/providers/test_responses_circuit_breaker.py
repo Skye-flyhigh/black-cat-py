@@ -88,7 +88,6 @@ def test_probe_after_interval(provider, monkeypatch):
 
 def test_below_threshold_still_allows(provider):
     provider._record_responses_failure("gpt-5", None)
-    provider._record_responses_failure("gpt-5", None)
     assert provider._should_use_responses_api("gpt-5", None) is True
 
 

@@ -8,7 +8,7 @@ from typing import Any
 
 from loguru import logger
 
-from blackcat.utils.formatting import stringify_text_blocks
+from blackcat.utils.helpers import stringify_text_blocks
 
 _MAX_REPEAT_EXTERNAL_LOOKUPS = 2
 
@@ -20,10 +20,16 @@ EMPTY_FINAL_RESPONSE_MESSAGE = (
     "Please try again or narrow the task."
 )
 
+FINALIZATION_RETRY_PROMPT = (
+    "Please provide your response to the user based on the conversation above."
+)
+
 BUDGET_EXHAUSTED_FINALIZATION_PROMPT = (
-    "You have reached the maximum number of iterations for this task. "
-    "Please provide your final response now, summarizing what you accomplished "
-    "and any remaining steps. Do not attempt to call any more tools."
+    "The tool-call budget for this turn is exhausted. Based only on the "
+    "conversation and tool results above, provide a concise final response to "
+    "the user. Do not call or request tools. Do not claim the task is complete "
+    "unless the evidence above clearly shows it is complete. State what was "
+    "done, what remains, and the best next step if anything is incomplete."
 )
 
 LENGTH_RECOVERY_PROMPT = (
@@ -34,11 +40,6 @@ LENGTH_RECOVERY_PROMPT = (
 SUSTAINED_GOAL_CONTINUE_PROMPT = (
     "You have an active sustained goal. Please continue working toward the "
     "objective using your tools, or call complete_goal if the work is truly finished."
-)
-
-FINALIZATION_RETRY_PROMPT = (
-    "You have already finished the tool work. Do not call any more tools. "
-    "Using only the conversation and tool results above, provide the final answer for the user now."
 )
 
 
@@ -71,6 +72,12 @@ def build_finalization_retry_message() -> dict[str, str]:
     """A short no-tools-allowed prompt for final answer recovery."""
     return {"role": "user", "content": FINALIZATION_RETRY_PROMPT}
 
+
+def build_budget_exhausted_finalization_message() -> dict[str, str]:
+    """Prompt the model for a no-tools final response after budget exhaustion."""
+    return {"role": "user", "content": BUDGET_EXHAUSTED_FINALIZATION_PROMPT}
+
+
 def build_length_recovery_message() -> dict[str, str]:
     """Prompt the model to continue after hitting output token limit."""
     return {"role": "user", "content": LENGTH_RECOVERY_PROMPT}
@@ -79,10 +86,6 @@ def build_length_recovery_message() -> dict[str, str]:
 def build_goal_continue_message(custom: str | None = None) -> dict[str, str]:
     """Prompt the model to continue when a sustained goal is still active."""
     return {"role": "user", "content": custom or SUSTAINED_GOAL_CONTINUE_PROMPT}
-
-def build_budget_exhausted_finalization_message() -> dict[str, str]:
-    """Prompt the model for a no-tools final response after budget exhaustion."""
-    return {"role": "user", "content": BUDGET_EXHAUSTED_FINALIZATION_PROMPT}
 
 
 def external_lookup_signature(tool_name: str, arguments: Any) -> str | None:

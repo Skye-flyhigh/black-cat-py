@@ -396,7 +396,6 @@ async def test_send_uses_typing_start_and_cancel_when_ticket_available() -> None
         side_effect=[
             {"ret": 0, "typing_ticket": "ticket-typing"},
             {"ret": 0},
-            {"ret": 0},
         ]
     )
 
@@ -491,9 +490,6 @@ async def test_qr_login_returns_false_after_too_many_expired_qr_codes() -> None:
     )
     channel._api_get_with_base = AsyncMock(
         side_effect=[
-            {"status": "expired"},
-            {"status": "expired"},
-            {"status": "expired"},
             {"status": "expired"},
         ]
     )

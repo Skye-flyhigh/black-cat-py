@@ -100,8 +100,6 @@ class TestMessageToolSuppressLogic:
             LLMResponse(content="First answer", tool_calls=[]),
             LLMResponse(content="", tool_calls=[tool_call]),
             LLMResponse(content="", tool_calls=[]),
-            LLMResponse(content="", tool_calls=[]),
-            LLMResponse(content="", tool_calls=[]),
         ])
         loop.provider.chat_with_retry = AsyncMock(side_effect=lambda *a, **kw: next(calls))
         loop.tools.get_definitions = MagicMock(return_value=[])

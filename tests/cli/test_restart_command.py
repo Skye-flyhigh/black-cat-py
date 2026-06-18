@@ -98,8 +98,6 @@ class TestRestartCommand:
         )
 
         with patch.object(loop, "_dispatch", new_callable=AsyncMock) as mock_dispatch, \
-             patch("blackcat.command.builtin.os.execv"), \
-             patch("blackcat.command.builtin.asyncio", new=fake_asyncio):
              patch("blackcat.command.builtin.asyncio", new=fake_asyncio), \
              patch("blackcat.command.builtin.os.execv"):
             await bus.publish_inbound(msg)
@@ -140,7 +138,7 @@ class TestRestartCommand:
 
             mock_dispatch.assert_not_called()
             assert "blackcat" in out.content.lower() or "Model" in out.content
-            assert "nanobot" in out.content.lower() or "Model" in out.content
+            assert "blackcat" in out.content.lower() or "Model" in out.content
 
     @pytest.mark.asyncio
     async def test_run_propagates_external_cancellation(self):

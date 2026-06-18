@@ -1,7 +1,6 @@
 """Anthropic provider — direct SDK integration for Claude models."""
 
 from __future__ import annotations
-import os
 
 import asyncio
 import re
@@ -11,10 +10,10 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from blackcat.providers.base import (
-from blackcat.providers.base import (
     LLMProvider,
     LLMResponse,
     ToolCallRequest,
+    resolve_stream_idle_timeout_s,
     tool_arguments_object_for_replay,
 )
 
@@ -614,7 +613,7 @@ class AnthropicProvider(LLMProvider):
             messages, tools, model, max_tokens, temperature,
             reasoning_effort, tool_choice,
         )
-        idle_timeout_s = int(os.environ.get("BLACKCAT_STREAM_IDLE_TIMEOUT_S", "90"))
+        idle_timeout_s = resolve_stream_idle_timeout_s()
         try:
             async with self._client.messages.stream(**kwargs) as stream:
                 if on_content_delta or on_thinking_delta or on_tool_call_delta:

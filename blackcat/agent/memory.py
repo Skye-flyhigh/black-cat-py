@@ -2,29 +2,35 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
 import threading
+import weakref
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from loguru import logger
 
-from blackcat.utils.formatting import strip_think, truncate_text
+from blackcat.session.manager import Session
 from blackcat.utils.gitstore import GitStore
 from blackcat.utils.helpers import (
     ensure_dir,
+    estimate_message_tokens,
+    estimate_prompt_tokens_chain,
+    find_legal_message_start,
+    strip_think,
+    truncate_text,
+    truncate_text_to_tokens,
 )
 from blackcat.utils.prompt_templates import render_template
 
-# Individual history.jsonl writers cap their own payloads tightly; the
-# _HISTORY_ENTRY_HARD_CAP at append_history() is a belt-and-suspenders default
-# that catches any new caller that forgot to set its own cap.
-_RAW_ARCHIVE_MAX_CHARS = 16_000       # fallback dump (LLM failed)
-_HISTORY_ENTRY_HARD_CAP = 64_000      # emergency cap in append_history
+if TYPE_CHECKING:
+    from blackcat.providers.base import LLMProvider
+    from blackcat.session.manager import SessionManager
 
 
 # ---------------------------------------------------------------------------
@@ -800,14 +806,7 @@ class Consolidator:
         budget = self._input_token_budget
         if budget <= 0:
             return truncate_text(text, _RAW_ARCHIVE_MAX_CHARS)
-        try:
-            enc = tiktoken.get_encoding("cl100k_base")
-            tokens = enc.encode(text)
-            if len(tokens) <= budget:
-                return text
-            return enc.decode(tokens[:budget]) + "\n... (truncated)"
-        except Exception:
-            return truncate_text(text, budget * 4)
+        return truncate_text_to_tokens(text, budget)
 
     async def archive(
         self,
@@ -1000,7 +999,7 @@ class Consolidator:
                 metadata={},
                 last_consolidated=0,
             )
-            dropped, already_consolidated = probe.retain_recent_legal_suffix(max_suffix)
+            dropped, already_consolidated = probe.retain_recent_legal_suffix(max_suffix, extend_to_user=True)
             messages_to_keep = probe.messages
             messages_to_remove = dropped[already_consolidated:]
 

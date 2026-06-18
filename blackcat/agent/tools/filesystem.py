@@ -18,9 +18,6 @@ from blackcat.agent.tools.schema import (
 )
 from blackcat.config_base import Base
 from blackcat.security.workspace_access import current_tool_workspace
-from blackcat.utils.media import build_image_content_blocks, detect_image_mime
-from blackcat.config_base import Base
-from blackcat.security.workspace_access import current_tool_workspace
 from blackcat.utils.helpers import build_image_content_blocks, detect_image_mime
 
 
@@ -186,9 +183,6 @@ class ReadFileTool(_FsTool):
     _MAX_CHARS = 128_000
     _DEFAULT_LIMIT = 2000
     _MAX_PDF_PAGES = 20
-
-    parameters: dict[str, Any] # type: ignore[assignment]
-
 
     @property
     def name(self) -> str:
@@ -372,9 +366,9 @@ class ReadFileTool(_FsTool):
         parts: list[str] = []
         for i in range(start, end + 1):
             page = doc[i]
-            text: str = page.get_text()  # type: ignore[union-attr]
+            text = page.get_text().strip()
             if text:
-                parts.append(f"--- Page {i + 1} ---\n{text.strip()}")
+                parts.append(f"--- Page {i + 1} ---\n{text}")
         doc.close()
 
         if not parts:
@@ -422,8 +416,6 @@ class ReadFileTool(_FsTool):
 class WriteFileTool(_FsTool):
     """Write content to a file."""
     _scopes = {"core", "subagent", "memory"}
-
-    parameters: dict[str, Any] # type: ignore[assignment]
 
     @property
     def name(self) -> str:
@@ -753,9 +745,6 @@ class EditFileTool(_FsTool):
     _MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024  # 1 GiB
     _MARKDOWN_EXTS = frozenset({".md", ".mdx", ".markdown"})
 
-    # Type hint for Pylance: decorator injects this at runtime
-    parameters: dict[str, Any] # type: ignore[assignment]
-
     @property
     def name(self) -> str:
         return "edit_file"
@@ -986,8 +975,6 @@ class ListDirTool(_FsTool):
         "dist", "build", ".tox", ".mypy_cache", ".pytest_cache",
         ".ruff_cache", ".coverage", "htmlcov",
     }
-
-    parameters: dict[str, Any] # type: ignore[assignment]
 
     @property
     def name(self) -> str:

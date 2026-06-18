@@ -392,13 +392,11 @@ async def test_runner_persists_large_tool_results_for_follow_up_calls(tmp_path):
     assert "[tool output persisted]" in tool_message["content"]
     assert "tool-results" in tool_message["content"]
     assert (tmp_path / ".blackcat" / "tool-results" / "test_runner" / "call_big.txt").exists()
-    assert (tmp_path / ".blackcat" / "tool-results" / "test_runner" / "call_big.txt").exists()
 
 
 def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
     from blackcat.utils.tools import maybe_persist_tool_result
 
-    root = tmp_path / ".blackcat" / "tool-results"
     root = tmp_path / ".blackcat" / "tool-results"
     old_bucket = root / "old_session"
     recent_bucket = root / "recent_session"
@@ -428,7 +426,6 @@ def test_persist_tool_result_prunes_old_session_buckets(tmp_path):
 def test_persist_tool_result_leaves_no_temp_files(tmp_path):
     from blackcat.utils.tools import maybe_persist_tool_result
 
-    root = tmp_path / ".blackcat" / "tool-results"
     root = tmp_path / ".blackcat" / "tool-results"
     maybe_persist_tool_result(
         tmp_path,
@@ -700,7 +697,6 @@ def test_snip_history_drops_orphaned_tool_results_from_trimmed_slice(monkeypatch
         context_block_limit=100,
     )
 
-    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_args, **_kwargs: (500, None))
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_args, **_kwargs: (500, None))
     token_sizes = {
         "old user": 120,
@@ -1169,7 +1165,6 @@ async def test_subagent_max_iterations_announces_existing_fallback(tmp_path, mon
     async def fake_execute(self, **kwargs):
         return "tool result"
 
-    monkeypatch.setattr("blackcat.agent.tools.filesystem.ListDirTool.execute", fake_execute)
     monkeypatch.setattr("blackcat.agent.tools.filesystem.ListDirTool.execute", fake_execute)
 
     status = SubagentStatus(task_id="sub-1", label="label", task_description="do task", started_at=time.monotonic())
@@ -2894,7 +2889,6 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
         {"role": "system", "content": "system"},
         {"role": "assistant", "content": "previous reply"},
         {"role": "user", "content": ".blackcat的同目录"},
-        {"role": "user", "content": ".blackcat的同目录"},
         {
             "role": "assistant",
             "content": None,
@@ -2921,12 +2915,10 @@ def test_snip_history_preserves_user_message_after_truncation(monkeypatch):
 
     # Make estimate_prompt_tokens_chain report above budget so _snip_history activates.
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
-    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
     # Make kept window small: only the last 2 messages fit the budget.
     token_sizes = {
         "system": 0,
         "previous reply": 200,
-        ".blackcat的同目录": 80,
         ".blackcat的同目录": 80,
         "tool output 1": 80,
         "tool output 2": 80,
@@ -2975,7 +2967,6 @@ def test_snip_history_no_user_at_all_falls_back_gracefully(monkeypatch):
         context_block_limit=100,
     )
 
-    monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
     monkeypatch.setattr("blackcat.agent.runner.estimate_prompt_tokens_chain", lambda *_a, **_kw: (500, None))
     monkeypatch.setattr(
         "blackcat.utils.tokens.estimate_message_tokens",

@@ -1,7 +1,6 @@
 """Shared tool-argument parsing policy tests."""
 
 from blackcat.providers.base import (
-from blackcat.providers.base import (
     parse_tool_arguments,
     tool_arguments_json_for_replay,
     tool_arguments_object_for_replay,

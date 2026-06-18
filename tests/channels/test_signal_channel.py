@@ -1433,7 +1433,6 @@ async def test_send_request_increments_id() -> None:
     ch._http = client  # type: ignore[assignment]
 
     await ch._send_request("testMethod", {"key": "val"})
-    await ch._send_request("testMethod", {"key": "val"})
 
     ids = [p["json"]["id"] for p in client.posts]
     assert ids == [1, 2]

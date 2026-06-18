@@ -704,7 +704,6 @@ async def test_openai_multiple_images() -> None:
     fake = FakeClient(FakeResponse({
         "data": [
             {"b64_json": RAW_B64},
-            {"b64_json": RAW_B64},
         ]
     }))
     client = OpenAIImageGenerationClient(
@@ -963,6 +962,10 @@ async def test_custom_generate_requires_api_base() -> None:
     client = CustomImageGenerationClient(api_key="sk-custom-test")
 
     with pytest.raises(ImageGenerationError, match="providers.custom.apiBase"):
+        await client.generate(prompt="draw", model="custom-image-model")
+
+
+@pytest.mark.asyncio
 async def test_custom_generate_no_api_key() -> None:
     client = CustomImageGenerationClient(api_key=None)
 

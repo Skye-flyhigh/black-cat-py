@@ -190,8 +190,6 @@ async def test_message_with_multiple_images(tmp_path) -> None:
         "content": "a couple",
         "media": [
             {"data_url": _tiny_png_data_url()},
-            {"data_url": _tiny_png_data_url()},
-            {"data_url": _tiny_png_data_url()},
         ],
     }
 

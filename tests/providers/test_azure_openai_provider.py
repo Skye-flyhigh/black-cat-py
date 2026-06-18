@@ -176,7 +176,6 @@ def test_init_missing_key_without_azure_identity_raises(monkeypatch):
 
     with patch("builtins.__import__", side_effect=fake_import):
         with pytest.raises(RuntimeError, match=r"pip install 'blackcat-ai\[azure\]'"):
-        with pytest.raises(RuntimeError, match=r"pip install 'nanobot-ai\[azure\]'"):
             AzureOpenAIProvider(api_key="", api_base="https://res.openai.azure.com")
 
 

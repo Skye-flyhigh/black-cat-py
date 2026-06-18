@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Mapping
 
 from loguru import logger
 
@@ -20,6 +20,7 @@ from blackcat.agent import model_presets as preset_helpers
 from blackcat.agent.autocompact import AutoCompact
 from blackcat.agent.consolidate import Consolidator
 from blackcat.agent.context import ContextBuilder
+from blackcat.agent.cron_turns import CronTurnCoordinator
 from blackcat.agent.hook import AgentHook, CompositeHook
 from blackcat.agent.progress_hook import AgentProgressHook
 from blackcat.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
@@ -39,6 +40,7 @@ from blackcat.bus.runtime_events import (
 )
 from blackcat.command import CommandContext, CommandRouter, register_builtin_commands
 from blackcat.config.schema import AgentDefaults, ModelPresetConfig
+from blackcat.cron.session_turns import cron_history_overrides
 from blackcat.providers.base import LLMProvider
 from blackcat.providers.factory import ProviderSnapshot
 from blackcat.security.workspace_access import (
@@ -54,7 +56,6 @@ from blackcat.session.goal_state import (
 )
 from blackcat.session.keys import UNIFIED_SESSION_KEY, session_key_for_channel
 from blackcat.session.manager import Session, SessionManager
-from blackcat.cron.session_turns import cron_history_overrides
 from blackcat.utils.document import extract_documents, reference_non_image_attachments
 from blackcat.utils.formatting import truncate_text as truncate_text_fn
 from blackcat.utils.image_generation_intent import image_generation_prompt
@@ -200,6 +201,7 @@ class AgentLoop:
         hooks: list[AgentHook] | None = None,
         unified_session: bool = False,
         disabled_skills: list[str] | None = None,
+        author_identity: Mapping[str, Any] | None = None, # TODO: delete author params from the loops for future upstream merging (x1)
         tools_config: ToolsConfig | None = None,
         image_generation_provider_config: ProviderConfig | None = None,
         image_generation_provider_configs: dict[str, ProviderConfig] | None = None,
@@ -265,7 +267,7 @@ class AgentLoop:
         self._last_usage: dict[str, int] = {}
         self._extra_hooks: list[AgentHook] = hooks or []
 
-        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills)
+        self.context = ContextBuilder(workspace, timezone=timezone, disabled_skills=disabled_skills, author_identity=author_identity)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         # One file-read/write tracker per logical session. The tool registry is
@@ -299,6 +301,11 @@ class AgentLoop:
         # When a session has an active task, new messages for that session
         # are routed here instead of creating a new task.
         self._pending_queues: dict[str, asyncio.Queue] = {}
+        self._cron_turns = CronTurnCoordinator(
+            publish_inbound=self.bus.publish_inbound,
+            dispatch=self._dispatch,
+            is_running=lambda: self._running,
+        )
         # BLACKCAT_MAX_CONCURRENT_REQUESTS: <=0 means unlimited; default 3.
         _max = int(os.environ.get("BLACKCAT_MAX_CONCURRENT_REQUESTS", "3"))
         self._concurrency_gate: asyncio.Semaphore | None = (
@@ -376,6 +383,7 @@ class AgentLoop:
             timezone=defaults.timezone,
             unified_session=defaults.unified_session,
             disabled_skills=defaults.disabled_skills,
+            author_identity=config.author_identity, # TODO: delete author params from the loops for future upstream merging (x3)
             session_ttl_minutes=defaults.session_ttl_minutes,
             consolidation_ratio=defaults.consolidation_ratio,
             max_messages=defaults.max_messages,

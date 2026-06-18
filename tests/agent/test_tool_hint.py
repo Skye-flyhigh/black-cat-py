@@ -1,7 +1,7 @@
 """Tests for tool hint formatting (blackcat.utils.tool_hints)."""
 
-from blackcat.providers.base import ToolCallRequest
 from blackcat.utils.tool_hints import format_tool_hints
+from blackcat.providers.base import ToolCallRequest
 
 
 def _tc(name: str, args) -> ToolCallRequest:
@@ -158,7 +158,6 @@ class TestToolHintFolding:
 
     def test_two_consecutive_same_args_folded(self):
         calls = [
-            _tc("grep", {"pattern": "TODO"}),
             _tc("grep", {"pattern": "TODO"}),
         ]
         result = _hint(calls)

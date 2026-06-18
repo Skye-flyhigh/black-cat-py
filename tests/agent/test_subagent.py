@@ -6,7 +6,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from blackcat.agent.subagent import SubagentManager
+from blackcat.agent.tools.filesystem import FileToolsConfig
 from blackcat.bus.queue import MessageBus
+from blackcat.config.schema import ToolsConfig
 from blackcat.providers.base import LLMProvider
 
 

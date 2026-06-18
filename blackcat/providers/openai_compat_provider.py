@@ -21,14 +21,13 @@ from loguru import logger
 from pydantic.alias_generators import to_snake
 
 from blackcat.providers.base import (
-from blackcat.providers.base import (
     LLMProvider,
     LLMResponse,
     ToolCallRequest,
     parse_tool_arguments,
+    resolve_stream_idle_timeout_s,
     tool_arguments_json_for_replay,
 )
-from blackcat.providers.openai_responses import (
 from blackcat.providers.openai_responses import (
     consume_sdk_stream,
     convert_messages,
@@ -112,11 +111,6 @@ def _requires_max_completion_tokens(model_name: str) -> bool:
     slug = _model_slug(model_name)
     return "gpt-5" in slug or any(
         slug == p or slug.startswith((p + "-", p + ".")) for p in ("o1", "o3", "o4")
-def _requires_max_completion_tokens(model_name: str) -> bool:
-    """Return True for models that reject ``max_tokens`` (GPT-5 family, o-series)."""
-    slug = _model_slug(model_name)
-    return "gpt-5" in slug or any(
-        slug == p or slug.startswith((p + "-", p + ".")) for p in ("o1", "o3", "o4")
     )
 
 
@@ -193,8 +187,6 @@ def _coerce_dict(value: Any) -> dict[str, Any] | None:
 
 
 def _extract_tc_extras(tc: Any) -> tuple[
-    dict[str, Any] | None,
-    dict[str, Any] | None,
     dict[str, Any] | None,
 ]:
     """Extract (extra_content, provider_specific_fields, fn_provider_specific_fields).
@@ -1393,7 +1385,7 @@ class OpenAICompatProvider(LLMProvider):
         on_tool_call_delta: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         await self._ensure_client()
-        idle_timeout_s = int(os.environ.get("BLACKCAT_STREAM_IDLE_TIMEOUT_S", "90"))
+        idle_timeout_s = resolve_stream_idle_timeout_s()
         try:
             if self._should_use_responses_api(model, reasoning_effort):
                 try:

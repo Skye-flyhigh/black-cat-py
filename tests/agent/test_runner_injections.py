@@ -47,7 +47,6 @@ def _make_loop(tmp_path):
 async def test_drain_injections_returns_empty_when_no_callback():
     """No injection_callback → empty list."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
-    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     runner = AgentRunner(provider)
@@ -230,7 +229,6 @@ async def test_drain_injections_skips_objects_with_none_content():
 @pytest.mark.asyncio
 async def test_drain_injections_handles_callback_exception():
     """If the callback raises, return empty list (error is logged)."""
-    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
@@ -488,7 +486,6 @@ async def test_loop_injected_followup_preserves_image_media(tmp_path):
 async def test_runner_merges_multiple_injected_user_messages_without_losing_media():
     """Multiple injected follow-ups should not create lossy consecutive user messages."""
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
-    from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()
     call_count = {"n": 0}
@@ -594,7 +591,6 @@ async def test_injection_cycles_capped_at_max():
 @pytest.mark.asyncio
 async def test_no_injections_flag_is_false_by_default():
     """had_injections should be False when no injection callback or no messages."""
-    from blackcat.agent.runner import AgentRunner, AgentRunSpec
     from blackcat.agent.runner import AgentRunner, AgentRunSpec
 
     provider = MagicMock()

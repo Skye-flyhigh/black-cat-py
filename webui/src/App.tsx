@@ -6,6 +6,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 
+import { BlackcatClient } from "@/lib/blackcat-client";
 import {
   clearSavedSecret,
   deriveWsUrl,
@@ -13,7 +14,6 @@ import {
   loadSavedSecret,
   saveSecret,
 } from "@/lib/bootstrap";
-import { NanobotClient } from "@/lib/nanobot-client";
 import {
   createRuntimeHost,
   getHostApi,
@@ -23,6 +23,9 @@ import type {
   RuntimeSurface
 } from "@/lib/types";
 import { ClientProvider } from "@/providers/ClientProvider";
+
+import AuthForm from "./components/Auth";
+import Shell from "./components/Shell";
 import { tokenRefreshDelayMs } from "./utils/helpers";
 import { bootstrapTokenExpiresAt } from "./utils/shell";
 
@@ -32,7 +35,7 @@ type BootState =
   | { status: "auth"; failed?: boolean }
   | {
       status: "ready";
-      client: NanobotClient;
+      client: BlackcatClient;
       token: string;
       tokenExpiresAt: number;
       modelName: string | null;
@@ -45,7 +48,7 @@ export default function App() {
   const bootstrapSecretRef = useRef("");
 
   const refreshReadyClient = useCallback(
-    async (client: NanobotClient, fallbackSurface: RuntimeSurface) => {
+    async (client: BlackcatClient, fallbackSurface: RuntimeSurface) => {
       const boot = await fetchBootstrap("", bootstrapSecretRef.current);
       const url = deriveWsUrl(boot.ws_path, boot.token, boot.ws_url);
       const runtimeSurface = boot.runtime_surface
@@ -86,7 +89,7 @@ export default function App() {
           const url = deriveWsUrl(boot.ws_path, boot.token, boot.ws_url);
           const runtimeSurface = toRuntimeSurface(boot.runtime_surface);
           const runtimeHost = createRuntimeHost(runtimeSurface, boot.runtime_capabilities);
-          const client = new NanobotClient({
+          const client = new BlackcatClient({
             url,
             socketFactory: runtimeHost.socketFactory,
             onReauth: async () => {

@@ -480,7 +480,6 @@ async def test_drain_pending_timeout(tmp_path):
         raise asyncio.TimeoutError
 
     with patch("blackcat.agent.loop.asyncio.wait_for", side_effect=_timeout):
-    with patch("blackcat.agent.loop.asyncio.wait_for", side_effect=_timeout):
         results = await injection_callback()
         assert results == []
 

@@ -75,22 +75,23 @@ from blackcat.webui.workspaces import WebUIWorkspaceController
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
 
 _SLOW_WEBUI_HTTP_LOG_MS = 1_000
-_AUTOMATION_VALUES_HEADER = "X-Nanobot-Automation-Values"
+_AUTOMATION_VALUES_HEADER = "X-Blackcat-Automation-Values"
 
 if TYPE_CHECKING:
     from blackcat.bus.queue import MessageBus
 
-from blackcat.cron.types import CronJob, CronSchedule
-from blackcat.cron.session_turns import is_bound_cron_job
 from blackcat.cron.service import CronService
+from blackcat.cron.session_turns import is_bound_cron_job
+from blackcat.cron.types import CronJob, CronSchedule
 from blackcat.session.manager import SessionManager
 from blackcat.webui.session_automations import (
-    session_automation_jobs,
-    serialize_automation_jobs,
     all_automations_payload,
+    serialize_automation_jobs,
+    session_automation_jobs,
     session_automations_payload,
 )
 from blackcat.webui.skills_api import webui_skill_detail_payload, webui_skills_payload
+
 
 def _decode_api_key(raw_key: str) -> str | None:
     key = unquote(raw_key)

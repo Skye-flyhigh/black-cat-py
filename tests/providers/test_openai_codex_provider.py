@@ -211,9 +211,6 @@ async def test_codex_timeout_error_writes_diagnostic_log(monkeypatch) -> None:
                 "timeout",
                 True,
                 None,
-                None,
-                None,
-                None,
                 "ReadTimeout timeout",
             ),
         )

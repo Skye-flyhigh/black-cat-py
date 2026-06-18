@@ -3,7 +3,6 @@
 Uses ``AsyncOpenAI`` pointed at ``https://{endpoint}/openai/v1/`` which
 routes to the Responses API (``/responses``).  Reuses shared conversion
 helpers from :mod:`blackcat.providers.openai_responses`.
-helpers from :mod:`blackcat.providers.openai_responses`.
 
 Authentication
 --------------

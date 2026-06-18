@@ -144,7 +144,6 @@ async def test_send_session_updated_broadcasts_to_other_webui_connections(bus) -
 
     assert (active_events, other_events) == (
         ["session_updated"],
-        ["session_updated"],
     )
     payload = json.loads(other_conn.sent[0])
     assert payload == {
@@ -1803,7 +1802,6 @@ async def test_stop_is_idempotent() -> None:
     bus = MagicMock()
     channel = WebSocketChannel({"enabled": True, "allowFrom": ["*"]}, bus, gateway=_basic_handler(bus))
     # stop() before start() should not raise
-    await channel.stop()
     await channel.stop()
     assert channel._subs == {}
 

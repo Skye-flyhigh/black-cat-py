@@ -71,7 +71,7 @@ def test_stream_idle_timeout_parser_accepts_and_clamps_numeric_values() -> None:
 
 @pytest.mark.asyncio
 async def test_openai_compat_stream_ignores_invalid_idle_timeout_env(monkeypatch) -> None:
-    monkeypatch.setenv("NANOBOT_STREAM_IDLE_TIMEOUT_S", "abc")
+    monkeypatch.setenv("BLACKCAT_STREAM_IDLE_TIMEOUT_S", "abc")
     provider = OpenAICompatProvider(api_key="sk-test", api_base="https://example.com/v1")
 
     chunk = SimpleNamespace(
@@ -100,7 +100,7 @@ async def test_openai_compat_stream_ignores_invalid_idle_timeout_env(monkeypatch
 
 @pytest.mark.asyncio
 async def test_anthropic_stream_ignores_invalid_idle_timeout_env(monkeypatch) -> None:
-    monkeypatch.setenv("NANOBOT_STREAM_IDLE_TIMEOUT_S", "abc")
+    monkeypatch.setenv("BLACKCAT_STREAM_IDLE_TIMEOUT_S", "abc")
     provider = AnthropicProvider(api_key="sk-test")
     provider._client = MagicMock()
     provider._client.messages.stream = MagicMock(return_value=_AnthropicStream([]))
@@ -112,7 +112,7 @@ async def test_anthropic_stream_ignores_invalid_idle_timeout_env(monkeypatch) ->
 
 @pytest.mark.asyncio
 async def test_bedrock_stream_ignores_invalid_idle_timeout_env(monkeypatch) -> None:
-    monkeypatch.setenv("NANOBOT_STREAM_IDLE_TIMEOUT_S", "abc")
+    monkeypatch.setenv("BLACKCAT_STREAM_IDLE_TIMEOUT_S", "abc")
     provider = BedrockProvider(region="us-east-1", client=_BedrockClient())
 
     result = await provider.chat_stream(messages=[{"role": "user", "content": "hi"}])
@@ -122,7 +122,7 @@ async def test_bedrock_stream_ignores_invalid_idle_timeout_env(monkeypatch) -> N
 
 @pytest.mark.asyncio
 async def test_codex_stream_ignores_invalid_idle_timeout_env(monkeypatch) -> None:
-    monkeypatch.setenv("NANOBOT_STREAM_IDLE_TIMEOUT_S", "abc")
+    monkeypatch.setenv("BLACKCAT_STREAM_IDLE_TIMEOUT_S", "abc")
     original_client = httpx.AsyncClient
     seen: dict[str, float] = {}
 

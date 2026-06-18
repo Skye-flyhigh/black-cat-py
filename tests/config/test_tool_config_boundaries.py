@@ -22,7 +22,7 @@ print("blackcat.config.schema" in sys.modules)
 
 def test_builtin_tool_configs_do_not_depend_on_config_schema_base():
     repo = Path(__file__).resolve().parents[2]
-    tool_paths = sorted((repo / "nanobot/agent/tools").glob("*.py"))
+    tool_paths = sorted((repo / "blackcat/agent/tools").glob("*.py"))
 
     violations = []
     for path in tool_paths:

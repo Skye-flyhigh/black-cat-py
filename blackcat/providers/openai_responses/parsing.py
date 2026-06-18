@@ -10,7 +10,6 @@ import httpx
 from loguru import logger
 
 from blackcat.providers.base import LLMResponse, ToolCallRequest, parse_tool_arguments
-from blackcat.providers.base import LLMResponse, ToolCallRequest, parse_tool_arguments
 
 FINISH_REASON_MAP = {
     "completed": "stop",

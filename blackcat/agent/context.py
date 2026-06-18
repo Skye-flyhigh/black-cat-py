@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from loguru import logger
 
+from blackcat import __logo__, __name__, __version__
 from blackcat.agent.memory import MemoryStore
 from blackcat.agent.skills import SkillsLoader
 from blackcat.agent.tools import mcp as mcp_tools
@@ -104,11 +105,12 @@ class ContextBuilder:
         session_manager: SessionManager | None = None,
         timezone: str | None = None,
         disabled_skills: list[str] | None = None,
+        author_identity: Mapping[str, Any] | None = None,
     ):
         self.workspace = workspace
         self.timezone = timezone
         self.memory = MemoryStore(workspace)
-        self.authors: dict[str, Any] = {}
+        self.authors: dict[str, Any] = dict(author_identity or {})
         self.skills = SkillsLoader(
             workspace,
             disabled_skills=set(disabled_skills) if disabled_skills else None,
@@ -217,11 +219,18 @@ class ContextBuilder:
         Returns:
             Author name if found in config, otherwise "unknown".
         """
-        if sender_id and channel:
-            for author_name, identity in self.authors.items(): # FIXME: iterate through the config files for authors
-                platform_id = getattr(identity, channel, None)
-                if platform_id and platform_id == sender_id:
-                    return author_name
+        if sender_id in (None, ""):
+            return "unknown"
+        if sender_id == "system":
+            return "system"
+        if not channel:
+            return "unknown"
+
+        normalized_sender = str(sender_id)
+        for author_name, identity in self.authors.items():
+            platform_id = getattr(identity, channel, None)
+            if platform_id is not None and str(platform_id) == normalized_sender:
+                return author_name
         return "unknown"
 
 
@@ -256,7 +265,7 @@ class ContextBuilder:
         else:
             return "low"
 
-    def get_allowed_tools(
+    def get_allowed_tools( # TODO: double check this is usefull really
         self,
         author: str,
         identity: dict | None = None,
@@ -601,9 +610,7 @@ class ContextBuilder:
         Returns:
             Complete system prompt string, sections joined by "---".
         """
-        intro_block = [{"type": "text", "text": """# Blackcat 🐈‍⬛
-You are within blackcat harness/structure.
-"""}] # FIXME: brings the name and sigil of the app dynamically
+        intro_block = [{"type": "text", "text": f"# {__name__} {__logo__} \nYou are within {__name__} harness/structure {__version__}."}] # FIXME: brings the name and sigil of the app dynamically
         author = self.resolve_author(channel, sender_id)
 
         static_blocks = self._build_static_blocks(skill_names, channel=channel, include_memory_recent_history=include_memory_recent_history)

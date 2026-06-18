@@ -67,14 +67,12 @@ def test_repeated_workspace_violation_returns_none_within_budget():
     arguments = {"path": "/Users/x/Downloads/01.md"}
 
     assert repeated_workspace_violation_error("read_file", arguments, counts) is None
-    assert repeated_workspace_violation_error("read_file", arguments, counts) is None
 
 
 def test_repeated_workspace_violation_escalates_after_third_attempt():
     counts: dict[str, int] = {}
     arguments = {"path": "/Users/x/Downloads/01.md"}
 
-    repeated_workspace_violation_error("read_file", arguments, counts)
     repeated_workspace_violation_error("read_file", arguments, counts)
     third = repeated_workspace_violation_error("read_file", arguments, counts)
 

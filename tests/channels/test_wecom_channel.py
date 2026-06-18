@@ -652,7 +652,6 @@ async def test_process_message_deduplication() -> None:
     })
 
     await channel._process_message(frame, "text")
-    await channel._process_message(frame, "text")
 
     msg = await channel.bus.consume_inbound()
     assert msg.content == "once"

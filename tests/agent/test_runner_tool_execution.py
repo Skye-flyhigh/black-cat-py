@@ -14,13 +14,6 @@ from blackcat.config.schema import AgentDefaults
 from blackcat.providers.base import LLMResponse, ToolCallRequest
 from blackcat.providers.openai_compat_provider import OpenAICompatProvider
 from blackcat.providers.openai_responses.parsing import parse_response_output
-from blackcat.agent.runner import AgentRunner, AgentRunSpec
-from blackcat.agent.tools.base import Tool
-from blackcat.agent.tools.registry import ToolRegistry
-from blackcat.config.schema import AgentDefaults
-from blackcat.providers.base import LLMResponse, ToolCallRequest
-from blackcat.providers.openai_compat_provider import OpenAICompatProvider
-from blackcat.providers.openai_responses.parsing import parse_response_output
 
 _MAX_TOOL_RESULT_CHARS = AgentDefaults().max_tool_result_chars
 
@@ -107,8 +100,6 @@ def _tool_message(result, tool_call_id: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_runner_batches_read_only_tools_before_exclusive_work():
-    from blackcat.agent.runner import AgentRunner, AgentRunSpec
-
     tools = ToolRegistry()
     shared_events: list[str] = []
     read_a = _DelayTool("read_a", delay=0.05, read_only=True, shared_events=shared_events)
@@ -134,7 +125,6 @@ async def test_runner_batches_read_only_tools_before_exclusive_work():
             ToolCallRequest(id="rw1", name="write_a", arguments={}),
         ],
         {},
-        {},
     )
 
     assert shared_events[0:2] == ["start:read_a", "start:read_b"]
@@ -146,8 +136,6 @@ async def test_runner_batches_read_only_tools_before_exclusive_work():
 
 @pytest.mark.asyncio
 async def test_runner_does_not_batch_exclusive_read_only_tools():
-    from blackcat.agent.runner import AgentRunner, AgentRunSpec
-
     tools = ToolRegistry()
     shared_events: list[str] = []
     read_a = _DelayTool("read_a", delay=0.03, read_only=True, shared_events=shared_events)
@@ -179,7 +167,6 @@ async def test_runner_does_not_batch_exclusive_read_only_tools():
             ToolCallRequest(id="ro2", name="read_b", arguments={}),
         ],
         {},
-        {},
     )
 
     assert shared_events[0] == "start:read_a"
@@ -188,8 +175,6 @@ async def test_runner_does_not_batch_exclusive_read_only_tools():
 
 
 @pytest.mark.asyncio
-async def test_runner_blocks_repeated_external_fetches():
-    pass
 async def test_runner_rejects_near_miss_tool_name_without_executing():
     provider = MagicMock()
     call_count = {"n": 0}
@@ -257,7 +242,6 @@ async def test_runner_rejects_near_miss_tool_name_without_executing():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("arguments", ['{path:"notes.txt"}', "null"])
 async def test_runner_rejects_openai_compat_invalid_arguments_without_executing(arguments):
-    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         parsed = OpenAICompatProvider()._parse({
             "choices": [{

@@ -231,8 +231,8 @@ class TestPathAppendPlatform:
 
         assert captured_cmd == 'export PATH="$BLACKCAT_PATH_PREPEND:$PATH"; python --version'
         assert captured_env["BLACKCAT_PATH_PREPEND"] == "/venv/bin; echo INJECTED"
-        assert captured_cmd == 'export PATH="$NANOBOT_PATH_PREPEND:$PATH"; python --version'
-        assert captured_env["NANOBOT_PATH_PREPEND"] == "/venv/bin; echo INJECTED"
+        assert captured_cmd == 'export PATH="$BLACKCAT_PATH_PREPEND:$PATH"; python --version'
+        assert captured_env["BLACKCAT_PATH_PREPEND"] == "/venv/bin; echo INJECTED"
         assert "INJECTED" not in captured_cmd
 
     @pytest.mark.asyncio
@@ -266,10 +266,6 @@ class TestPathAppendPlatform:
         )
         assert captured_env["BLACKCAT_PATH_PREPEND"] == "/venv/bin"
         assert captured_env["BLACKCAT_PATH_APPEND"] == "/usr/sbin"
-            'export PATH="$NANOBOT_PATH_PREPEND:$PATH:$NANOBOT_PATH_APPEND"; python --version'
-        )
-        assert captured_env["NANOBOT_PATH_PREPEND"] == "/venv/bin"
-        assert captured_env["NANOBOT_PATH_APPEND"] == "/usr/sbin"
 
     @pytest.mark.asyncio
     async def test_windows_modifies_env(self):

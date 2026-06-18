@@ -1525,9 +1525,9 @@ def test_telegram_bus_slash_command_regex_matches_agent_loop_commands() -> None:
     assert pat.fullmatch("/skill")
     assert pat.fullmatch("/skill@blackcat_bot")
     assert pat.fullmatch("/skill")
-    assert pat.fullmatch("/skill@nanobot_bot")
-    assert pat.fullmatch("/new@nanobot_bot")
-    assert pat.fullmatch("/goal@nanobot_bot refine objective")
+    assert pat.fullmatch("/skill@blackcat_bot")
+    assert pat.fullmatch("/new@blackcat_bot")
+    assert pat.fullmatch("/goal@blackcat_bot refine objective")
     assert pat.fullmatch("/dream-log deadbeef") is None
     assert pat.fullmatch("/dream-restore deadbeef") is None
 

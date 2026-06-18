@@ -28,13 +28,13 @@ from blackcat.security.workspace_access import (
     WorkspaceScopeError,
 )
 from blackcat.session.goal_state import goal_state_ws_blob
-from blackcat.webui.forking import handle_webui_fork_chat
 from blackcat.session.webui_turns import websocket_turn_wall_started_at
 from blackcat.utils.media_decode import (
     FileSizeExceeded,
     save_base64_data_url,
 )
 from blackcat.webui.cli_apps_api import normalize_cli_app_mentions
+from blackcat.webui.forking import handle_webui_fork_chat
 from blackcat.webui.gateway_services import GatewayServices
 from blackcat.webui.http_utils import (
     normalize_config_path as _normalize_config_path,
@@ -1065,7 +1065,6 @@ class WebSocketChannel(BaseChannel):
             full_text = "".join(buffered)
             rewritten = self._media.rewrite_local_markdown_images(full_text)
             if delta or rewritten != full_text:
-            if full_text:
                 body["text"] = rewritten
         else:
             body = {

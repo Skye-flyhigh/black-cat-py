@@ -174,7 +174,6 @@ class TestCursorValidationInvariant:
         try:
             with caplog.at_level(logging.WARNING):
                 store.read_unprocessed_history(since_cursor=0)
-                store.read_unprocessed_history(since_cursor=0)
                 store.append_history("another")
         finally:
             loguru_logger.remove(handler_id)

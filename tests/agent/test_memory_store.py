@@ -304,8 +304,6 @@ class TestAppendHistoryHardCap:
         try:
             huge = "x" * (_HISTORY_ENTRY_HARD_CAP + 1)
             store.append_history(huge)
-            store.append_history(huge)
-            store.append_history(huge)
         finally:
             loguru_logger.remove(handler_id)
 

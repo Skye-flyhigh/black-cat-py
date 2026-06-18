@@ -798,7 +798,6 @@ def test_install_uses_uv_pip_when_pip_unavailable(
     monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
         "blackcat.apps.cli.service.shutil.which",
-        "blackcat.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
     monkeypatch.setattr(manager, "_run_argv", fake_run)
@@ -823,7 +822,6 @@ def test_update_uses_uv_pip_reinstall_when_pip_unavailable(
     manager = _manager(tmp_path)
     monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
-        "blackcat.apps.cli.service.shutil.which",
         "blackcat.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )
@@ -860,7 +858,6 @@ def test_uninstall_uses_uv_pip_when_pip_unavailable(
 
     monkeypatch.setattr(CliAppManager, "_pip_available", staticmethod(lambda: False))
     monkeypatch.setattr(
-        "blackcat.apps.cli.service.shutil.which",
         "blackcat.apps.cli.service.shutil.which",
         lambda command: "/usr/bin/uv" if command == "uv" else None,
     )

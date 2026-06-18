@@ -622,7 +622,6 @@ async def test_openai_compat_preserves_extra_content_on_tool_calls() -> None:
 
 def test_openai_compat_parse_preserves_malformed_tool_arguments() -> None:
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
-    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
     result = provider._parse(_fake_tool_call_response_with_arguments('{path:"foo.txt"}'))
@@ -631,7 +630,6 @@ def test_openai_compat_parse_preserves_malformed_tool_arguments() -> None:
 
 
 def test_openai_compat_parse_preserves_array_tool_arguments() -> None:
-    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
 
@@ -954,7 +952,6 @@ def test_openai_compat_build_kwargs_max_completion_tokens_by_model_name(
 ) -> None:
     spec = find_by_name("custom")
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
-    with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider(
             api_key="sk-test-key",
             default_model=model_name,
@@ -1188,12 +1185,31 @@ def test_openai_compat_stringifies_dict_tool_arguments() -> None:
 
 def test_openai_compat_repairs_non_json_tool_arguments_string() -> None:
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
+        provider = OpenAICompatProvider()
+
+    sanitized = provider._sanitize_messages([
+        {"role": "user", "content": "hi"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "exec", "arguments": "{'cmd': 'ls -la'}"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "name": "exec", "content": "ok"},
+        {"role": "user", "content": "done"},
+    ])
+
+    assert sanitized[1]["tool_calls"][0]["function"]["arguments"] == '{"cmd": "ls -la"}'
+
+
 def test_openai_compat_repairs_object_like_history_tool_arguments_string() -> None:
     with patch("blackcat.providers.openai_compat_provider.AsyncOpenAI"):
         provider = OpenAICompatProvider()
-
-def test_openai_compat_repairs_object_like_history_tool_arguments_string() -> None:
-    provider = OpenAICompatProvider()
 
     sanitized = provider._sanitize_messages([
         {"role": "user", "content": "hi"},

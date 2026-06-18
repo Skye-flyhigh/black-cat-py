@@ -1029,7 +1029,7 @@ async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
             f"{base_url}/api/webui/automations/update?id={user_job.id}",
             headers={
                 **auth,
-                "X-Nanobot-Automation-Values": json.dumps(
+                "X-Blackcat-Automation-Values": json.dumps(
                     {
                         "name": "Daily quiz",
                         "message": "Ask the daily quiz",
@@ -1054,7 +1054,7 @@ async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
             f"{base_url}/api/webui/automations/update?id={user_job.id}",
             headers={
                 **auth,
-                "X-Nanobot-Automation-Values": quote(
+                "X-Blackcat-Automation-Values": quote(
                     json.dumps(
                         {
                             "name": "每日测验",
@@ -1074,7 +1074,7 @@ async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
             f"{base_url}/api/webui/automations/update?id={user_job.id}",
             headers={
                 **auth,
-                "X-Nanobot-Automation-Values": json.dumps({"message": ["bad"]}),
+                "X-Blackcat-Automation-Values": json.dumps({"message": ["bad"]}),
             },
         )
         assert malformed_update.status_code == 400
@@ -1084,7 +1084,7 @@ async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
             f"{base_url}/api/webui/automations/update?id={user_job.id}",
             headers={
                 **auth,
-                "X-Nanobot-Automation-Values": json.dumps(
+                "X-Blackcat-Automation-Values": json.dumps(
                     {"schedule": {"kind": "cron", "expr": "not a cron", "tz": "UTC"}}
                 ),
             },
@@ -1096,7 +1096,7 @@ async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
             f"{base_url}/api/webui/automations/update?id={past_one_shot_job.id}",
             headers={
                 **auth,
-                "X-Nanobot-Automation-Values": json.dumps(
+                "X-Blackcat-Automation-Values": json.dumps(
                     {
                         "message": "Updated one-shot message",
                         "schedule": {"kind": "at", "at_ms": 1},
@@ -1112,7 +1112,7 @@ async def test_webui_automations_route_lists_all_jobs_and_allows_user_actions(
             f"{base_url}/api/webui/automations/update?id=heartbeat",
             headers={
                 **auth,
-                "X-Nanobot-Automation-Values": json.dumps({"name": "bad"}),
+                "X-Blackcat-Automation-Values": json.dumps({"name": "bad"}),
             },
         )
         assert protected_update.status_code == 403

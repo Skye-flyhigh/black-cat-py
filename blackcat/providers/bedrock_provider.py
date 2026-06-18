@@ -11,11 +11,11 @@ from collections.abc import Awaitable, Callable, Iterator
 from typing import Any
 
 from blackcat.providers.base import (
-from blackcat.providers.base import (
     LLMProvider,
     LLMResponse,
     ToolCallRequest,
     parse_tool_arguments,
+    resolve_stream_idle_timeout_s,
     tool_arguments_object_for_replay,
 )
 
@@ -702,7 +702,7 @@ class BedrockProvider(LLMProvider):
         on_tool_call_delta: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         _ = on_thinking_delta, on_tool_call_delta
-        idle_timeout_s = int(os.environ.get("BLACKCAT_STREAM_IDLE_TIMEOUT_S", "90"))
+        idle_timeout_s = resolve_stream_idle_timeout_s()
         content_parts: list[str] = []
         reasoning_parts: list[str] = []
         thinking_blocks: list[dict[str, Any]] = []

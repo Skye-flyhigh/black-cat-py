@@ -161,7 +161,6 @@ async def test_web_fetch_can_skip_jina_and_use_custom_user_agent(monkeypatch):
     assert data["extractor"] == "readability"
     assert [headers["User-Agent"] for headers in seen_headers] == [
         "blackcat-test-agent",
-        "blackcat-test-agent",
     ]
 
 

@@ -69,7 +69,6 @@ async def test_connect_mcp_retries_when_no_servers_connect(tmp_path, monkeypatch
     monkeypatch.setattr("blackcat.agent.tools.mcp.connect_mcp_servers", _fake_connect)
 
     await loop._connect_mcp()
-    await loop._connect_mcp()
 
     assert attempts == 2
     assert loop._mcp_connected is False
@@ -325,7 +324,6 @@ async def test_mcp_reconnect_handler_uses_sanitized_server_prefix(
         return stacks
 
     monkeypatch.setattr("blackcat.agent.tools.mcp.connect_mcp_servers", _fake_connect)
-    monkeypatch.setattr("blackcat.agent.tools.mcp.connect_mcp_servers", _fake_connect)
 
     await loop._connect_mcp()
     old_tool = loop.tools.get("mcp_remote_quote")
@@ -359,19 +357,33 @@ async def test_concurrent_mcp_reconnect_reuses_fresh_session(
             await asyncio.sleep(0)
             return SimpleNamespace(
                 contents=[
-                    SimpleNamespace(uri=uri, text=f"fresh:{uri.split(":")[-1]}"),
-                ],
+                    mcp_types.TextResourceContents(
+                        uri=uri,
+                        text=f"fresh:{uri.rsplit('/', maxsplit=1)[-1]}",
+                    )
+                ]
             )
 
-    async def _connect(name: str) -> Any:
+    async def _fake_connect(servers, registry):
         nonlocal connect_count
-        connect_count += 1
-        if connect_count == 1:
-            return _DeadSession()
-        return _LiveSession()
+        stacks = {}
+        for name in servers:
+            connect_count += 1
+            session = _DeadSession() if connect_count == 1 else _LiveSession()
+            for resource_name in ("alpha", "beta"):
+                resource_def = SimpleNamespace(
+                    name=resource_name,
+                    uri=f"file:///{resource_name}",
+                    description=f"{resource_name} resource",
+                )
+                registry.register(MCPResourceWrapper(session, name, resource_def))
+            stack = AsyncExitStack()
+            await stack.__aenter__()
+            stack.push_async_callback(_mark_closed, name)
+            stacks[name] = stack
+        return stacks
 
-    monkeypatch.setattr(loop.mcp_manager, "connect", _connect)
-    monkeypatch.setattr(loop.mcp_manager, "close", _mark_closed)
+    monkeypatch.setattr("blackcat.agent.tools.mcp.connect_mcp_servers", _fake_connect)
 
     await loop._connect_mcp()
     old_alpha = loop.tools.get("mcp_remote_resource_alpha")

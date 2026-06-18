@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from blackcat.session.manager import Session, SessionManager
-from blackcat.session.manager import Session, SessionManager
 
 # Test constants
 MEMORY_WINDOW = 50

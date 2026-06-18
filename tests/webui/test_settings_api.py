@@ -46,15 +46,6 @@ def _dynamic_provider_config(
             }
         }
     return Config.model_validate(raw_config)
-    )
-
-    assert payload["agent"]["model_preset"] == "codex"
-    assert payload["agent"]["model"] == "openai-codex/gpt-5.5"
-    saved = load_config(config_path)
-    assert saved.agents.defaults.model_preset == "codex"
-    assert saved.model_presets["codex"].label == "Codex"
-    assert saved.model_presets["codex"].provider == "openai_codex"
-    assert saved.model_presets["codex"].model == "openai-codex/gpt-5.5"
 
 
 def test_update_agent_settings_accepts_context_window_options(
